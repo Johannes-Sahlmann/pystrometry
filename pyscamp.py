@@ -450,8 +450,27 @@ class ScampMergedCatalog(object):
         index = np.where(SkyCoord(ra=RA_deg*u.deg, dec=DE_deg*u.deg).separation(cat) < radius)[0]
         return good_source_numbers[index]
 
-
-
+    # def xfEliminatePoorRefStars(s, pixelscale, seeingthreshold_as):
+    #     saturatedRefStarsIndex = uniq(where(s[:, :, 0] == -1)[1]);  # remove refstars with at least one saturated epoch
+    #     blurredRefStars0Index = uniq(
+    #         where(s[:, :, 4] * pixelscale * 2 > seeingthreshold_as)[1]);  # remove refstars with too large FWHM
+    #     blurredRefStars1Index = uniq(
+    #         where(s[:, :, 5] * pixelscale * 2 > seeingthreshold_as)[1]);  # remove refstars with too large FWHM
+    #     blurredRefStarsIndex = np.concatenate((blurredRefStars0Index, blurredRefStars1Index));
+    #
+    #     goodRefStarsIndex = [i for i in np.arange(s.shape[1]) if
+    #                          not (i in np.concatenate((saturatedRefStarsIndex, blurredRefStarsIndex)))];
+    #     s = s[:, goodRefStarsIndex, :];
+    #     # print "xfastrom: Eliminated %d saturated and %d blurred RefStars: Using %d good ref. stars." % (np.size(saturatedRefStarsIndex),np.size(blurredRefStarsIndex),np.size(s,axis=1))
+    #
+    #     #     select on refStar position scatter
+    #     if 0 == 1:
+    #         scatteredRefStarsIndex = np.where(numpy.std(s[:, :, 3], axis=0) > 1)[0];
+    #         goodRefStarsIndex = [i for i in np.arange(s.shape[1]) if not (i in scatteredRefStarsIndex)];
+    #         s = s[:, goodRefStarsIndex, :];
+    #         # print "xfastrom: Eliminated %d scattered RefStars: Using %d good ref. stars." % (np.size(scatteredRefStarsIndex),np.size(s,axis=1) );
+    #
+    #     return s
 
 
 def getScampXml(targetDir, target_file=None):
