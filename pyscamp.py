@@ -58,8 +58,19 @@ class ScampXml(object):
         print('{}: target is {}, {} frames, {} epochs, {:2.1f} days timespan'.format(self.source_file, self.target, self.n_frames, self.n_epoch, self.timespan_day))
         print('{}: Average pixel scale {:3.3f}'.format(self.source_file, self.average_pixel_scale.to(u.milliarcsecond)))
 
-    def get_catalog_index(self, catalog_number):
-        catalog_index = self.table['Catalog_Number'].tolist().index(catalog_number)
+    def get_catalog_index(self, catalog_number=None, catalog_name=None):
+        """
+        return the table row index of a catalog
+        :param catalog_number:
+        :param catalog_name:
+        :return:
+        """
+        if catalog_number is not None:
+            catalog_index = self.table['Catalog_Number'].tolist().index(catalog_number)
+        elif catalog_name is not None:
+            catalog_index = self.table['Catalog_Name'].tolist().index((catalog_name.split('.')[0]+'.cat').encode())
+        else:
+            raise RuntimeError('Specify exactly one argument')
         return catalog_index
 
     def get_fits_filename(self, catalog_number):
@@ -68,7 +79,7 @@ class ScampXml(object):
         :param catalog_number:
         :return:
         """
-        catalog_index = self.get_catalog_index(catalog_number)
+        catalog_index = self.get_catalog_index(catalog_number=catalog_number)
         file_name = (self.table['Catalog_Name'][catalog_index]).decode().replace('.cat', '.fits')
         return file_name
 
@@ -172,7 +183,9 @@ class ScampFullCatalog(object):
                      DE_deg=None, radius=50.*u.arcsec, tag='selected', label=True, external_cat=None):
 
         T = self.select_sources(catalog_number, chip_extension)
-        cat = SkyCoord(ra=np.array(T['RA_deg']) * u.degree, dec=np.array(T['DE_deg']) * u.degree)
+        # cat = SkyCoord(ra=np.array(T['RA_deg']) * u.degree, dec=np.array(T['DE_deg']) * u.degree)
+        cat = SkyCoord(ra=np.array(T['ALPHA_J2000']) * u.degree, dec=np.array(T['DELTA_J2000']) * u.degree)
+
 
         # name of the individual frame FITS file being plotted
         file_name = scamp_xml.get_fits_filename(catalog_number)
@@ -189,7 +202,8 @@ class ScampFullCatalog(object):
 
         # to align the plotted symbols with the actual image, use the WCS of the actual frame
         w = WCS(header=header)
-        coord_array = np.array([T['x'].data, T['y'].data]).T
+        # coord_array = n.array([T['x'].data, T['y'].data]).T
+        coord_array = np.array([T['X_IMAGE'].data, T['Y_IMAGE'].data]).T
         coord_array_world = w.wcs_pix2world(coord_array, 0)
 
         T['RA_deg'] = coord_array_world[:, 0]
@@ -225,7 +239,7 @@ class ScampFullCatalog(object):
         gc.show_markers(T['RA_deg'][idx] - 0 / 3600., T['DE_deg'][idx] - 0 / 3600., marker='o', edgecolor='g')
         if label:
             for j in idx:
-                gc.add_label(T['RA_deg'][j] - 0 / 3600., T['DE_deg'][j] + 1 / 3600., T['source_number'][j])
+                gc.add_label(T['RA_deg'][j] - 0 / 3600., T['DE_deg'][j] + 1 / 3600., T['SOURCE_NUMBER'][j])
 
         if external_cat is not None:
             gc.show_markers(external_cat.ra, external_cat.dec, marker='s', edgecolor='b', lw=1)
@@ -234,12 +248,15 @@ class ScampFullCatalog(object):
         pl.show()
         if save_plot:
             save_file = os.path.join(out_dir,file_name.replace('.fits', '_{}_sources.pdf'.format(tag)))
-            gc.save(save_file, dpi=300);
+            gc.save(save_file, dpi=300)
 
-    def correct_distortion(self, cal_pickle):
+    def correct_distortion(self, cal_pickle, calibration_catalog_number=None):
         """
         Corrects for distortion in every frame
         creates columns X_Idl and Y_Idl
+
+        if calibration_catalog_number is specified, the full table is corrected for the distortion
+        specified in the calibration_catalog. Otherwise every catalog is corrected for it's individual distortion
 
         :param cal_pickle:
         :return:
@@ -250,20 +267,25 @@ class ScampFullCatalog(object):
         self.table['X_Idl'] = np.zeros(len(self.table))
         self.table['Y_Idl'] = np.zeros(len(self.table))
 
+        # this applies the transformation from the star catalog onto the Gaia frame
+        evaluation_frame_number = 1
 
-        for catalog_number in np.unique(self.table['CATALOG_NUMBER']):
-            table_index = np.where(self.table['CATALOG_NUMBER'] == catalog_number)[0]
-            cal_obs = cals[catalog_number]
-            P = sympy.symbols('p0:%d' % cal_obs.lazAC.Nalm)
+        if calibration_catalog_number is not None:
+            cal_obs = cals[calibration_catalog_number]
+            x_in = self.table['X_IMAGE']
+            y_in = self.table['Y_IMAGE']
+            self.table['X_Idl'], self.table['Y_Idl'] = \
+                cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, 0, x_in, y_in)
+        else:
+            catalog_numbers = self.table['CATALOG_NUMBER'].data
+            for catalog_number in np.unique(catalog_numbers):
+                table_index = np.where(self.table['CATALOG_NUMBER'] == catalog_number)[0]
+                cal_obs = cals[catalog_number]
 
-            Cs, polynomialTermOrder = pystortion.distortion.bivariate_polynomial(sympy_x, sympy_y, cal_obs.lazAC.k, verbose=0)
-            evaluation_frame_number = 1
-
-            x_in = self.table['X_IMAGE'][table_index]
-            y_in = self.table['Y_IMAGE'][table_index]
-            self.table['X_Idl'][table_index], self.table['Y_Idl'][
-                table_index] = cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, 0, Cs, P, x_in,
-                                                                             y_in)
+                x_in = self.table['X_IMAGE'][table_index]
+                y_in = self.table['Y_IMAGE'][table_index]
+                self.table['X_Idl'][table_index], self.table['Y_Idl'][
+                    table_index] = cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, 0, x_in, y_in)
 
     def suitable_reference_sources(self, selected_source_numbers, target_number, chip_extension):
         """

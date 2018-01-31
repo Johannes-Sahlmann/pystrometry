@@ -17,6 +17,9 @@ from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
 from astroquery.simbad import Simbad
 import pyslalib as sla
+# import urllib.request as urllib
+from urllib.request import urlopen
+from urllib.error import HTTPError
 
 # from modules.functionsAndClasses import *
 # from .functionsAndClasses import *
@@ -47,6 +50,9 @@ ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
 'JWST': 'horizons_XYZ_2012-2023_EQUATORIAL_JWST_1day_csv',
 'L2': 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
 'Earth': 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
+
+ephemeris_dir = '/Users/jsahlmann/astro/palta/processing/data/earthEphemeris/'
+
 
 def fractional_luminosity( mag1 , mag2 ):
     """
@@ -1123,9 +1129,21 @@ class xfAxOrbitPlotter(object):
         return table names of a certain schema
     """
 
-    def __init__(self, theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0, theta_names=None):
+    def __init__(self, theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0):#, theta_names=None):
+        """
+
+        :param theta: list of dictionaries, length = nr of companions
+        :param C:
+        :param T:
+        :param xi:
+        :param yi:
+        :param Tref_MJD:
+        :param omc:
+        :param m1_MS:
+        :param theta_names:
+        """
         self.theta = theta
-        self.theta_names = theta_names
+        # self.theta_names = theta_names
         self.C = C
         self.T = T
         self.xi = xi
@@ -1133,36 +1151,70 @@ class xfAxOrbitPlotter(object):
         self.omc = omc
         self.Tref_MJD = Tref_MJD
 
-        if np.ndim(theta) == 2:
-            number_of_companions = theta.shape[0]
-        else:
-            number_of_companions = 1
+
+        # if np.ndim(theta) == 2:
+        #     number_of_companions = theta.shape[0]
+        # else:
+        #     number_of_companions = 1
+
+        number_of_companions = len(theta)
+
 
         self.number_of_companions = number_of_companions
         model_name = 'k{:d}'.format(number_of_companions)
 
-        if model_name != 'k1':
-            # use first planet to get common parameters (parallax etc.)
-            exec (','.join(theta_names) + ' = theta[0];')
-        else:
-            exec (','.join(theta_names) + ' = theta;')
+        # exec behaves differently under python3, trying to fix it.
+        # global plx_mas
+        if 0:
+            for key, val in locals().items():
+                if key in theta_names:
+                    print('Local {} = {}'.format(key, val))
+
+        # for key, val in globals().items():
+        #     if key in theta_names:
+        #         print('Global {} = {}'.format(key, val))
+
+        # parameters of first companion
+        theta_0 = theta[0]
+
+        theta_names = theta_0.keys()
+        # if model_name != 'k1':
+        #     # use first planet to get common parameters (parallax etc.)
+        #     exec(','.join(theta_names) + ' = theta[0]')
+        # else:
+        #     exec(','.join(theta_names) + ' = theta')
+        #     statement = "global plx_mas = theta[theta_names.index('{}')]".format('plx_mas')
+        #     exec('print(statement)')
+        #     exec('statement', globals(), locals())
+        #     # exec(','.join(theta_names) + ' = theta', globals(), _locals)
+        #     # exec(','.join(theta_names) + ' = theta', _locals)
+        #     # exec(','.join(theta_names) + ' = theta', globals())
+        # # locals()
+        # if 0:
+        #     for key, val in locals().items():
+        #         if key in theta_names:
+        #             print('Local {} = {}'.format(key, val))
+
+
 
         if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
-            plx_mas = plx_abs_mas + plx_corr_mas
+            theta_0['plx_mas ']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
+        # else:
+        #     plx_mas = theta_0['plx_mas']
 
         # P_day,ecc,m2_MJ,omega_deg,T0_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg = theta;
         #         P_day,ecc,m2_MJ,omega_deg,T0_day,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,OMEGA_deg,i_deg = theta;
         #         P_day,ecc,m2_MJ,omega_deg,T0_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg,S_x,S_y,rvQuadraticDrift_mspyr,rvCubicDrift_mspyr = theta;
 
         # compute positions at measurement dates according to best-fit model p (no DCR)
-        inVec = np.array([dRA0_mas, dDE0_mas, plx_mas, muRA_mas, muDE_mas])  # ,
-        self.ppm_model = np.array(np.dot(C[0:len(inVec), :].T, inVec)).flatten();
+        inVec = np.array([theta_0['dRA0_mas'], theta_0['dDE0_mas'], theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
+        self.ppm_model = np.array(np.dot(C[0:len(inVec), :].T, inVec)).flatten()
 
         if 'rho_mas' in theta_names:
             if 'd_mas' in theta_names:
                 inVec_DCR = np.array([rho_mas, d_mas]);
             else:
-                inVec_DCR = np.array([rho_mas]);
+                inVec_DCR = np.array([theta_0['rho_mas']]);
 
             # compute measured positions (DCR-corrected)
             if C.shape[0] == 7:
@@ -1187,17 +1239,18 @@ class xfAxOrbitPlotter(object):
 
 
         for p in range(number_of_companions):
-            if model_name != 'k1':
-                exec (','.join(theta_names) + ' = theta[p];')
-            else:
-                exec (','.join(theta_names) + ' = theta;')
-
+            # if model_name != 'k1':
+            #     exec (','.join(theta_names) + ' = theta[p];')
+            # else:
+            #     exec (','.join(theta_names) + ' = theta;')
+            theta_p = theta[p]
             if 'm2_MS' in theta_names:
-                m2_MJ = m2_MS * MS_kg / MJ_kg
+                theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
 
-            tmporb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=m1_MS, m2_MJ=m2_MJ, omega_deg=omega_deg,
-                                 OMEGA_deg=OMEGA_deg, i_deg=i_deg, T0_day=T0_day, RA_deg=0., DE_deg=0., plx_mas=plx_mas,
-                                 muRA_mas=muRA_mas, muDE_mas=muDE_mas, Tref_MJD=self.Tref_MJD);
+            tmporb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
+                                 omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
+                                 T0_day=theta_p['T0_day'], RA_deg=0., DE_deg=0., plx_mas=theta_p['plx_mas'],
+                                 muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
 
             setattr(self, 'orbit_system_companion_%d' % (p), tmporb)
 
@@ -1205,9 +1258,9 @@ class xfAxOrbitPlotter(object):
                 relative_orbit_mas = tmporb.relative_orbit_fast(np.array(T['MjdUsedInTcspsi']), np.array(T['spsi']),
                                                                 np.array(T['cpsi']), shift_omega_by_pi=False);
                 # fractional luminosity
-                beta = getBeta(delta_mag)
+                beta = getBeta(theta_p['delta_mag'])
                 #     fractional mass
-                f = getB(m1_MS, m2_MS)
+                f = getB(m1_MS, theta_p['m2_MS'])
                 photocentric_orbit_mas = relative_orbit_mas * (f - beta)
                 orbit_model = photocentric_orbit_mas
             else:
@@ -1352,31 +1405,38 @@ class xfAxOrbitPlotter(object):
 
         for p in range(self.number_of_companions):
 
-            if self.number_of_companions != 1:
-                exec (','.join(self.theta_names) + ' = self.theta[p];')
-            else:
-                exec (','.join(self.theta_names) + ' = self.theta;')
+            theta_p = self.theta[p]
+            theta_names = theta_p.keys()
+            # if self.number_of_companions != 1:
+            #     exec (','.join(self.theta_names) + ' = self.theta[p];')
+            # else:
+            #     exec (','.join(self.theta_names) + ' = self.theta;')
 
             name_seed_2 = name_seed + '_companion{:d}'.format(p)
 
-            if 'm2_MS' in self.theta_names:
-                m2_MJ = m2_MS * MS_kg / MJ_kg
-            if ('plx_abs_mas' in self.theta_names) & ('plx_corr_mas' in self.theta_names):
-                plx_mas = plx_abs_mas + plx_corr_mas
+            if 'm2_MS' in theta_names:
+                theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
+            if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
+                theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
-            orb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=m1_MS, m2_MJ=m2_MJ, omega_deg=omega_deg, OMEGA_deg=OMEGA_deg,
-                              i_deg=i_deg, T0_day=T0_day, RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=plx_mas,
-                              muRA_mas=muRA_mas, muDE_mas=muDE_mas, Tref_MJD=self.Tref_MJD);
+            # orb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=m1_MS, m2_MJ=m2_MJ, omega_deg=omega_deg, OMEGA_deg=OMEGA_deg,
+            #                   i_deg=i_deg, T0_day=T0_day, RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=plx_mas,
+            #                   muRA_mas=muRA_mas, muDE_mas=muDE_mas, Tref_MJD=self.Tref_MJD);
+            orb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
+                             omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
+                             T0_day=theta_p['T0_day'], RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=theta_p['plx_mas'],
+                             muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
+
 
             t_curve_MJD = np.sort(np.tile(self.t_curve_MJD, 2));
-            tmp = arange(1., len(t_curve_MJD) + 1);
+            tmp = np.arange(1., len(t_curve_MJD) + 1);
             xi_curve = np.where(np.remainder(tmp + 1, 2) == 0);  # index of X coordinates (cpsi = 1) psi =  0 deg
             yi_curve = np.where(np.remainder(tmp, 2) == 0);  # index of X coordinates (cpsi = 1) psi =  0 deg
             cpsi_curve = tmp % 2
             spsi_curve = (tmp + 1) % 2
 
-            ppm_curve = orb.getPpm(t_curve_MJD, offsetRA_mas=dRA0_mas, offsetDE_mas=dDE0_mas,
-                                   horizonsFileSeed=horizonsFileSeed)  # , tref_MJD=self.tref_MJD);
+            ppm_curve = orb.getPpm(t_curve_MJD, offsetRA_mas=theta_p['dRA0_mas'], offsetDE_mas=theta_p['dDE0_mas'],
+                                   horizons_file_seed=horizonsFileSeed)  # , tref_MJD=self.tref_MJD);
 
             ##################################################
             # TRIPLE PANEL FIGURE
@@ -1386,7 +1446,7 @@ class xfAxOrbitPlotter(object):
             pl.subplot(3, 1, 1)
             pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
             pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
-            plt.annotate('', xy=(np.float(muRA_mas) + arrowOffsetX, np.float(muDE_mas) + arrowOffsetY),
+            plt.annotate('', xy=(np.float(theta_p['muRA_mas']) + arrowOffsetX, np.float(theta_p['muDE_mas']) + arrowOffsetY),
                          xytext=(0. + arrowOffsetX, 0. + arrowOffsetY),
                          arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
 
@@ -1403,13 +1463,13 @@ class xfAxOrbitPlotter(object):
                 yt = pl.ylim()[1] - dt * np.diff(pl.ylim())[0]
                 pl.text(xt, yt, descr)
 
-            if 'delta_mag' in self.theta_names:
+            if 'delta_mag' in theta_names:
                 relative_orbit_mas = orb.relative_orbit_fast(t_curve_MJD, spsi_curve, cpsi_curve,
-                                                             shift_omega_by_pi=False);
+                                                             shift_omega_by_pi=False)
                 # fractional luminosity
-                beta = getBeta(delta_mag)
+                beta = getBeta(theta_p['delta_mag'])
                 #     fractional mass
-                f = getB(m1_MS, m2_MS)
+                f = getB(m1_MS, theta_p['m2_MS'])
                 photocentric_orbit_mas = relative_orbit_mas * (f - beta)
                 orbit_curve = photocentric_orbit_mas
             else:
@@ -1460,13 +1520,13 @@ class xfAxOrbitPlotter(object):
             ##################################################
             #  ORBIT only
             t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
-            tmp = arange(1., len(t_epoch_MJD) + 1);
+            tmp = np.arange(1., len(t_epoch_MJD) + 1);
             xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
             yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0];  # index of Y coordinates (cpsi = 0) psi =  90 deg
             cpsi_epoch = tmp % 2
             spsi_epoch = (tmp + 1) % 2
 
-            if 'delta_mag' in self.theta_names:
+            if 'delta_mag' in theta_names:
                 relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
                                                              shift_omega_by_pi=False);
                 # fractional luminosity
@@ -2219,7 +2279,7 @@ def get_geomElem(TIC):
     p = (A ** 2 + B ** 2 + G ** 2 + F ** 2) / 2;
     q = A * G - B * F;
 
-    a_mas = numpy.sqrt(p + numpy.sqrt(p ** 2 - q ** 2));
+    a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2));
     # i_rad = math.acos(q/(a_mas**2.));
     # omega_rad = (math.atan2(B-F,A+G)+math.atan2(-B-F,A-G))/2.;
     # OMEGA_rad = (math.atan2(B-F,A+G)-math.atan2(-B-F,A-G))/2.;
@@ -2228,9 +2288,9 @@ def get_geomElem(TIC):
     omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.;
     OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.;
 
-    i_deg = i_rad * 360 / 2. / pi;
-    omega_deg = omega_rad * 360. / (2. * pi);
-    OMEGA_deg = OMEGA_rad * 360. / (2. * pi);
+    i_deg = i_rad * 360 / 2. / np.pi;
+    omega_deg = omega_rad * 360. / (2. * np.pi);
+    OMEGA_deg = OMEGA_rad * 360. / (2. * np.    pi);
 
     GE = [a_mas, omega_deg, OMEGA_deg, i_deg];
     return GE;
@@ -2311,41 +2371,153 @@ def astrom_signalFast(t_day,spsi,cpsi,ecc,P_day,T0_day,TIC):
     # return np.array(phi)
     return phi
 
+def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, step_size='5d', verbose=True, out_dir=None, vector_table_output_type=1, output_units='AU-D', overwrite=False, reference_plane='FRAME'):
+    """
+    Query the JPL Horizons web interface to return the X,Y,Z position of the target body relative to the center body
 
-def readEphemeris(horizons_file_seed):
-    
-    ephDir = '/Users/jsahlmann/astro/palta/processing/data/earthEphemeris/'
-    
-    fitsFile = ephDir + horizons_file_seed + '_XYZ.fits'
-    if not os.path.isfile(fitsFile):
-        ephFile = ephDir + horizons_file_seed + '.txt'
-        f_rd = open(ephFile, 'r')
-        file_lines = f_rd.readlines()[0].split('\r')
+
+    See Horizons_doc.pdf available at https://ssd.jpl.nasa.gov/?horizons#email
+    Documentation can also be obtained by sending en email with subject "BATCH-LONG" to horizons@ssd.jpl.nasa.gov
+
+
+    :param center: string
+        Horizons object identifier, default is Earth Center 'g@399'
+    :param target: string
+        Horizons object identifier, default is Solar System Barycenter '0'
+    :param start_time: astropy time instance
+    :param stop_time: astropy time instance
+    :param step_size: string, default is '1d' for 1 day steps
+    :return:
+
+
+    reference_plane = 'frame' is for Earh mean equator and equinox
+    """
+
+    if start_time is None:
+        start_time = Time(1950.0, format='decimalyear')
+    if stop_time is None:
+        stop_time = Time(2020.0, format='decimalyear')
+
+    if out_dir is not None:
+        ephemeris_dir = out_dir
+
+    if output_units not in ['AU-D', 'KM-S', 'KM-D']:
+        raise NotImplementedError()
+
+    if reference_plane not in ['ECLIPTIC', 'FRAME', 'B']: # last is BODY EQUATOR
+        raise NotImplementedError()
+
+    if vector_table_output_type not in np.arange(6)+1:
+        raise NotImplementedError()
+
+
+    horizons_file_seed = '{}_{}_{}_{}_{}'.format(center, target, start_time, stop_time, step_size)
+    out_file = os.path.join(ephemeris_dir, horizons_file_seed + '.txt')
+
+    if verbose:
+        print('Getting ephemeris {}'.format(horizons_file_seed))
+
+    if (not os.path.isfile(out_file)) or overwrite:
+        # run Horizons query
+        url = "https://ssd.jpl.nasa.gov/horizons_batch.cgi?batch=l&TABLE_TYPE='VECTORS'&CSV_FORMAT='YES'"
+        url += "&CENTER='{}'".format(center)
+        url += "&COMMAND='{}'".format(target)
+        url += "&START_TIME='{}'".format(start_time.isot.split('T')[0])
+        url += "&STOP_TIME='{}'".format(stop_time.isot.split('T')[0])
+        url += "&STEP_SIZE='{}'".format(step_size)
+        url += "&SKIP_DAYLT='NO'"
+        url += "&OUT_UNITS='{}'".format(output_units)
+        url += "&VEC_TABLE='{}'".format(vector_table_output_type)
+        url += "&REF_PLANE='{}'".format(reference_plane)
+
+        print(url)
+        try:
+            url_stream = urlopen(url)
+        except HTTPError as e:
+            print("Unable to open URL:", e)
+            sys.exit(1)
+
+        content = url_stream.read()
+        url_stream.close()
+
+
+        # print(content.decode())
+        with open(out_file, 'wb') as ephemeris:
+            ephemeris.write(content)
+
+    xyzdata = read_ephemeris(horizons_file_seed, overwrite=overwrite, ephemeris_path=ephemeris_dir)
+    return xyzdata
+
+
+
+def read_ephemeris(horizons_file_seed, overwrite=False, ephemeris_path=None, verbose=False):
+    """
+    Read ephemeris file obtained from the JPL HORIZONS system
+
+    TODO: clean up computation of data_start and data_end
+
+    :param horizons_file_seed:
+    :return:
+    """
+
+    if ephemeris_path is None:
+        ephemeris_path = ephemeris_dir
+
+
+
+    fits_file = os.path.join(ephemeris_path, horizons_file_seed + '_XYZ.fits')
+    if (not os.path.isfile(fits_file)) or overwrite:
+        eph_file = os.path.join(ephemeris_path, horizons_file_seed + '.txt')
+        f_rd = open(eph_file, 'r')
+        # file_lines = f_rd.readlines()[0].split('\r')
+        file_lines = f_rd.readlines()
         f_rd.close()
+        # for i in range(len(file_lines)):
+        #     line = file_lines[i]
+        #     print('{} {}'.format(i, line))
+        #     if line.strip()=='':
+        #         print('{} Empty line detected'.format(i))
+
         index_start = [i for i in range(len(file_lines)) if "$$SOE" in file_lines[i]][0]
         index_end   = [i for i in range(len(file_lines)) if "$$EOE" in file_lines[i]][0]
-        nBlankLines = len([i for i in range(index_start) if (file_lines[i] == '' or file_lines[i] == ' ')])
-        data_start = index_start - nBlankLines + 1
-        data_end = data_start + index_end - index_start - 1
-        xyzdata = Table.read(ephFile, format='ascii.no_header',delimiter=',',data_start = data_start,data_end=data_end,names=('JD','ISO','X','Y','Z','tmp'), guess=False,comment='mycomment99')
-        xyzdata['JD','X','Y','Z'].write(fitsFile, format = 'fits')
- #        xyzdata = Table.read(ephFile, format='ascii',delimiter='\t',data_start = 0,names=('JD','X','Y','Z'))
-#         xyzdata.write(fitsFile, format = 'fits')
+        # n_blank_lines = len([i for i in range(index_start) if (file_lines[i] == '' or file_lines[i] == ' ' or file_lines[i].strip() == '\n')])
+        n_blank_lines = len([i for i in range(index_start) if (file_lines[i].strip() in ['\n',''])])
+        # data_start = index_start + 1
+        data_start = index_start - n_blank_lines + 1
+        data_end = data_start + index_end - index_start -1
+        # data_end = index_end - 1
+        header_start = index_start - n_blank_lines -2
+        if verbose:
+            print('Number of blank lines found before data: {}'.format(n_blank_lines))
+            print('index_start: {}'.format(index_start))
+            print('index_end: {}'.format(index_end))
+            print('data_start: {}'.format(data_start))
+            print('data_end: {}'.format(data_end))
+            print('header start: {}'.format(header_start))
+        xyzdata = Table.read(eph_file, format='ascii.basic', delimiter=',', data_start = data_start,
+                             data_end=data_end, guess=False, comment='mycomment95', header_start = header_start)
+        xyzdata.write(fits_file, format = 'fits', overwrite=True)
+        # xyzdata = Table.read(eph_file, format='ascii.no_header', delimiter=',', data_start = data_start,
+        #                      data_end=data_end, names=('JD','ISO','X','Y','Z','tmp'), guess=False, comment='mycomment95')
+        # xyzdata['JD','X','Y','Z'].write(fits_file, format = 'fits')
     else:
-        xyzdata = Table.read(fitsFile, format = 'fits')
+        xyzdata = Table.read(fits_file, format = 'fits')
+
+    for colname in xyzdata.colnames:
+        if 'col' in colname:
+            xyzdata.remove_column(colname)
+
+    # xyzdata.rename_column('JDTDB', 'JD')
 
     return xyzdata
 
 
-def getParallaxFactors(RA_deg,DE_deg,t_JD, horizons_file_seed=None, verbose = 0, instrument=None):
+def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose = 0, instrument=None):
     
     ephFactor = -1
     RA_rad = np.deg2rad(RA_deg)
     DE_rad = np.deg2rad(DE_deg)
 
-    if horizons_file_seed is None:
-        horizons_file_seed = 'horizons_XYZ_2009-2019_EQUATORIAL_Paranal_1h'
-    
     if instrument is not None:
         instr = np.unique(instrument)
         Nepoch = len(instrument)
@@ -2357,7 +2529,7 @@ def getParallaxFactors(RA_deg,DE_deg,t_JD, horizons_file_seed=None, verbose = 0,
             idx = np.where( instrument == ins )[0]                
             if verbose:
                 print('Getting Parallax factors for %s using Seed: \t%s' % (ins,ephDict[ins]))
-            xyzdata = readEphemeris( ephDict[ins] )
+            xyzdata = read_ephemeris(ephDict[ins])
             Xip = interp1d(xyzdata['JD'],xyzdata['X'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
             Yip = interp1d(xyzdata['JD'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
             Zip = interp1d(xyzdata['JD'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
@@ -2375,25 +2547,30 @@ def getParallaxFactors(RA_deg,DE_deg,t_JD, horizons_file_seed=None, verbose = 0,
 
             parfRA  = ephFactor* ( Xip_val*np.sin(RA_rad) - Yip_val*np.cos(RA_rad) )
             parfDE =  ephFactor*(( Xip_val*np.cos(RA_rad) + Yip_val*np.sin(RA_rad) )*np.sin(DE_rad) - Zip_val*np.cos(DE_rad))
-    
-    else:
-    
-        if verbose:
-            print('Getting Parallax factors using Seed: \t%s' % horizons_file_seed)
 
-        xyzdata = readEphemeris( horizons_file_seed )
+    #     horizons_file_seed = 'horizons_XYZ_2009-2019_EQUATORIAL_Paranal_1h'
+
+    else:
+        if horizons_file_seed is None:
+            xyzdata = get_ephemeris()
+
+        # if verbose:
+        #     print('Getting Parallax factors using Seed: \t%s' % horizons_file_seed)
+        else:
+            xyzdata = read_ephemeris(horizons_file_seed)
 
         Xip = interp1d(xyzdata['JD'],xyzdata['X'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
         Yip = interp1d(xyzdata['JD'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
         Zip = interp1d(xyzdata['JD'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
-    
 
         try:    
             parfRA  = ephFactor* ( Xip(t_JD)*np.sin(RA_rad) - Yip(t_JD)*np.cos(RA_rad) )
             parfDE =  ephFactor*(( Xip(t_JD)*np.cos(RA_rad) + Yip(t_JD)*np.sin(RA_rad) )*np.sin(DE_rad) - Zip(t_JD)*np.cos(DE_rad))
         except ValueError:
-            print('Error in time interpolation for parallax factors: range %3.1f--%3.2f (%s--%s)' % (np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso ) )          
-            1/0
+            raise ValueError('Error in time interpolation for parallax factors: \n'
+                             'requested range {:3.1f}--{:3.1f} ({}--{})\n'
+                             'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso, np.min(xyzdata['JD']),np.max(xyzdata['JD']), Time(np.min(xyzdata['JD']),format='jd',scale='utc').iso, Time(np.max(xyzdata['JD']),format='jd',scale='utc').iso
+                                                                                ) )
 
         
         
@@ -2750,7 +2927,21 @@ class ImagingAstrometryData(object):
 
 
 def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_MS, instrument=None, verbose=False):
-    
+    """
+
+    :param best_genome_file:
+    :param reference_time_MJD:
+    :param theta_names:
+    :param m1_MS:
+    :param instrument:
+    :param verbose:
+    :return:
+    """
+
+    # theta dictionary of variables
+    parameters = []
+
+
     best_genome = Table.read(best_genome_file,format='ascii.basic', data_start=2, delimiter=',', guess=False)
 
     # if len(best_genome) != 1:
@@ -2790,17 +2981,23 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
     best_genome['m1_MS'] = m1_MS
     best_genome['m2_MS'] = m2_MS
 
-    col_list = theta_names #np.array(['P_day','ecc','m1_MS','m2_MS','omega_deg','T0_day','dRA0_mas','dDE0_mas','plx_mas','muRA_mas','muDE_mas','rho_mas','d_mas','OMEGA_deg','i_deg'])
+    # col_list = theta_names #np.array(['P_day','ecc','m1_MS','m2_MS','omega_deg','T0_day','dRA0_mas','dDE0_mas','plx_mas','muRA_mas','muDE_mas','rho_mas','d_mas','OMEGA_deg','i_deg'])
 
     for i in range(len(best_genome)):
-        if i == 0:
-            theta_best_genome = np.array([best_genome[c][i] for c in col_list])
-        else:
-            theta_best_genome = np.vstack((theta_best_genome, np.array([best_genome[c][i] for c in col_list])))
+        # generate dictionary
+        theta = {c: best_genome[c][i] for c in best_genome.colnames}
+        parameters.append(theta)
+
+        # if i == 0:
+        #     theta_best_genome = np.array([best_genome[c][i] for c in col_list])
+        # else:
+        #     theta_best_genome = np.vstack((theta_best_genome, np.array([best_genome[c][i] for c in col_list])))
 
     if verbose:
         for i in range(len(best_genome)):
-            for c in col_list:
-                print('Planet %d: Adopted: %s \t %3.3f' % (i, c, best_genome[c][i]))
+            theta = parameters[i]
+            for key,value in theta.items():
+                print('Planet %d: Adopted: %s \t %3.3f' % (i, key, value))
  
-    return theta_best_genome
+    # return theta_best_genome
+    return parameters
