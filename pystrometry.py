@@ -17,10 +17,14 @@ from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
 from astroquery.simbad import Simbad
 import pyslalib as sla
-# import urllib.request as urllib
-from urllib.request import urlopen
-from urllib.error import HTTPError
+import sys
+if sys.version_info[0] == 3:
+    # import urllib.request as urllib
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+import pickle
 
+from linearfit import linearfit
 # from modules.functionsAndClasses import *
 # from .functionsAndClasses import *
 # import sys
@@ -51,6 +55,7 @@ ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
 'L2': 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
 'Earth': 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
 
+global ephemeris_dir
 ephemeris_dir = '/Users/jsahlmann/astro/palta/processing/data/earthEphemeris/'
 
 
@@ -81,7 +86,7 @@ def fractional_mass(m1, m2):
 
 class OrbitSystem(object):
     "2014-01-29  JSA ESAC"
-    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0., OMEGA_deg=0., i_deg=90., T0_day = 0., RA_deg=0.,DE_deg=0.,plx_mas = 25., muRA_mas=20.,muDE_mas=50., gamma_ms=0., rvLinearDrift_mspyr = None, rvQuadraticDrift_mspyr = None,rvCubicDrift_mspyr=None ,Tref_MJD=None ): 
+    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0., OMEGA_deg=0., i_deg=90., T0_day=0., RA_deg=0., DE_deg=0., plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0., rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None, rvCubicDrift_mspyr=None, Tref_MJD=None):
         self.P_day = P_day
         self.ecc = ecc
         self.m1_MS= m1_MS
@@ -103,7 +108,7 @@ class OrbitSystem(object):
 
         self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
 
-    def pjGetOrbit(self,N,Norbit=None,t_MJD=None, psi_deg=None, verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0 ):
+    def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0 ):
         """
         DOCUMENT ARV -- simulate simultaneous 2D-astrometric and RV observations
         written: J. Sahlmann   27.07.2009   ObsGe
@@ -142,7 +147,7 @@ class OrbitSystem(object):
     
         #*************SIMULATION*PARAMATERS*********************************************
         if Norbit is not None:
-            t_day = np.linspace(0,self.P_day*Norbit,N) + self.T0_day
+            t_day = np.linspace(0, self.P_day*Norbit, N) + self.T0_day
         elif t_MJD is not None:
             t_day = t_MJD
             N = len(t_MJD)
@@ -157,7 +162,7 @@ class OrbitSystem(object):
     
         #**************RADIAL*VELOCITY**************************************************
     
-        E_rad = eccentric_anomaly(self.ecc,t_day,self.T0_day,self.P_day) # eccentric anomaly
+        E_rad = eccentric_anomaly(self.ecc, t_day, self.T0_day, self.P_day) # eccentric anomaly
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
@@ -248,24 +253,43 @@ class OrbitSystem(object):
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
-    def pjGetRV(self,t_day):
-    #    updated: J. Sahlmann   25.01.2016   STScI/ESA
-        
-        m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass     
-        omega_rad = np.deg2rad(self.omega_deg)
+    # def pjGetRV(self,t_day):
+    def compute_radial_velocity(self, t_day, component='primary'):
+        """Compute radial velocity of primary or secondary component.
+
+         updated: J. Sahlmann   25.01.2016   STScI/ESA
+         updated: J. Sahlmann   13.07.2018   STScI/AURA
+
+        Parameters
+        ----------
+        t_day
+        component
+
+        Returns
+        -------
+
+        """
+
+        # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
         i_rad =     np.deg2rad(self.i_deg)
     
         #**************RADIAL*VELOCITY**************************************************    
         E_rad = eccentric_anomaly(self.ecc,t_day,self.T0_day,self.P_day) # eccentric anomaly
-        M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        a_AU = a_m / AU_m #  in AU
+        if component=='primary':
+            M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+            omega_rad = np.deg2rad(self.omega_deg)
+        elif component == 'secondary':
+            M = Ggrav * (self.m1_MS * MS_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the secondary mass
+            omega_rad = np.deg2rad(self.omega_deg + 180.)
+
+        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the component mass in m
+        # a_AU = a_m / AU_m #  in AU
         
         # damien's method
         THETA_rad = TrueAnomaly(self.ecc,E_rad)
-        k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude            
-        a_mps = RadialVelocitiesConstants(k1,omega_rad,self.ecc)
-        rv_ms = RadialVelocitiesKepler(a_mps[0],a_mps[1],a_mps[2],THETA_rad) + self.gamma_ms
+        k_m = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
+        a_mps = RadialVelocitiesConstants(k_m, omega_rad, self.ecc)
+        rv_ms = RadialVelocitiesKepler(a_mps[0], a_mps[1], a_mps[2], THETA_rad) + self.gamma_ms
             
         if self.rvLinearDrift_mspyr is not None:
             drift_ms = (t_day - self.Tref_MJD)/year2day * self.rvLinearDrift_mspyr
@@ -282,8 +306,34 @@ class OrbitSystem(object):
         return rv_ms
 
 
+    def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k', line_style='-', line_width=1, rv_factor=1., time_offset_day=0.):
+        """Plot the radial velocity orbit of the primary
+
+        Returns
+        -------
+
+        """
+        t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.T0_day + time_offset_day
+        t_plot = Time(t_day, format='mjd').decimalyear
+        if component=='primary':
+            rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
+            pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
+        elif component=='secondary':
+            rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
+            pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
+        elif component=='both':
+            rv_mps_1 = self.compute_radial_velocity(t_day, component='primary') * rv_factor
+            rv_mps_2 = self.compute_radial_velocity(t_day, component='secondary') * rv_factor
+            pl.plot(t_plot, rv_mps_1, ls=line_style, color=line_color, lw=line_width+2, label='primary')
+            pl.plot(t_plot, rv_mps_2, ls=line_style, color=line_color, lw=line_width, label='secondary')
+        elif component=='difference':
+            rv_mps_1 = self.compute_radial_velocity(t_day, component='primary') * rv_factor
+            rv_mps_2 = self.compute_radial_velocity(t_day, component='secondary') * rv_factor
+            pl.plot(t_plot, rv_mps_1-rv_mps_2, ls=line_style, color=line_color, lw=line_width+2, label='difference')
+
+
     
-    def pjGetOrbitFast(self,N,Norbit=None,t_MJD=None, psi_deg=None, verbose=0):
+    def pjGetOrbitFast(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0):
     # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
     #    written: J. Sahlmann   18 May 2015   ESAC
     # */
@@ -312,7 +362,7 @@ class OrbitSystem(object):
         
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         
-        phi1 = astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.T0_day,TIC)
+        phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.T0_day, TIC)
         phi1_rel = np.nan #astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.T0_day,TIC_rel)
         phi2 = np.nan
         phi2_rel = np.nan
@@ -321,7 +371,7 @@ class OrbitSystem(object):
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
-    def pjGetBarycentricAstrometricOrbitFast(self,t_MJD, spsi, cpsi):
+    def pjGetBarycentricAstrometricOrbitFast(self, t_MJD, spsi, cpsi):
     # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
     #    written: J. Sahlmann   18 May 2015   ESAC
     #    updated: J. Sahlmann   25.01.2016   STScI/ESA
@@ -337,12 +387,12 @@ class OrbitSystem(object):
                
 #         t_MJD = self.MjdUsedInTcspsi
     
-        m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass 
+        # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
         d_pc  = 1./ (self.plx_mas/1000.)    
 
-        omega_rad = np.deg2rad(self.omega_deg)
-        OMEGA_rad = np.deg2rad(self.OMEGA_deg)
-        i_rad = np.deg2rad(self.i_deg)
+        # omega_rad = np.deg2rad(self.omega_deg)
+        # OMEGA_rad = np.deg2rad(self.OMEGA_deg)
+        # i_rad = np.deg2rad(self.i_deg)
     
         #**************ASTROMETRY********************************************************
         
@@ -351,11 +401,11 @@ class OrbitSystem(object):
         a_rad = np.arctan2(a_m,d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas         
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        phi1 = astrom_signalFast(t_MJD,spsi,cpsi,self.ecc,self.P_day,self.T0_day,TIC) 
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.T0_day, TIC)
         return phi1
 
 
-    def relative_orbit_fast(self,t_MJD, spsi, cpsi, unit = 'mas', shift_omega_by_pi = True, coordinate_system='cartesian'):
+    def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True, coordinate_system='cartesian'):
         '''
         Simulate fast 1D orbital astrometry
         written: J. Sahlmann   18 May 2015   ESAC
@@ -387,19 +437,19 @@ class OrbitSystem(object):
             a_rel = a_rel_m     
             
         #Thiele-Innes constants 
-        TIC     = pjGet_TIC( [ a_rel   ,   omega_rel_deg   , self.OMEGA_deg, self.i_deg ] ) 
+        TIC = pjGet_TIC([a_rel, omega_rel_deg, self.OMEGA_deg, self.i_deg])
         
         # by default these are cartesian coordinates
-        phi1 = astrom_signalFast(t_MJD,spsi,cpsi,self.ecc,self.P_day,self.T0_day,TIC) 
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.T0_day, TIC)
         
-        # compute polar coordinates if requested
+        # convert to polar coordinates if requested
         if coordinate_system=='polar':
-        	xi = np.where(cpsi==1)[0]
-        	yi = np.where(cpsi==0)[0]
-        	rho = np.sqrt(phi1[xi]**2 + phi1[yi]**2)
-        	phi_deg = np.rad2deg(np.arctan2(phi1[xi],phi1[yi]))%360.
-        	phi1[xi] = rho
-        	phi1[yi] = phi_deg
+            xi = np.where(cpsi==1)[0]
+            yi = np.where(cpsi==0)[0]
+            rho = np.sqrt(phi1[xi]**2 + phi1[yi]**2)
+            phi_deg = np.rad2deg(np.arctan2(phi1[xi], phi1[yi]))%360.
+            phi1[xi] = rho
+            phi1[yi] = phi_deg
         
         return phi1
 
@@ -484,14 +534,36 @@ class OrbitSystem(object):
     
 
 #     def getPpm(self,t_MJD,psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, tref_MJD=None, externalParallaxFactors=None, horizons_file_seed=None):
-    def getPpm(self,t_MJD,psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
-        
+    def getPpm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
+        """
+
+        Parameters
+        ----------
+        t_MJD
+        psi_deg
+        offsetRA_mas
+        offsetDE_mas
+        externalParallaxFactors
+        horizons_file_seed
+        instrument
+        verbose
+
+        Returns
+        -------
+
+        """
+        # check that t_MJD is sorted and increasing
+        if sorted(list(t_MJD)) != list(t_MJD):
+            raise RuntimeError('Please sort the input timestamps first.')
+        if t_MJD[0] > t_MJD[-1]:
+            raise RuntimeError('Please sort the input timestamps in increasing order.')
+
         Nframes = len(t_MJD)
         t_JD = t_MJD + 2400000.5
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:                
-            parf = getParallaxFactors(self.RA_deg,self.DE_deg,t_JD, horizons_file_seed=horizons_file_seed,verbose=verbose,instrument=instrument)
+            parf = getParallaxFactors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
                         
         self.parf = parf
         if self.Tref_MJD is not None:
@@ -521,7 +593,10 @@ class OrbitSystem(object):
 #                 ppfact = parf[0]               
 
 #           added JSA 2016-03-07
-            ppfact = parf[0] * cpsi + parf[1] * spsi    # see Sahlmann+11 Eq. 1 / 8
+            if externalParallaxFactors is None:
+                ppfact = parf[0] * cpsi + parf[1] * spsi    # see Sahlmann+11 Eq. 1 / 8
+            else:
+                ppfact = parf
                  
         else:
             xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
@@ -529,8 +604,10 @@ class OrbitSystem(object):
             ppfact = np.zeros(2*Nframes)
             ppfact[xi] = parf[0]
             ppfact[yi] = parf[1]
+            self.xi = np.where(xi)[0]
+            self.yi = np.where(yi)[0]
                         
-        C = np.array([cpsi,spsi,ppfact,tcpsi,tspsi])
+        C = np.array([cpsi, spsi, ppfact, tcpsi, tspsi])
         self.coeffMatrix = C
         self.timeUsedInTcspsi = np.array(t)
         if psi_deg is not None:
@@ -538,19 +615,24 @@ class OrbitSystem(object):
         else:
             self.MjdUsedInTcspsi = np.array(np.sort(np.tile(t_MJD ,2)))
 
-        inVec = np.array([offsetRA_mas,offsetDE_mas,self.plx_mas,self.muRA_mas,self.muDE_mas])
+        inVec = np.array([offsetRA_mas, offsetDE_mas, self.plx_mas, self.muRA_mas, self.muDE_mas])
         ppm = np.dot(C.T,inVec)
+        self.ppm = ppm
         if psi_deg is not None:
             return ppm
         else:
             ppm2d = [ppm[xi],ppm[yi]]
             return ppm2d
 
-    def plot_orbits(self, timestamps_curve_2D=None, timestamps_probe_2D=None, timestamps_probe_2D_label=None, delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None):
+    def plot_orbits(self, timestamps_curve_2D=None, timestamps_probe_2D=None, timestamps_probe_2D_label=None,
+                    delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
+                    new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
+                    show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
+                    timeformat='decimalyear', name_seed=''):
         """
         Plot barycentric, photocentric, and relative orbits in two panels
-        :param timestamps_curve_2D:
-        :param timestamps_probe_2D:
+        :param timestamps_curve_2D: in MJD
+        :param timestamps_probe_2D: in MJD
         :param delta_mag:
         :param N_orbit:
         :param N_curve:
@@ -558,7 +640,7 @@ class OrbitSystem(object):
         """
 
         if timestamps_curve_2D is None:
-            timestamps_curve_2D = np.linspace(self.T0_day,self.T0_day+N_orbit+self.P_day,N_curve)
+            timestamps_curve_2D = np.linspace(self.T0_day-self.P_day,self.T0_day+N_orbit+self.P_day,N_curve)
 
         timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry( timestamps_curve_2D )
         # relative orbit
@@ -576,19 +658,25 @@ class OrbitSystem(object):
     
             # photocentre orbit about the system's barycentre
             phi0_curve_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve, shift_omega_by_pi = False)
-            phi0_probe_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_probe_1D, spsi_probe, cpsi_probe, shift_omega_by_pi = False)
+            if timestamps_probe_2D is not None:
+                phi0_probe_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_probe_1D, spsi_probe, cpsi_probe, shift_omega_by_pi = False)
 
 
         # barycentric orbit of M1
         phi0_curve_barycentre = self.pjGetBarycentricAstrometricOrbitFast(timestamps_curve_1D, spsi_curve, cpsi_curve)
-        phi0_probe_barycentre = self.pjGetBarycentricAstrometricOrbitFast(timestamps_probe_1D, spsi_probe, cpsi_probe)
+        if timestamps_probe_2D is not None:
+            phi0_probe_barycentre = self.pjGetBarycentricAstrometricOrbitFast(timestamps_probe_1D, spsi_probe, cpsi_probe)
 
         n_figure_columns = 2
         n_figure_rows = 1
         # fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=True, sharey=True)
-        fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=False, sharey=False)
+
+        if new_figure:
+            fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=share_axes, sharey=share_axes)
+        else:
+            axes = pl.gcf().axes
         # plot smooth orbit curve
-        axes[0].plot(phi0_curve_barycentre[xi_curve] ,phi0_curve_barycentre[yi_curve],'k--',lw=1, label='Barycentre')
+        axes[0].plot(phi0_curve_barycentre[xi_curve] ,phi0_curve_barycentre[yi_curve],'k--',lw=line_width, color=line_color, ls=line_style) #, label='Barycentre'
         # plot individual epochs    
         if timestamps_probe_2D is not None:
             axes[0].plot(phi0_probe_barycentre[xi_probe],phi0_probe_barycentre[yi_probe],'bo',mfc='0.7', label=timestamps_probe_2D_label)
@@ -598,6 +686,23 @@ class OrbitSystem(object):
             if timestamps_probe_2D is not None:
                 axes[0].plot(phi0_probe_photocentre[xi_probe],phi0_probe_photocentre[yi_probe],'bo')
 
+
+
+        if show_orientation:
+            # arrow_index_1 = np.int(N_curve/3.3)
+            arrow_index_1 = 3*np.int(N_curve/5)
+            arrow_index_2 = arrow_index_1 + 10
+            length_factor = 1
+            arrow_factor = 2
+
+            # ax = pl.axes()
+            arrow_base_x = phi0_curve_barycentre[xi_curve][arrow_index_1]
+            arrow_base_y = phi0_curve_barycentre[yi_curve][arrow_index_1]
+            arrow_delta_x = phi0_curve_barycentre[xi_curve][arrow_index_2] - arrow_base_x
+            arrow_delta_y = phi0_curve_barycentre[yi_curve][arrow_index_2] - arrow_base_y
+
+            axes[0].arrow(arrow_base_x+arrow_offset_x, arrow_base_y, arrow_delta_x*length_factor, arrow_delta_y*length_factor, head_width=0.05*arrow_factor, head_length=0.1*arrow_factor, fc=line_color, ec=line_color) #, head_width=0.05, head_length=0.1
+
         # plot origin = position of barycentre
         axes[0].plot(0,0,'kx')
         axes[0].axhline(y=0,color='0.7',ls='--',zorder=-50)
@@ -606,16 +711,28 @@ class OrbitSystem(object):
         axes[0].set_xlabel('Offset in Right Ascension (mas)')
         axes[0].set_ylabel('Offset in Declination (mas)')
         axes[0].axis('equal')
-        axes[0].invert_xaxis()
+        if invert_xaxis:
+            axes[0].invert_xaxis()
         axes[0].legend(loc='best')
         axes[0].set_title('Bary-/photocentric orbit of M1')
 
         # second panel
         # plot smooth orbit curve
-        axes[1].plot(phi0_curve_relative[xi_curve],phi0_curve_relative[yi_curve],'k-',lw=1)
+        axes[1].plot(phi0_curve_relative[xi_curve],phi0_curve_relative[yi_curve],'k-',lw=line_width, color=line_color, ls=line_style)
         # plot individual epochs
         if timestamps_probe_2D is not None:
             axes[1].plot(phi0_probe_relative[xi_probe],phi0_probe_relative[yi_probe], 'bo', label=timestamps_probe_2D_label)
+            print('relative separation: {}'.format(np.linalg.norm([phi0_probe_relative[xi_probe],phi0_probe_relative[yi_probe]], axis=0)))
+
+        if show_orientation:
+            # ax = pl.axes()
+            arrow_base_x = phi0_curve_relative[xi_curve][arrow_index_1]
+            arrow_base_y = phi0_curve_relative[yi_curve][arrow_index_1]
+            arrow_delta_x = phi0_curve_relative[xi_curve][arrow_index_2] - arrow_base_x
+            arrow_delta_y = phi0_curve_relative[yi_curve][arrow_index_2] - arrow_base_y
+
+            axes[1].arrow(arrow_base_x+arrow_offset_x, arrow_base_y, arrow_delta_x*length_factor, arrow_delta_y*length_factor, head_width=0.05*arrow_factor, head_length=0.1*arrow_factor, fc=line_color, ec=line_color)
+
         # plot origin = position of primary
         axes[1].plot(0,0,'kx')
         axes[1].axhline(y=0,color='0.7',ls='--',zorder=-50)
@@ -625,12 +742,408 @@ class OrbitSystem(object):
         axes[1].axis('equal')
         axes[1].legend(loc='best')
         axes[1].set_title('Relative orbit of M2 about M1')
-        if not axes[1]._sharex:
+        if (not axes[1]._sharex) and (invert_xaxis):
             axes[1].invert_xaxis()
         pl.show()
         if save_plot:
-            figName = os.path.join(plot_dir, 'astrometric_orbits.pdf')
-            plt.savefig(figName,transparent=True,bbox_inches='tight',pad_inches=0.05)
+            fig_name = os.path.join(plot_dir, '{}_orbits_sky.pdf'.format(name_seed))
+            plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
+        # show barycentric offsets as function of time
+        if show_time:
+            t_plot_curve = getattr(Time(timestamps_curve_2D, format='mjd'), timeformat)
+
+            n_figure_columns = 2
+            n_figure_rows = 1
+            fig, axes = pl.subplots(n_figure_rows, n_figure_columns,
+                                    figsize=(n_figure_columns * 8, n_figure_rows * 4),
+                                    facecolor='w', edgecolor='k', sharex=share_axes,
+                                    sharey=share_axes)
+            # plot smooth orbit curve
+            axes[0].plot(t_plot_curve, phi0_curve_barycentre[xi_curve], 'k-',
+                         lw=line_width, color=line_color, ls=line_style)
+            axes[1].plot(t_plot_curve, phi0_curve_barycentre[yi_curve], 'k-',
+                         lw=line_width, color=line_color, ls=line_style)
+
+            axes[0].set_ylabel('Offset in Right Ascension (mas)')
+            axes[1].set_ylabel('Offset in Declination (mas)')
+            axes[0].set_xlabel('Time ({})'.format(timeformat))
+            axes[1].set_xlabel('Time ({})'.format(timeformat))
+
+            pl.suptitle('Barycentre orbit')
+
+            # plot individual epochs
+            if timestamps_probe_2D is not None:
+                axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').decimalyear, phi0_probe_barycentre[xi_probe], 'bo',
+                             mfc='0.7', label=timestamps_probe_2D_label)
+                axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').decimalyear, phi0_probe_barycentre[yi_probe], 'bo',
+                             mfc='0.7', label=timestamps_probe_2D_label)
+
+            pl.show()
+            if save_plot:
+                fig_name = os.path.join(plot_dir, '{}_barycentre_orbit_time.pdf'.format(name_seed))
+                plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
+
+    def plot_ppm(self, timestamps_curve_2D=None, timestamps_probe_2D=None,
+                    timestamps_probe_2D_label=None,
+                    delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
+                    new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
+                    show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
+                    show_difference_to=None, timeformat='decimalyear',
+                    title=None, show_sky=False, name_seed='',
+                    **kwargs):
+        """Plot the parallax and proper motion of the instance.
+        """
+        if timestamps_curve_2D is None:
+            timestamps_curve_2D = np.linspace(self.T0_day - self.P_day,
+                                          self.T0_day + N_orbit + self.P_day, N_curve)
+        else:
+            N_curve = len(timestamps_curve_2D)
+
+        ppm_curve_mas = self.getPpm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+        ppm_probe_mas = self.getPpm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+        if show_difference_to is not None:
+            # expect OrbitSystem instance as input
+            ppm_curve_mas_2 = show_difference_to.getPpm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+            ppm_probe_mas_2 = show_difference_to.getPpm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+
+            ppm_curve_mas = [ppm_curve_mas[i] - ppm_curve_mas_2[i] for i in range(len(ppm_curve_mas))]
+            ppm_probe_mas = [ppm_probe_mas[i] - ppm_probe_mas_2[i] for i in range(len(ppm_probe_mas))]
+
+
+
+        if show_sky:
+            n_figure_columns = 1
+            n_figure_rows = 1
+            if new_figure:
+                # fig = pl.figure(figsize=(n_figure_columns * 6, n_figure_rows * 6), facecolor='w', edgecolor='k')
+                # axes = pl.gca()
+                fig, axes = pl.subplots(n_figure_rows, n_figure_columns,
+                                        figsize=(n_figure_columns * 6, n_figure_rows * 6),
+                                        facecolor='w', edgecolor='k', sharex=share_axes,
+                                        sharey=share_axes)
+                axes = [axes]
+            else:
+                axes = pl.gcf().axes
+            # plot smooth orbit curve
+            axes[0].plot(ppm_curve_mas[0], ppm_curve_mas[1], 'k--',
+                         lw=line_width, color=line_color, ls=line_style)
+            # plot individual epochs
+            if timestamps_probe_2D is not None:
+                axes[0].plot(ppm_probe_mas[0], ppm_probe_mas[1], 'bo', label=timestamps_probe_2D_label, **kwargs)
+            axes[0].set_xlabel('Offset in Right Ascension (mas)')
+            axes[0].set_ylabel('Offset in Declination (mas)')
+            axes[0].axis('equal')
+            if invert_xaxis:
+                axes[0].invert_xaxis()
+            if show_orientation:
+                arrow_index_1 = np.int(N_curve / 5)
+                arrow_index_2 = arrow_index_1 + 10
+                length_factor = 10
+                arrow_factor = 1000
+
+                arrow_base_x = ppm_curve_mas[0][arrow_index_1]
+                arrow_base_y = ppm_curve_mas[1][arrow_index_1]
+                arrow_delta_x = ppm_curve_mas[0][arrow_index_2] - arrow_base_x
+                arrow_delta_y = ppm_curve_mas[2][arrow_index_2] - arrow_base_y
+
+                axes[0].arrow(arrow_base_x + arrow_offset_x, arrow_base_y,
+                              arrow_delta_x * length_factor, arrow_delta_y * length_factor,
+                              head_width=0.05 * arrow_factor, head_length=0.1 * arrow_factor,
+                              fc=line_color,
+                              ec=line_color)  # , head_width=0.05, head_length=0.1
+
+            pl.show()
+            if save_plot:
+                fig_name = os.path.join(plot_dir, '{}_ppm_sky.pdf'.format(name_seed))
+                plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
+        if show_time:
+            n_figure_columns = 2
+            n_figure_rows = 1
+            if new_figure:
+                fig, axes = pl.subplots(n_figure_rows, n_figure_columns,
+                                        figsize=(n_figure_columns * 8, n_figure_rows * 4),
+                                        facecolor='w', edgecolor='k', sharex=share_axes,
+                                        sharey=share_axes)
+            else:
+                axes = pl.gcf().axes
+
+            t_plot_curve = getattr(Time(timestamps_curve_2D, format='mjd'), timeformat)
+            t_plot_probe = getattr(Time(timestamps_probe_2D, format='mjd'), timeformat)
+
+            # plot smooth PPM curve
+            axes[0].plot(t_plot_curve, ppm_curve_mas[0], 'k-', lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
+            axes[1].plot(t_plot_curve, ppm_curve_mas[1], 'k-', lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
+            axes[0].axhline(y=0, color='0.7', ls='--', zorder=-50)
+            axes[1].axhline(y=0, color='0.7', ls='--', zorder=-50)
+
+            axes[0].set_ylabel('Offset in Right Ascension (mas)')
+            axes[1].set_ylabel('Offset in Declination (mas)')
+
+            axes[0].set_xlabel('Time ({})'.format(timeformat))
+            axes[1].set_xlabel('Time ({})'.format(timeformat))
+
+            if title is not None:
+                pl.suptitle(title)
+
+            # plot individual epochs
+            if timestamps_probe_2D is not None:
+                axes[0].plot(t_plot_probe, ppm_probe_mas[0], 'bo', label=timestamps_probe_2D_label, **kwargs)
+                axes[1].plot(t_plot_probe, ppm_probe_mas[1], 'bo', label=timestamps_probe_2D_label, **kwargs)
+                if timestamps_probe_2D_label is not None:
+                    axes[0].legend(loc='best')
+
+            pl.show()
+            if save_plot:
+                fig_name = os.path.join(plot_dir, '{}_ppm_time.pdf'.format(name_seed))
+                plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
+        # return
+        # # 1/0
+        #
+        #
+        # if delta_mag is not None:
+        #     axes[0].plot(phi0_curve_photocentre[xi_curve], phi0_curve_photocentre[yi_curve], 'k-',
+        #                  lw=1, label='Photocentre')
+        #     if timestamps_probe_2D is not None:
+        #         axes[0].plot(phi0_probe_photocentre[xi_probe], phi0_probe_photocentre[yi_probe],
+        #                      'bo')
+        #
+        # if show_orientation:
+        #     # arrow_index_1 = np.int(N_curve/3.3)
+        #     arrow_index_1 = np.int(N_curve / 5)
+        #     arrow_index_2 = arrow_index_1 + 10
+        #     length_factor = 10
+        #     arrow_factor = 1000
+        #
+        #     # ax = pl.axes()
+        #     arrow_base_x = phi0_curve_barycentre[xi_curve][arrow_index_1]
+        #     arrow_base_y = phi0_curve_barycentre[yi_curve][arrow_index_1]
+        #     arrow_delta_x = phi0_curve_barycentre[xi_curve][arrow_index_2] - arrow_base_x
+        #     arrow_delta_y = phi0_curve_barycentre[yi_curve][arrow_index_2] - arrow_base_y
+        #
+        #     axes[0].arrow(arrow_base_x + arrow_offset_x, arrow_base_y,
+        #                   arrow_delta_x * length_factor, arrow_delta_y * length_factor,
+        #                   head_width=0.05 * arrow_factor, head_length=0.1 * arrow_factor,
+        #                   fc=line_color, ec=line_color)  # , head_width=0.05, head_length=0.1
+        #
+        # # plot origin = position of barycentre
+        # axes[0].plot(0, 0, 'kx')
+        # axes[0].axhline(y=0, color='0.7', ls='--', zorder=-50)
+        # axes[0].axvline(x=0, color='0.7', ls='--', zorder=-50)
+        #
+        # axes[0].set_xlabel('Offset in Right Ascension (mas)')
+        # axes[0].set_ylabel('Offset in Declination (mas)')
+        # axes[0].axis('equal')
+        # if invert_xaxis:
+        #     axes[0].invert_xaxis()
+        # axes[0].legend(loc='best')
+        # axes[0].set_title('Bary-/photocentric orbit of M1')
+        #
+        # # second panel
+        # # plot smooth orbit curve
+        # axes[1].plot(phi0_curve_relative[xi_curve], phi0_curve_relative[yi_curve], 'k-',
+        #              lw=line_width, color=line_color, ls=line_style)
+        # # plot individual epochs
+        # if timestamps_probe_2D is not None:
+        #     axes[1].plot(phi0_probe_relative[xi_probe], phi0_probe_relative[yi_probe], 'bo',
+        #                  label=timestamps_probe_2D_label)
+        #     print('relative separation: {}'.format(
+        #         np.linalg.norm([phi0_probe_relative[xi_probe], phi0_probe_relative[yi_probe]],
+        #                        axis=0)))
+        #
+        # if show_orientation:
+        #     # ax = pl.axes()
+        #     arrow_base_x = phi0_curve_relative[xi_curve][arrow_index_1]
+        #     arrow_base_y = phi0_curve_relative[yi_curve][arrow_index_1]
+        #     arrow_delta_x = phi0_curve_relative[xi_curve][arrow_index_2] - arrow_base_x
+        #     arrow_delta_y = phi0_curve_relative[yi_curve][arrow_index_2] - arrow_base_y
+        #
+        #     axes[1].arrow(arrow_base_x + arrow_offset_x, arrow_base_y,
+        #                   arrow_delta_x * length_factor, arrow_delta_y * length_factor,
+        #                   head_width=0.05 * arrow_factor, head_length=0.1 * arrow_factor,
+        #                   fc=line_color, ec=line_color)
+        #
+        # # plot origin = position of primary
+        # axes[1].plot(0, 0, 'kx')
+        # axes[1].axhline(y=0, color='0.7', ls='--', zorder=-50)
+        # axes[1].axvline(x=0, color='0.7', ls='--', zorder=-50)
+        #
+        # axes[1].set_xlabel('Offset in Right Ascension (mas)')
+        # axes[1].axis('equal')
+        # axes[1].legend(loc='best')
+        # axes[1].set_title('Relative orbit of M2 about M1')
+        # if (not axes[1]._sharex) and (invert_xaxis):
+        #     axes[1].invert_xaxis()
+        # pl.show()
+        # if save_plot:
+        #     figName = os.path.join(plot_dir, 'astrometric_orbits.pdf')
+        #     plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+        #
+        #
+        #
+        #
+        # timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(
+        #     timestamps_curve_2D)
+        # # relative orbit
+        # phi0_curve_relative = self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve,
+        #                                                shift_omega_by_pi=True)
+        #
+        # if timestamps_probe_2D is not None:
+        #     timestamps_probe_1D, cpsi_probe, spsi_probe, xi_probe, yi_probe = get_spsi_cpsi_for_2Dastrometry(
+        #         timestamps_probe_2D)
+        #     phi0_probe_relative = self.relative_orbit_fast(timestamps_probe_1D, spsi_probe,
+        #                                                    cpsi_probe, shift_omega_by_pi=True)
+        #
+        # if delta_mag is not None:
+        #     # fractional luminosity
+        #     beta = fractional_luminosity(0., 0. + delta_mag)
+        #     #     fractional mass
+        #     f = getB(self.m1_MS, self.m2_MS)
+        #
+        #     # photocentre orbit about the system's barycentre
+        #     phi0_curve_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_curve_1D,
+        #                                                                    spsi_curve, cpsi_curve,
+        #                                                                    shift_omega_by_pi=False)
+        #     if timestamps_probe_2D is not None:
+        #         phi0_probe_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_probe_1D,
+        #                                                                        spsi_probe,
+        #                                                                        cpsi_probe,
+        #                                                                        shift_omega_by_pi=False)
+        #
+        # # barycentric orbit of M1
+        # phi0_curve_barycentre = self.pjGetBarycentricAstrometricOrbitFast(timestamps_curve_1D,
+        #                                                                   spsi_curve, cpsi_curve)
+        # if timestamps_probe_2D is not None:
+        #     phi0_probe_barycentre = self.pjGetBarycentricAstrometricOrbitFast(timestamps_probe_1D,
+        #                                                                       spsi_probe,
+        #                                                                       cpsi_probe)
+        #
+        # n_figure_columns = 2
+        # n_figure_rows = 1
+        # # fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=True, sharey=True)
+        #
+        # if new_figure:
+        #     fig, axes = pl.subplots(n_figure_rows, n_figure_columns,
+        #                             figsize=(n_figure_columns * 6, n_figure_rows * 5),
+        #                             facecolor='w', edgecolor='k', sharex=share_axes,
+        #                             sharey=share_axes)
+        # else:
+        #     axes = pl.gcf().axes
+        # # plot smooth orbit curve
+        # axes[0].plot(phi0_curve_barycentre[xi_curve], phi0_curve_barycentre[yi_curve], 'k--',
+        #              lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
+        # # plot individual epochs
+        # if timestamps_probe_2D is not None:
+        #     axes[0].plot(phi0_probe_barycentre[xi_probe], phi0_probe_barycentre[yi_probe], 'bo',
+        #                  mfc='0.7', label=timestamps_probe_2D_label)
+        #
+        # if delta_mag is not None:
+        #     axes[0].plot(phi0_curve_photocentre[xi_curve], phi0_curve_photocentre[yi_curve], 'k-',
+        #                  lw=1, label='Photocentre')
+        #     if timestamps_probe_2D is not None:
+        #         axes[0].plot(phi0_probe_photocentre[xi_probe], phi0_probe_photocentre[yi_probe],
+        #                      'bo')
+        #
+        # if show_orientation:
+        #     # arrow_index_1 = np.int(N_curve/3.3)
+        #     arrow_index_1 = np.int(N_curve / 5)
+        #     arrow_index_2 = arrow_index_1 + 10
+        #     length_factor = 10
+        #     arrow_factor = 1000
+        #
+        #     # ax = pl.axes()
+        #     arrow_base_x = phi0_curve_barycentre[xi_curve][arrow_index_1]
+        #     arrow_base_y = phi0_curve_barycentre[yi_curve][arrow_index_1]
+        #     arrow_delta_x = phi0_curve_barycentre[xi_curve][arrow_index_2] - arrow_base_x
+        #     arrow_delta_y = phi0_curve_barycentre[yi_curve][arrow_index_2] - arrow_base_y
+        #
+        #     axes[0].arrow(arrow_base_x + arrow_offset_x, arrow_base_y,
+        #                   arrow_delta_x * length_factor, arrow_delta_y * length_factor,
+        #                   head_width=0.05 * arrow_factor, head_length=0.1 * arrow_factor,
+        #                   fc=line_color, ec=line_color)  # , head_width=0.05, head_length=0.1
+        #
+        # # plot origin = position of barycentre
+        # axes[0].plot(0, 0, 'kx')
+        # axes[0].axhline(y=0, color='0.7', ls='--', zorder=-50)
+        # axes[0].axvline(x=0, color='0.7', ls='--', zorder=-50)
+        #
+        # axes[0].set_xlabel('Offset in Right Ascension (mas)')
+        # axes[0].set_ylabel('Offset in Declination (mas)')
+        # axes[0].axis('equal')
+        # if invert_xaxis:
+        #     axes[0].invert_xaxis()
+        # axes[0].legend(loc='best')
+        # axes[0].set_title('Bary-/photocentric orbit of M1')
+        #
+        # # second panel
+        # # plot smooth orbit curve
+        # axes[1].plot(phi0_curve_relative[xi_curve], phi0_curve_relative[yi_curve], 'k-',
+        #              lw=line_width, color=line_color, ls=line_style)
+        # # plot individual epochs
+        # if timestamps_probe_2D is not None:
+        #     axes[1].plot(phi0_probe_relative[xi_probe], phi0_probe_relative[yi_probe], 'bo',
+        #                  label=timestamps_probe_2D_label)
+        #     print('relative separation: {}'.format(
+        #         np.linalg.norm([phi0_probe_relative[xi_probe], phi0_probe_relative[yi_probe]],
+        #                        axis=0)))
+        #
+        # if show_orientation:
+        #     # ax = pl.axes()
+        #     arrow_base_x = phi0_curve_relative[xi_curve][arrow_index_1]
+        #     arrow_base_y = phi0_curve_relative[yi_curve][arrow_index_1]
+        #     arrow_delta_x = phi0_curve_relative[xi_curve][arrow_index_2] - arrow_base_x
+        #     arrow_delta_y = phi0_curve_relative[yi_curve][arrow_index_2] - arrow_base_y
+        #
+        #     axes[1].arrow(arrow_base_x + arrow_offset_x, arrow_base_y,
+        #                   arrow_delta_x * length_factor, arrow_delta_y * length_factor,
+        #                   head_width=0.05 * arrow_factor, head_length=0.1 * arrow_factor,
+        #                   fc=line_color, ec=line_color)
+        #
+        # # plot origin = position of primary
+        # axes[1].plot(0, 0, 'kx')
+        # axes[1].axhline(y=0, color='0.7', ls='--', zorder=-50)
+        # axes[1].axvline(x=0, color='0.7', ls='--', zorder=-50)
+        #
+        # axes[1].set_xlabel('Offset in Right Ascension (mas)')
+        # axes[1].axis('equal')
+        # axes[1].legend(loc='best')
+        # axes[1].set_title('Relative orbit of M2 about M1')
+        # if (not axes[1]._sharex) and (invert_xaxis):
+        #     axes[1].invert_xaxis()
+        # pl.show()
+        # if save_plot:
+        #     figName = os.path.join(plot_dir, 'astrometric_orbits.pdf')
+        #     plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+        #
+        # # show barycentric offsets as function of time
+        # if show_time:
+        #     n_figure_columns = 2
+        #     n_figure_rows = 1
+        #     fig, axes = pl.subplots(n_figure_rows, n_figure_columns,
+        #                             figsize=(n_figure_columns * 6, n_figure_rows * 5),
+        #                             facecolor='w', edgecolor='k', sharex=share_axes,
+        #                             sharey=share_axes)
+        #     # plot smooth orbit curve
+        #     axes[0].plot(Time(timestamps_curve_1D[xi_curve], format='mjd').decimalyear,
+        #                  phi0_curve_barycentre[xi_curve], 'k-',
+        #                  lw=line_width, color=line_color, ls=line_style)
+        #     axes[1].plot(Time(timestamps_curve_1D[yi_curve], format='mjd').decimalyear,
+        #                  phi0_curve_barycentre[yi_curve], 'k-',
+        #                  lw=line_width, color=line_color, ls=line_style)
+        #
+        #     # plot individual epochs
+        #     if timestamps_probe_2D is not None:
+        #         axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').decimalyear,
+        #                      phi0_probe_barycentre[xi_probe], 'bo',
+        #                      mfc='0.7', label=timestamps_probe_2D_label)
+        #         axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').decimalyear,
+        #                      phi0_probe_barycentre[yi_probe], 'bo',
+        #                      mfc='0.7', label=timestamps_probe_2D_label)
+        #
+        #     pl.show()
 
 
 class PpmPlotter(object):
@@ -656,7 +1169,7 @@ class PpmPlotter(object):
     """
 
     def __init__(self, p, C, T, xi, yi, omc, noParallaxFit=0, psi_deg=None, epoch_outlier_dir=None,
-                 outlier_sigma_threshold=2.):
+                 outlier_sigma_threshold=2., absolute_threshold=None):
 
         self.p = p
         self.C = C
@@ -799,30 +1312,35 @@ class PpmPlotter(object):
                 self.stdResidualX[jj] = np.std(omc[tmpIndexX])
                 self.stdResidualY[jj] = np.std(omc[tmpIndexY])
 
-                # if epoch_outlier_dir is not None:
-                outliers_x = np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX])) > outlier_sigma_threshold * \
+                if absolute_threshold is not None:
+                    outliers_x = (np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX])) > outlier_sigma_threshold * self.stdResidualX[jj]) | (np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX])) > absolute_threshold)
+
+                    outliers_y = (np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY])) > outlier_sigma_threshold * self.stdResidualY[jj]) | (np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY])) > absolute_threshold)
+
+                else:
+                    outliers_x = np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX])) > outlier_sigma_threshold * \
                                                                                 self.stdResidualX[jj]
+                    outliers_y = np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY])) > outlier_sigma_threshold * \
+                                                                                    self.stdResidualY[jj]
                 if any(outliers_x):
                     tmp_1D_index_x = np.where(outliers_x)[0]
-                    print('Detected %d X-residual outliers (%2.1f sigma) in epoch %d' % (
-                    len(tmp_1D_index_x), outlier_sigma_threshold, jj), end='')
+                    print('Detected %d X-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
+                    len(tmp_1D_index_x), outlier_sigma_threshold, epoch), end='')
                     print(np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX]))[tmp_1D_index_x], end='')
                     for ii in tmp_1D_index_x:
-                        print('{:.12f}'.format(self.T['MJD'][tmpIndexX[ii]]), end=',')
+                        print(' {:.12f}'.format(self.T['MJD'][tmpIndexX[ii]]), end=',')
                     print()
 
                     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_x]))
                     # outlier_1D_index.append(tmpIndexX[tmp_1D_index_x].tolist())
 
-                outliers_y = np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY])) > outlier_sigma_threshold * \
-                                                                                self.stdResidualY[jj]
                 if any(outliers_y):
                     tmp_1D_index_y = np.where(outliers_y)[0]
-                    print('Detected %d Y-residual outliers (%2.1f sigma) in epoch %d' % (
-                    len(tmp_1D_index_y), outlier_sigma_threshold, jj), end='')
+                    print('Detected %d Y-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
+                    len(tmp_1D_index_y), outlier_sigma_threshold, epoch), end='')
                     print(np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY]))[tmp_1D_index_y], end='')
                     for ii in tmp_1D_index_y:
-                        print('{:.12f}'.format(self.T['MJD'][tmpIndexY[ii]]), end=',')
+                        print(' {:.12f}'.format(self.T['MJD'][tmpIndexY[ii]]), end=',')
                     print()
                     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_y]))
                     # outlier_1D_index.append(tmpIndexY[tmp_1D_index_y].tolist())
@@ -877,9 +1395,29 @@ class PpmPlotter(object):
             self.epoch_omc_std_Y = np.std(self.meanResidualY)
             self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
 
+
     def ppm_plot(self, save_plot=0, plot_dir=None, name_seed='', descr=None, omc2D=0, arrowOffsetX=0, arrowOffsetY=0,
                  horizons_file_seed=None, psi_deg=None, instrument=None, separate_residual_panels=0,
-                 residual_y_axis_limit=None):
+                 residual_y_axis_limit=None, individual_frame_figure=False, omc_description=None):
+        """Make figures showing results of PPM fitting.
+
+        Parameters
+        ----------
+        save_plot
+        plot_dir
+        name_seed
+        descr
+        omc2D
+        arrowOffsetX
+        arrowOffsetY
+        horizons_file_seed
+        psi_deg
+        instrument
+        separate_residual_panels
+        residual_y_axis_limit
+        individual_frame_figure
+
+        """
 
         if self.noParallaxFit != 1:
             orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., T0_day=0,
@@ -895,34 +1433,32 @@ class PpmPlotter(object):
         else:
             n_subplots = 2
 
-
-
         ##################################################################
         # Figure with on-sky motion only, showing individual frames
-        fig = pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
-        pl.clf()
+        if individual_frame_figure:
+            fig = pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
+            pl.clf()
 
-        if instrument is None:
-            if psi_deg is None:
-                ppm_curve = orb.getPpm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                       horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
-            ppm_meas = orb.getPpm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                  horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
-            if psi_deg is None:
-                pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
-                pl.plot(self.Xmean, self.Ymean, 'ko')
-                pl.plot(self.ppm_meas[self.xi], self.ppm_meas[self.yi], 'b.')
+            if instrument is None:
+                if psi_deg is None:
+                    ppm_curve = orb.getPpm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                           horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                ppm_meas = orb.getPpm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                      horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                if psi_deg is None:
+                    pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
+                    pl.plot(self.Xmean, self.Ymean, 'ko')
+                    pl.plot(self.ppm_meas[self.xi], self.ppm_meas[self.yi], 'b.')
 
-        pl.axis('equal')
-        ax = plt.gca()
-        ax.invert_xaxis()
-        pl.xlabel('Offset in Right Ascension (mas)')
-        pl.ylabel('Offset in Declination (mas)')
-        pl.title(self.title)
-        if save_plot:
-            fig_name = os.path.join(plot_dir, 'PPM_{}_frames.pdf'.format(name_seed.replace('.', 'p')))
-            plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
-
+            pl.axis('equal')
+            ax = plt.gca()
+            ax.invert_xaxis()
+            pl.xlabel('Offset in Right Ascension (mas)')
+            pl.ylabel('Offset in Declination (mas)')
+            pl.title(self.title)
+            if save_plot:
+                fig_name = os.path.join(plot_dir, 'PPM_{}_frames.pdf'.format(name_seed.replace('.', 'p')))
+                plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
         ##################################################################
         # Figure with on-sky motion and residuals
@@ -971,10 +1507,7 @@ class PpmPlotter(object):
         pl.title(self.title)
 
         if descr is not None:
-            dt = 0.05
-            xt = pl.xlim()[0] + dt * np.diff(pl.xlim())[0]
-            yt = pl.ylim()[1] - dt * np.diff(pl.ylim())[0]
-            pl.text(xt, yt, descr)
+            pl.text(0.01, 0.99, descr, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes)
 
         pl.subplot(n_subplots, 1, 2)
         epochTime = self.t_MJD_epoch - self.tref_MJD
@@ -998,7 +1531,13 @@ class PpmPlotter(object):
                 pl.ylim((-residual_y_axis_limit, residual_y_axis_limit))
 
         if not separate_residual_panels:
-            pl.legend(loc='best')
+            # pl.legend(loc='best')
+            pl.legend()
+
+        if omc_description is not None:
+            ax=pl.gca()
+            pl.text(0.01, 0.99, omc_description, horizontalalignment='left', verticalalignment='top',
+                    transform=ax.transAxes)
 
         if instrument is not None:
             for jjj, ins in enumerate(instr):
@@ -1010,11 +1549,11 @@ class PpmPlotter(object):
         pl.xlabel(epochOrdinateLabel)
         fig.tight_layout(h_pad=0.0)
         pl.show()
-        # pdb.set_trace()
 
         if save_plot:
             fig_name = os.path.join(plot_dir, 'PPM_%s.pdf' % (name_seed.replace('.', 'p')))
             plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
 
         if self.C.shape[0] > 7:
             pl.figure(figsize=(6, 8), facecolor='w', edgecolor='k')
@@ -1129,7 +1668,7 @@ class xfAxOrbitPlotter(object):
         return table names of a certain schema
     """
 
-    def __init__(self, theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0):#, theta_names=None):
+    def __init__(self, theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0, outlier_sigma_threshold=3., absolute_threshold=10):#, theta_names=None):
         """
 
         :param theta: list of dictionaries, length = nr of companions
@@ -1212,7 +1751,8 @@ class xfAxOrbitPlotter(object):
 
         if 'rho_mas' in theta_names:
             if 'd_mas' in theta_names:
-                inVec_DCR = np.array([rho_mas, d_mas]);
+                # inVec_DCR = np.array([rho_mas, d_mas]);
+                inVec_DCR = np.array([theta_0['rho_mas'], theta_0['d_mas']]);
             else:
                 inVec_DCR = np.array([theta_0['rho_mas']]);
 
@@ -1319,6 +1859,7 @@ class xfAxOrbitPlotter(object):
         self.sx_star_laz = np.zeros(len(medi));
         self.sy_star_laz = np.zeros(len(medi));
 
+        outlier_1D_index = np.array([])
         for jj, epoch in enumerate(self.medi):
             tmpidx = np.where(self.T['OB'] == epoch)[0];
             tmpIndexX = np.intersect1d(self.xi, tmpidx)
@@ -1356,6 +1897,60 @@ class xfAxOrbitPlotter(object):
             self.stdResidualX[jj] = np.std(omc[tmpIndexX]);
             self.stdResidualY[jj] = np.std(omc[tmpIndexY]);
 
+            # on the fly inter-epoch outlier detection
+            outliers = {}
+            outliers['x'] = {}
+            outliers['y'] = {}
+            outliers['x']['index'] = tmpIndexX
+            outliers['y']['index'] = tmpIndexY
+            outliers['x']['std_residual'] = self.stdResidualX[jj]
+            outliers['y']['std_residual'] = self.stdResidualY[jj]
+
+            is_outlier = []
+            for key in outliers.keys():
+                # boolean array
+                if absolute_threshold is not None:
+                    is_outlier = (np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']) | (
+                             np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > absolute_threshold)
+
+                elif outlier_sigma_threshold is not None:
+                    is_outlier = np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']
+
+                if any(is_outlier):
+                    tmp_1D_index = np.where(is_outlier)[0]
+                    print('Detected {} {}-residual outliers ({:2.1f} sigma) in epoch {} (1-indexed) '.format(
+                            len(tmp_1D_index), key, outlier_sigma_threshold, epoch), end='')
+                    print(np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']]))[tmp_1D_index], end='')
+                    # 1/0
+                    for ii in tmp_1D_index:
+                        print(' {:.12f}'.format(self.T['MJD'][outliers[key]['index'][ii]]), end=',')
+                    print()
+
+                    outlier_1D_index = np.hstack((outlier_1D_index, outliers[key]['index'][tmp_1D_index]))
+
+            # if any(outliers_x):
+            #     tmp_1D_index_x = np.where(outliers_x)[0]
+            #     print('Detected %d X-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
+            #         len(tmp_1D_index_x), outlier_sigma_threshold, epoch), end='')
+            #     print(np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX]))[tmp_1D_index_x], end='')
+            #     for ii in tmp_1D_index_x:
+            #         print(' {:.12f}'.format(self.T['MJD'][tmpIndexX[ii]]), end=',')
+            #     print()
+            #
+            #     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_x]))
+            #     # outlier_1D_index.append(tmpIndexX[tmp_1D_index_x].tolist())
+            #
+            # if any(outliers_y):
+            #     tmp_1D_index_y = np.where(outliers_y)[0]
+            #     print('Detected %d Y-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
+            #         len(tmp_1D_index_y), outlier_sigma_threshold, epoch), end='')
+            #     print(np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY]))[tmp_1D_index_y], end='')
+            #     for ii in tmp_1D_index_y:
+            #         print(' {:.12f}'.format(self.T['MJD'][tmpIndexY[ii]]), end=',')
+            #     print()
+            #     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_y]))
+            #     # outlier_1D_index.append(tmpIndexY[tmp_1D_index_y].tolist())
+
             self.errResidualX[jj] = self.stdResidualX[jj] / np.sqrt(len(tmpIndexX));
             self.errResidualY[jj] = self.stdResidualY[jj] / np.sqrt(len(tmpIndexY));
 
@@ -1368,13 +1963,23 @@ class xfAxOrbitPlotter(object):
             self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)));
             self.sy_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)));
 
+        if len(outlier_1D_index) != 0:
+            print('MJD of outliers:')
+            for ii in np.unique(outlier_1D_index.astype(np.int)):
+                print('{:.12f}'.format(self.T['MJD'][ii]), end=',')
+            print()
+
+
         self.chi2_naive = np.sum(
             [self.meanResidualX ** 2 / self.errResidualX ** 2, self.meanResidualY ** 2 / self.errResidualY ** 2])
         self.chi2_laz = np.sum(
             [self.x_e_laz ** 2 / self.errResidualX ** 2, self.y_e_laz ** 2 / self.errResidualY ** 2]);
         self.chi2_star_laz = np.sum(
             [self.x_e_laz ** 2 / self.sx_star_laz ** 2, self.y_e_laz ** 2 / self.sy_star_laz ** 2]);
-        self.nFree_ep = len(medi) * 2 - (C.shape[0] + 2);
+
+        # fixed 2018-08-18 JSA
+        # self.nFree_ep = len(medi) * 2 - (C.shape[0] + 2)
+        self.nFree_ep = len(medi) * 2 - (C.shape[0] + number_of_companions*7)
 
         self.chi2_laz_red = self.chi2_laz / self.nFree_ep
         self.chi2_star_laz_red = self.chi2_star_laz / self.nFree_ep
@@ -1400,18 +2005,29 @@ class xfAxOrbitPlotter(object):
         print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
         print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
 
-    def myPlot(self, savePlot=0, plotDir=None, name_seed='', descr=None, omc2D=0, arrowOffsetX=0, arrowOffsetY=0,
-               m1_MS=1.0, horizonsFileSeed=None):
+    def myPlot(self, savePlot=0, plotDir=None, name_seed='', ppm_description=None, omc2D=0, arrowOffsetX=0, arrowOffsetY=0, arrow_length_factor=1,
+               m1_MS=1.0, horizonsFileSeed=None, orbit_only_panel=False, frame_residual_panel=False, omc_description=None, orbit_description=None, omc_panel=True):
+
+        if ppm_description == 'default':
+            ppm_description = '$\\varpi_\\mathrm{{rel}}={:2.1f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
+                        ':2.1f}$ mas/yr\n$\mu_\\mathrm{{dec}}={:2.1f}$ mas/yr'.format(
+                self.theta[0]['plx_mas'], self.theta[0]['muDE_mas'], self.theta[0]['muRA_mas'])
+        if omc_description == 'default':
+            omc_description = '$N_e={}$, $N_f={}$, $\Delta t={:.0f}$ d\nDOF$_\\mathrm{{eff}}$={}, ' \
+                              '$\Sigma_\\mathrm{{O-C}}$={:2.2f} mas'.format(
+                len(np.unique(self.T['OB'])), len(self.T), np.ptp(self.T['MJD']), self.nFree_ep, self.epoch_omc_std)
 
         for p in range(self.number_of_companions):
+            if orbit_description == 'default':
+                tmp_orbit_description = '$P={:2.1f}$ d\n$e={:2.2f}$\n$\\alpha={:2.1f}$ mas\n$i={:2.1f}$ deg'.format(self.theta[p]['P_day'], self.theta[p]['ecc'], self.theta[p]['a_mas'], self.theta[p]['i_deg'])
+            else:
+                tmp_orbit_description = orbit_description
+
+
+
 
             theta_p = self.theta[p]
             theta_names = theta_p.keys()
-            # if self.number_of_companions != 1:
-            #     exec (','.join(self.theta_names) + ' = self.theta[p];')
-            # else:
-            #     exec (','.join(self.theta_names) + ' = self.theta;')
-
             name_seed_2 = name_seed + '_companion{:d}'.format(p)
 
             if 'm2_MS' in theta_names:
@@ -1441,12 +2057,17 @@ class xfAxOrbitPlotter(object):
             ##################################################
             # TRIPLE PANEL FIGURE
             # plot PPM and residuals
-            pl.figure(figsize=(6, 9), facecolor='w', edgecolor='k');
-            pl.clf();
-            pl.subplot(3, 1, 1)
+            if frame_residual_panel:
+                pl.figure(figsize=(6, 9), facecolor='w', edgecolor='k')
+                n_panels = 3
+            else:
+                pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
+                n_panels = 2
+            pl.clf()
+            pl.subplot(n_panels, 1, 1)
             pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
             pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
-            plt.annotate('', xy=(np.float(theta_p['muRA_mas']) + arrowOffsetX, np.float(theta_p['muDE_mas']) + arrowOffsetY),
+            plt.annotate('', xy=(np.float(theta_p['muRA_mas'])*arrow_length_factor + arrowOffsetX, np.float(theta_p['muDE_mas'])*arrow_length_factor + arrowOffsetY),
                          xytext=(0. + arrowOffsetX, 0. + arrowOffsetY),
                          arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
 
@@ -1456,12 +2077,10 @@ class xfAxOrbitPlotter(object):
             pl.xlabel('Offset in Right Ascension (mas)');
             pl.ylabel('Offset in Declination (mas)');
             pl.title(self.title)
+            if ppm_description is not None:
+                pl.text(0.01, 0.99, ppm_description, horizontalalignment='left', verticalalignment='top',
+                        transform=ax.transAxes)
 
-            if descr is not None:
-                dt = 0.05
-                xt = pl.xlim()[0] + dt * np.diff(pl.xlim())[0]
-                yt = pl.ylim()[1] - dt * np.diff(pl.ylim())[0]
-                pl.text(xt, yt, descr)
 
             if 'delta_mag' in theta_names:
                 relative_orbit_mas = orb.relative_orbit_fast(t_curve_MJD, spsi_curve, cpsi_curve,
@@ -1482,30 +2101,39 @@ class xfAxOrbitPlotter(object):
             Xmean_orb = getattr(self, 'Xmean_orb_{:d}'.format(p))
             Ymean_orb = getattr(self, 'Ymean_orb_{:d}'.format(p))
 
-            pl.subplot(3, 1, 2)
+            pl.subplot(n_panels, 1, 2)
             pl.plot(phi1_curve, phi2_curve, 'k-')
             pl.plot(Xmean_orb, Ymean_orb, 'ko')
             pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='k')
-            # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko')
-            # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
-            pl.axis('equal');
+
+            if orbit_description is not None:
+                pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
+                        transform=pl.gca().transAxes)
+
+            pl.axis('equal')
             ax = plt.gca()
             ax.invert_xaxis()
-            pl.xlabel('Offset in Right Ascension (mas)');
-            pl.ylabel('Offset in Declination (mas)');
+            pl.xlabel('Offset in Right Ascension (mas)')
+            pl.ylabel('Offset in Declination (mas)')
 
-            pl.subplot(3, 1, 3)
-            epochTime = self.t_MJD_epoch - self.Tref_MJD;
-            epochOrdinateLabel = 'MJD - %3.1f' % self.Tref_MJD
-            # pl.figure(figsize=(6, 4),facecolor='w', edgecolor='k'); pl.clf();
-            pl.plot(epochTime, self.meanResidualX, 'ko', color='0.7')
-            pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='0.7')
-            pl.plot(epochTime, self.meanResidualY, 'ko')
-            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
-            plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
+            if frame_residual_panel:
+                pl.subplot(3, 1, 3)
+                epochTime = self.t_MJD_epoch - self.Tref_MJD;
+                epochOrdinateLabel = 'MJD - %3.1f' % self.Tref_MJD
+                # pl.figure(figsize=(6, 4),facecolor='w', edgecolor='k'); pl.clf();
+                pl.plot(epochTime, self.meanResidualX, 'ko', color='0.7')
+                pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='0.7')
+                pl.plot(epochTime, self.meanResidualY, 'ko')
+                pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+                plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
-            pl.ylabel('O-C (mas)')
-            pl.xlabel(epochOrdinateLabel)
+                pl.ylabel('O-C (mas)')
+                pl.xlabel(epochOrdinateLabel)
+                if omc_description is not None:
+                    pl.text(0.01, 0.99, omc_description, horizontalalignment='left',
+                            verticalalignment='top',
+                            transform=ax.transAxes)
+
             plt.tight_layout()
             pl.show()
             # pdb.set_trace()
@@ -1517,54 +2145,56 @@ class xfAxOrbitPlotter(object):
             ##################################################
 
 
+
             ##################################################
             #  ORBIT only
-            t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
-            tmp = np.arange(1., len(t_epoch_MJD) + 1);
-            xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
-            yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0];  # index of Y coordinates (cpsi = 0) psi =  90 deg
-            cpsi_epoch = tmp % 2
-            spsi_epoch = (tmp + 1) % 2
+            if orbit_only_panel:
+                t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
+                tmp = np.arange(1., len(t_epoch_MJD) + 1);
+                xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
+                yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0];  # index of Y coordinates (cpsi = 0) psi =  90 deg
+                cpsi_epoch = tmp % 2
+                spsi_epoch = (tmp + 1) % 2
 
-            if 'delta_mag' in theta_names:
-                relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
-                                                             shift_omega_by_pi=False);
-                # fractional luminosity
-                beta = getBeta(delta_mag)
-                #     fractional mass
-                f = getB(m1_MS, m2_MS)
-                photocentric_orbit_mas = relative_orbit_mas * (f - beta)
-                orbit_epoch = photocentric_orbit_mas
-            else:
-                #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_MJD,spsi_curve,cpsi_curve);
-                orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch);
+                if 'delta_mag' in theta_names:
+                    relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
+                                                                 shift_omega_by_pi=False);
+                    # fractional luminosity
+                    beta = getBeta(delta_mag)
+                    #     fractional mass
+                    f = getB(m1_MS, m2_MS)
+                    photocentric_orbit_mas = relative_orbit_mas * (f - beta)
+                    orbit_epoch = photocentric_orbit_mas
+                else:
+                    #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_MJD,spsi_curve,cpsi_curve);
+                    orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch);
 
-            phi1_model = orbit_epoch[xi_epoch]
-            phi2_model = orbit_epoch[yi_epoch]
+                phi1_model = orbit_epoch[xi_epoch]
+                phi2_model = orbit_epoch[yi_epoch]
 
-            pl.figure(figsize=(5, 5), facecolor='w', edgecolor='k');
-            pl.clf();
-            pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5)
-            pl.plot(phi1_model, phi2_model, 'ko', color='0.7', ms=2)
-            pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
-            pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='0.6',
-                        zorder=-49)
-            # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
-            # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
-            #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
-            for j in range(len(phi1_model)):
-                # pl.plot([self.Xmean_orb[j],phi1_model[j]],[self.Ymean_orb[j],phi2_model[j]], 'k--', color='0.7',zorder=-50)
-                pl.plot([Xmean_orb[j], phi1_model[j]], [Ymean_orb[j], phi2_model[j]], 'k--', color='0.7', zorder=-50)
-            pl.plot(0, 0, 'kx')
-            pl.axis('equal');
-            ax = plt.gca()
-            ax.invert_xaxis()
-            pl.xlabel('Offset in Right Ascension (mas)');
-            pl.ylabel('Offset in Declination (mas)');
-            pl.show()
-            if savePlot:
-                figName = os.path.join(plotDir, 'ORBITonly_%s.pdf' % (name_seed_2.replace('.', 'p')))
-                plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                pl.figure(figsize=(5, 5), facecolor='w', edgecolor='k');
+                pl.clf();
+                pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5)
+                pl.plot(phi1_model, phi2_model, 'ko', color='0.7', ms=2)
+                pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
+                pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='0.6',
+                            zorder=-49)
+                # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
+                # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
+                #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
+                for j in range(len(phi1_model)):
+                    # pl.plot([self.Xmean_orb[j],phi1_model[j]],[self.Ymean_orb[j],phi2_model[j]], 'k--', color='0.7',zorder=-50)
+                    pl.plot([Xmean_orb[j], phi1_model[j]], [Ymean_orb[j], phi2_model[j]], 'k--', color='0.7', zorder=-50)
+                pl.plot(0, 0, 'kx')
+                pl.axis('equal');
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)');
+                pl.ylabel('Offset in Declination (mas)');
+                pl.show()
+                if savePlot:
+                    figName = os.path.join(plotDir, 'ORBITonly_%s.pdf' % (name_seed_2.replace('.', 'p')))
+                    plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
             ##################################################
 
@@ -1592,39 +2222,66 @@ class xfAxOrbitPlotter(object):
             # 4 PANEL FIGURE SHOWING RA AND Dec OFFSETS AND RESIDUALS
 
             offset_MJD = self.Tref_MJD
-            fig, axes = pl.subplots(2, 2, sharex=True, figsize=(9, 4.5))
+            if frame_residual_panel:
+                fig, axes = pl.subplots(3, 2, sharex=True, figsize=(9, 9), facecolor='w',
+                                        edgecolor='k')
+            elif omc_panel is False:
+                fig, axes = pl.subplots(1, 2, sharex=True, figsize=(9, 3), facecolor='w',
+                                        edgecolor='k', squeeze=False)
+            else:
+                fig, axes = pl.subplots(2, 2, sharex=True, figsize=(9, 4.5), facecolor='w',
+                                        edgecolor='k')
+
             axes[0][0].plot(tmpt_day - offset_MJD, phi1_curve, 'k-')
             axes[0][0].plot(self.t_MJD_epoch - offset_MJD, Xmean_orb, 'ko')
             axes[0][0].errorbar(self.t_MJD_epoch - offset_MJD, Xmean_orb, yerr=self.errResidualX, fmt=None, ecolor='k')
+            if orbit_description is not None:
+                pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
+                        transform=axes[0][0].transAxes)
 
-            if 1:
-                axes[0][0].plot(self.T['MjdUsedInTcspsi'][self.xi] - offset_MJD, self.orbit_model[self.xi], 'k.',
-                                mfc='0.7')
 
-            # axes[0][0].plot(self.t_MJD_epoch-offset_MJD,self.Xmean_orb,'ko')
-            # axes[0][0].errorbar(self.t_MJD_epoch-offset_MJD,self.Xmean_orb,yerr=self.errResidualX, fmt=None,ecolor='k')
+            if 0:
+                axes[0][0].plot(self.T['MjdUsedInTcspsi'][self.xi] - offset_MJD, self.orbit_model[self.xi], 'k.', mfc='0.7')
             axes[0][0].set_ylabel('Offset in RA (mas)')
 
             axes[0][1].plot(tmpt_day - offset_MJD, phi2_curve, 'k-')
             axes[0][1].plot(self.t_MJD_epoch - offset_MJD, Ymean_orb, 'ko')
             axes[0][1].errorbar(self.t_MJD_epoch - offset_MJD, Ymean_orb, yerr=self.errResidualY, fmt=None, ecolor='k')
-            # axes[0][1].plot(self.t_MJD_epoch-offset_MJD,self.Ymean_orb,'ko')
-            # axes[0][1].errorbar(self.t_MJD_epoch-offset_MJD,self.Ymean_orb,yerr=self.errResidualY, fmt=None,ecolor='k')
             axes[0][1].set_ylabel('Offset in Dec (mas)')
 
-            axes[1][0].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualX, 'ko')
-            axes[1][0].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualX, yerr=self.errResidualX, fmt=None,
-                                ecolor='k')
-            axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
-            axes[1][0].set_ylabel('O-C (mas)')
-            axes[1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
+            fig.suptitle(self.title)
 
-            axes[1][1].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualY, 'ko')
-            axes[1][1].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualY, yerr=self.errResidualY, fmt=None,
-                                ecolor='k')
-            axes[1][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
-            axes[1][1].set_ylabel('O-C (mas)')
-            axes[1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
+            if omc_panel:
+                axes[1][0].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualX, 'ko')
+                axes[1][0].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualX, yerr=self.errResidualX, fmt=None,
+                                    ecolor='k')
+                axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                axes[1][0].set_ylabel('O-C (mas)')
+                if omc_description is not None:
+                    pl.text(0.01, 0.99, omc_description, horizontalalignment='left',
+                            verticalalignment='top',
+                            transform=axes[1][0].transAxes)
+
+                # axes[1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
+
+                axes[1][1].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualY, 'ko')
+                axes[1][1].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualY, yerr=self.errResidualY, fmt=None,
+                                    ecolor='k')
+                axes[1][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                axes[1][1].set_ylabel('O-C (mas)')
+
+            if frame_residual_panel:
+                axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.omc[self.xi], 'ko')
+                axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                axes[2][0].set_ylabel('Frame O-C (mas)')
+
+                axes[2][1].plot(self.T['MJD'][self.yi] - offset_MJD, self.omc[self.yi], 'ko')
+                axes[2][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+            axes[-1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
+            axes[-1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
+
+
 
             #         for GJ676A
             #         axes[0][0].set_ylim((-2,1.5))
@@ -1632,18 +2289,21 @@ class xfAxOrbitPlotter(object):
             #         axes[1][0].set_ylim((-1,1.5))
             #         axes[1][1].set_ylim((-1,1.5))
 
-            labels = axes[1][0].get_xticklabels()
+            labels = axes[-1][0].get_xticklabels()
             plt.setp(labels, rotation=30)
-            labels = axes[1][1].get_xticklabels()
+            labels = axes[-1][1].get_xticklabels()
             plt.setp(labels, rotation=30)
 
             #         plt.tight_layout()
             fig.tight_layout(h_pad=0.0)
             pl.show()
             if savePlot:
-                figName = os.path.join(plotDir, 'Orbit_time_%s.pdf' % (name_seed_2.replace('.', 'p')))
+                if frame_residual_panel:
+                    figName = os.path.join(plotDir, 'Orbit_time_%s_frameres.pdf' % (name_seed_2.replace('.', 'p')))
+                else:
+                    figName = os.path.join(plotDir,
+                                           'Orbit_time_%s.pdf' % (name_seed_2.replace('.', 'p')))
                 plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
-                #           fig.savefig(chainPlotFile)
 
 
 class pDetLim(object):
@@ -1683,15 +2343,17 @@ class pDetLim(object):
                                    T0_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
                                    muDE_mas=0, Tref_MJD=xfP.tref_MJD);
             #             ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed);
-            ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed,
+            ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
                                                  psi_deg=xfP.psi_deg);
             C_mean = orb_mean.coeffMatrix
             TableC1_mean = Table(C_mean.T, names=('cpsi', 'spsi', 'ppfact', 'tcpsi', 'tspsi'))
             tmp_mean, xi_mean, yi_mean = xfGetMeanParMatrix(xfP)
             S_mean = np.mat(np.diag(1. / np.power(tmp_mean['sigma_da_mas'], 2)));
             M_mean = np.mat(tmp_mean['da_mas']);
-            res_mean = linfit(M_mean, S_mean, C_mean);
-            res_mean.makeReadableNumbers()
+            # res_mean = linfit(M_mean, S_mean, C_mean);
+            res_mean = linearfit.LinearFit(M_mean, S_mean, C_mean);
+            res_mean.fit()
+            # res_mean.makeReadableNumbers()
 
             self.TableC1_mean = TableC1_mean
             self.tmp_mean = tmp_mean
@@ -1716,7 +2378,8 @@ class pDetLim(object):
 
         mcFileName = simuDir + 'dw%02d_detectionLimits_%d%s.pkl' % (
         self.dwNr, self.N_sim, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p'));
-        meanResiduals = np.zeros((self.N_sim, len(self.res_mean.omc[0])))
+        # meanResiduals = np.zeros((self.N_sim, len(self.res_mean.omc[0])))
+        meanResiduals = np.zeros((self.N_sim, len(self.res_mean.residuals)))
         meanResidualRMS = np.zeros(self.N_sim)
 
         if ((not os.path.isfile(mcFileName)) or (self.overwrite == 1)):
@@ -1769,7 +2432,8 @@ class pDetLim(object):
             spsi = np.array(self.TableC1_mean['spsi'])
             cpsi = np.array(self.TableC1_mean['cpsi'])
             ref_da_mas = np.array(self.tmp_mean['da_mas'])
-            ref_omc_mas = self.res_mean.omc[0]
+            # ref_omc_mas = self.res_mean.omc[0]
+            ref_omc_mas = self.res_mean.residuals
             for j in range(self.N_sim):
                 tot_da_mas = [];
                 simu_da_mas = [];
@@ -1780,10 +2444,12 @@ class pDetLim(object):
                 # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], T0_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
                 # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
 
-                tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas;  # remove noise structure
-                simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean);
+                tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas  # remove noise structure
+                # simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean);
+                simu_res = linearfit.LinearFit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
+                simu_res.fit()
                 # meanResiduals[j,:] = np.array(simu_res.omc)[0]
-                meanResidualRMS[j] = np.std(np.array(simu_res.omc)[0])
+                meanResidualRMS[j] = np.std(np.array(simu_res.residuals))
                 if np.mod(j, 10000) == 0:
                     print('\b\b\b\b\b\b\b%07d' % j)
                     # print '\x1b[%07d\r' % j,
@@ -1982,7 +2648,7 @@ class pDetLim(object):
         #
         # self.meanResidualRMS = mean_residual_rms
 
-    def plotSimuResults(self, xfP, factor=1., visplot=1, confidence_limit=0.997, x_axis_unit='day', semilogx=True, ):
+    def plotSimuResults(self, xfP, factor=1., visplot=1, confidence_limit=0.997, x_axis_unit='day', semilogx=True, y_data_divisor=None, y_data_factor=1., new_figure=True, line_width=2.):
 
         if xfP.psi_deg is None:
             criterion = np.std([xfP.meanResidualX, xfP.meanResidualY]) * factor;
@@ -2021,20 +2687,82 @@ class pDetLim(object):
                 x_axis_factor = 1. / u.year.to(u.day)
             x_axis_label = 'Period ({})'.format(x_axis_unit)
 
-            pl.figure(figsize=(6, 3), facecolor='w', edgecolor='k');
-            pl.clf();
+            if new_figure:
+                pl.figure(figsize=(6, 3), facecolor='w', edgecolor='k');
+                pl.clf()
             if semilogx:
-                pl.semilogx(detLimit[:, 0] * x_axis_factor, detLimit[:, 1], 'k-', lw=2);
+                if y_data_divisor is not None:
+                    pl.semilogx(detLimit[:, 0] * x_axis_factor, y_data_divisor/detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
+                else:
+                    pl.semilogx(detLimit[:, 0] * x_axis_factor, detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
             else:
-                pl.plot(detLimit[:, 0] * x_axis_factor, detLimit[:, 1], 'k-', lw=2);
+                if y_data_divisor is not None:
+                    pl.plot(detLimit[:, 0] * x_axis_factor, y_data_divisor/detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
+                else:
+                    pl.plot(detLimit[:, 0] * x_axis_factor, detLimit[:, 1] * y_data_factor, 'k-',
+                            lw=line_width)
             pl.title('{:.1f}% confidence limit'.format(confidence_limit * 100))
-            pl.ylim((0, np.max(self.M2_jup_grid)))
+            if y_data_divisor is not None:
+                pl.ylim((0, y_data_divisor/np.max(self.M2_jup_grid)*y_data_factor))
+            else:
+                pl.ylim((0, np.max(self.M2_jup_grid)*y_data_factor))
             pl.xlabel(x_axis_label)
-            pl.show()
+            if new_figure:
+                pl.show()
 
-        self.detLimit = detLimit;
+        self.detLimit = detLimit
 
 
+def xfGetMeanParMatrix(xfP):
+    """ Copied over from functions_and_classes, 2018-08-14, should be deleted
+
+    Parameters
+    ----------
+    xfP
+
+    Returns
+    -------
+
+    """
+    if xfP.psi_deg is None:
+        cat = Table()
+        cat['MJD'] = xfP.t_MJD_epoch
+        cat['RA*_mas'] = xfP.Xmean
+        cat['DE_mas'] = xfP.Ymean
+        cat['sRA*_mas'] = xfP.errResidualX
+        cat['sDE_mas'] = xfP.errResidualY
+        cat['OB'] = xfP.medi
+
+        # tmp = cat['MJD','fx[1]','fx[2]','fy[1]','fy[2]','RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame'];
+        tmp = cat.copy()
+        tmp = tablevstack((tmp, tmp))
+        tmp.sort('MJD')
+        tmp.add_column(Column(name='da_mas', data=np.zeros(len(tmp))))
+        tmp.add_column(Column(name='sigma_da_mas', data=np.zeros(len(tmp))))
+
+        spsi = (np.arange(1, len(tmp) + 1) + 1) % 2;  # % first X then Y
+        cpsi = (np.arange(1, len(tmp) + 1)) % 2;
+        # xi = spsi==0;    #index of X coordinates (cpsi = 1) psi =  0 deg
+        # yi = cpsi==0;    #index of Y coordinates (spsi = 1) psi = 90 deg
+
+        xi = np.where(spsi == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
+        yi = np.where(cpsi == 0)[0];  # index of Y coordinates (spsi = 1) psi = 90 deg
+
+        tmp['da_mas'][xi] = tmp['RA*_mas'][xi]
+        tmp['da_mas'][yi] = tmp['DE_mas'][yi]
+        tmp['sigma_da_mas'][xi] = tmp['sRA*_mas'][xi]
+        tmp['sigma_da_mas'][yi] = tmp['sDE_mas'][yi]
+
+    else:
+        tmp = Table()
+        tmp['MJD'] = xfP.t_MJD_epoch
+        tmp['da_mas'] = xfP.Xmean
+        tmp['sigma_da_mas'] = xfP.errResidualX
+        tmp['OB'] = xfP.medi
+        xi = None
+        yi = None
+
+    return tmp, xi, yi
 
 
 def get_spsi_cpsi_for_2Dastrometry( timestamps_2D ):
@@ -2058,12 +2786,150 @@ def get_spsi_cpsi_for_2Dastrometry( timestamps_2D ):
     return timestamps_1D, cpsi, spsi, xi, yi
 
 
-def pjGet_m2( m1_kg, a_m, P_day ):
-    '''
-    # extern day2sec, Gc
-    # local a,b,c,m2_kg
-    # // return m2 when m1, Period and semimajor axis of the m1 motion is given (astrometric signature of planet host star)
-    '''
+def mass_from_semimajor_axis(a_m, p_day):
+    """Return mass term in Kepler's law.
+
+    M_0,1,2 = 4 pi^2 a_0,1,2^3 / P^2
+
+    Parameters
+    ----------
+    a_m
+    p_day
+
+    Returns
+    -------
+
+    """
+
+    mass_term = 4 * np.pi**2 * a_m**3/(p_day*day2sec)**2
+    mass_kg = mass_term / Ggrav
+
+    return mass_kg
+
+
+def convert_from_linear_to_angular(a_m, absolute_parallax_mas):
+    """Convert a linear quantity in meters to a angle in mas, given the absolute parallax.
+
+    Parameters
+    ----------
+    a_m
+    absolute_parallax_mas
+
+    Returns
+    -------
+
+    """
+    d_pc = 1./ (absolute_parallax_mas/1000.)
+    a_rad = np.arctan2(a_m, d_pc*pc_m)
+    a_mas = a_rad * rad2mas  # semimajor axis in mas
+    return a_mas
+
+
+def convert_from_angular_to_linear(a_mas, absolute_parallax_mas):
+    """Convert a angle in mas to a linear quantity in meters, given the absolute parallax.
+
+    Parameters
+    ----------
+    a_mas
+    absolute_parallax_mas
+
+    Returns
+    -------
+
+    """
+    a_rad = a_mas/rad2mas
+    d_pc = 1. / (absolute_parallax_mas / 1000.)
+    a_m = np.tan(a_rad) * d_pc*pc_m
+
+    return a_m
+
+
+# def mass_from_mass_term(mass_term, type='relative'):
+#     """Returm mass corresponding to mass term
+#
+#     Parameters
+#     ----------
+#     mass_term
+#     type
+#
+#     Returns
+#     -------
+#
+#     """
+
+
+# def keplerian_secondary_mass(m1_kg, a_m, P_day):
+#     """Return companion mass in kg.
+#
+#     Parameters
+#     ----------
+#     m1_kg : float
+#         primary mass in kg
+#     a_m : float
+#         barycentric semimajor axis in meter
+#     P_day : float
+#         orbital period in days
+#
+#     Returns
+#     -------
+#
+#     """
+#     if 0:
+#         import sympy as sp
+#         c = sp.Symbol('c')
+#         g = sp.Symbol('g')
+#         m1 = sp.Symbol('m1')
+#         m2 = sp.Symbol('m2')
+#         # zero_equation = m2 ** 3 / (m1 + m2) ** 2 - c  # == 0
+#         zero_equation = g * m2**3 / (m1 + m2)** 2 - c  # == 0
+#         res = sp.solvers.solve((zero_equation), (m2))
+#         print(res[0])
+#         1/0
+#
+#
+#     if 0:
+#
+#         m1 = m1_kg
+#         c = (4. * np.pi**2. * a_m**3. / ((P_day * day2sec)**2. * Ggrav))
+#
+#         print(m1)
+#         print(c)
+#         term_1 = (c**2. + 6.*c*m1)
+#         term_4 = np.sqrt(-4.*(c**2 + 6*c*m1)**3 + (-2*c**3 - 18. * c**2 * m1 - 27.*c * m1**2)**2)
+#         term_2 = (3.*(-c**3 - 9. * c**2 * m1 - 27. * c * m1**2 /2. + term_4/2.)**(1./3.))
+#         term_5 = np.sqrt(-4.*(c**2.+ 6*c*m1)**3 + (-2*c**3 - 18. * c**2 * m1 - 27.*c * m1**2)**2)
+#         term_3 =     (-c**3 - 9. * c**2 * m1 - 27. * c * m1**2 /2. + term_5/2.)**(1./3.)/3.
+#
+#         print(term_1, term_2, term_3, term_4, term_5)
+#         m2_kg = c/3. - term_1/term_2 - term_3
+#
+#     else:
+#         m1 = m1_kg
+#         c = np.abs(4. * np.pi**2. * a_m**3. / ((P_day * day2sec)**2.))
+#         g = Ggrav
+#         print(c)
+#
+#         m2_kg = c/(3*g) - (c**2/g**2 + 6*c*m1/g)/(3*(-c**3/g**3 - 9*c**2*m1/g**2 - 27*c*m1**2/(2*g) + np.sqrt(-4*(c**2/g**2 + 6*c*m1/g)**3 + (-2*c**3/g**3 - 18*c**2*m1/g**2 - 27*c*m1**2/g)**2)/2.)**(1./3.)) - (-c**3/g**3 - 9*c**2*m1/g**2 - 27*c*m1**2/(2*g) + np.sqrt(-4*(c**2/g**2 + 6*c*m1/g)**3 + (-2*c**3/g**3 - 18*c**2*m1/g**2 - 27*c*m1**2/g)**2)/2.)**(1./3.)/3.
+#
+#     return m2_kg
+
+
+def pjGet_m2(m1_kg, a_m, P_day):
+    """Return companion mass in kg.
+
+    Parameters
+    ----------
+    m1_kg : float
+        primary mass in kg
+    a_m : float
+        barycentric semimajor axis in meter
+    P_day : float
+        orbital period in days
+
+    Returns
+    -------
+
+    """
     c = np.abs(4.*np.pi**2.*a_m**3./(P_day*day2sec)**2.)
 
     a = np.sqrt( c / Ggrav ) * m1_kg
@@ -2352,7 +3218,23 @@ def astrom_signal(t_day,psi_deg,ecc,P_day,T0_day,TIC):
     return phi
 
 
-def astrom_signalFast(t_day,spsi,cpsi,ecc,P_day,T0_day,TIC):  
+def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
+    """
+
+    Parameters
+    ----------
+    t_day
+    spsi
+    cpsi
+    ecc
+    P_day
+    T0_day
+    TIC
+
+    Returns
+    -------
+
+    """
         
     # compute eccentric anomaly
     E_rad = eccentric_anomaly(ecc,t_day,T0_day,P_day)
@@ -2366,10 +3248,11 @@ def astrom_signalFast(t_day,spsi,cpsi,ecc,P_day,T0_day,TIC):
         Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
         
     # pdb.set_trace()
-    phi = (TIC[0]*spsi+TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
+    phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
     # phi = np.multiply((np.multiply(TIC[0],spsi)+np.multiply(TIC[1],cpsi)),X) + np.multiply((np.multiply(TIC[2],spsi) + np.multiply(TIC[3],cpsi)),Y)
     # return np.array(phi)
     return phi
+
 
 def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, step_size='5d', verbose=True, out_dir=None, vector_table_output_type=1, output_units='AU-D', overwrite=False, reference_plane='FRAME'):
     """
@@ -2390,8 +3273,9 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
     :return:
 
 
-    reference_plane = 'frame' is for Earh mean equator and equinox
+    reference_plane = 'FRAME' is for Earth mean equator and equinox
     """
+    global ephemeris_dir
 
     if start_time is None:
         start_time = Time(1950.0, format='decimalyear')
@@ -2512,7 +3396,7 @@ def read_ephemeris(horizons_file_seed, overwrite=False, ephemeris_path=None, ver
     return xyzdata
 
 
-def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose = 0, instrument=None):
+def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=False, instrument=None, overwrite=False):
     
     ephFactor = -1
     RA_rad = np.deg2rad(RA_deg)
@@ -2552,16 +3436,15 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose = 
 
     else:
         if horizons_file_seed is None:
-            xyzdata = get_ephemeris()
+            xyzdata = get_ephemeris(verbose=verbose, overwrite=overwrite)
 
         # if verbose:
         #     print('Getting Parallax factors using Seed: \t%s' % horizons_file_seed)
         else:
             xyzdata = read_ephemeris(horizons_file_seed)
-
-        Xip = interp1d(xyzdata['JD'],xyzdata['X'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
-        Yip = interp1d(xyzdata['JD'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
-        Zip = interp1d(xyzdata['JD'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
+        Xip = interp1d(xyzdata['JDTDB'],xyzdata['X'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
+        Yip = interp1d(xyzdata['JDTDB'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
+        Zip = interp1d(xyzdata['JDTDB'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
 
         try:    
             parfRA  = ephFactor* ( Xip(t_JD)*np.sin(RA_rad) - Yip(t_JD)*np.cos(RA_rad) )
@@ -2569,7 +3452,7 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose = 
         except ValueError:
             raise ValueError('Error in time interpolation for parallax factors: \n'
                              'requested range {:3.1f}--{:3.1f} ({}--{})\n'
-                             'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso, np.min(xyzdata['JD']),np.max(xyzdata['JD']), Time(np.min(xyzdata['JD']),format='jd',scale='utc').iso, Time(np.max(xyzdata['JD']),format='jd',scale='utc').iso
+                             'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso, np.min(xyzdata['JDTDB']),np.max(xyzdata['JDTDB']), Time(np.min(xyzdata['JDTDB']),format='jd',scale='utc').iso, Time(np.max(xyzdata['JDTDB']),format='jd',scale='utc').iso
                                                                                 ) )
 
         
@@ -2813,12 +3696,12 @@ class ImagingAstrometryData(object):
         
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
    
-    def set_five_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None):
+    def set_five_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None, overwrite=False):
     
-        observing_times_2D_JD = Time(self.observing_times_2D_MJD, format='mjd').jd
+        observing_times_2D_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
         
         # compute parallax factors, this is a 2xN_obs array
-        observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_JD, horizons_file_seed=earth_ephemeris_file_seed,verbose=verbose)
+        observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_JD, horizons_file_seed=earth_ephemeris_file_seed,verbose=verbose, overwrite=overwrite)
           
         # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi   
         if reference_epoch_MJD is None:
@@ -2839,8 +3722,10 @@ class ImagingAstrometryData(object):
         observing_1D_ppfact[self.observing_1D_yi] = observing_parallax_factors[1]
                         
         self.five_parameter_coefficients_table = Table(np.array([observing_1D_cpsi,observing_1D_spsi,observing_1D_ppfact,observing_1D_tcpsi,observing_1D_tspsi]).T, names=('cpsi','spsi','ppfact','tcpsi','tspsi'))
+        self.five_parameter_coefficients_array = np.array([self.five_parameter_coefficients_table[c].data for c in self.five_parameter_coefficients_table.colnames])
         self.observing_relative_time_1D_year = observing_relative_time_1D_year
- 
+
+
 
     def set_linear_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None):
 
@@ -2853,7 +3738,7 @@ class ImagingAstrometryData(object):
             tmp_2D = self.data_2D[self.time_column_name,'fx[1]','fy[1]','fx[2]','fy[2]'] #,'RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame']            
         elif ('fx[1]' in self.data_2D.colnames) & ('fx[2]' not in self.data_2D.colnames):    
             # for GTC/OSIRIS, Gemini/GMOS-N/GMOS-S, VLT/HAWK-I
-            tmp_2D = self.data_2D[self.time_column_name,'fx[1]','fy[1]']
+            tmp_2D = self.data_2D[self.time_column_name, 'fx[1]', 'fy[1]']
         elif ('fx[1]' not in self.data_2D.colnames) & ('fx[2]' not in self.data_2D.colnames):
             # anything else, e.g. RECONS, there is no DCR correction to be applied
             # tmp_2D = self.data_2D[[self.time_column_name]]
@@ -2937,44 +3822,42 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
     :param verbose:
     :return:
     """
-
-    # theta dictionary of variables
     parameters = []
 
-
-    best_genome = Table.read(best_genome_file,format='ascii.basic', data_start=2, delimiter=',', guess=False)
-
-    # if len(best_genome) != 1:
-    #     1/0
+    best_genome = Table.read(best_genome_file, format='ascii.basic', data_start=2, delimiter=',', guess=False)
 
     if instrument != 'FORS2':
         best_genome.remove_column('d_mas')
 
-
-    if verbose:
+    # if verbose:
+    if 0:
         for i in range(len(best_genome)):
             for c in best_genome.colnames:
                 print('Planet %d: %s \t %3.3f' % (i+1, c, best_genome[c][i]))
-    # thiele_innes_constants = np.array([best_genome[c][0] for c in ['A','B','F','G']])
+
     thiele_innes_constants = np.array([best_genome[c] for c in ['A','B','F','G']])
+
     a_mas, omega_deg, OMEGA_deg, i_deg = get_geomElem(thiele_innes_constants)
     d_pc  = 1./ (best_genome['plx_mas'].data.data /1000.)
     P_day = best_genome['P_day'].data.data
     a_m = a_mas / 1.e3 * d_pc * AU_m
     m1_kg = m1_MS * MS_kg
     m2_kg = pjGet_m2( m1_kg, a_m, P_day )
+    # m2_kg = keplerian_secondary_mass( m1_kg, a_m, P_day )
     m2_MS = m2_kg / MS_kg
+    # print(m2_MS)
     m2_MJ = m2_kg / MJ_kg
     TRef_MJD = reference_time_MJD
 
     # MIKS-GA computes T0 relative to the average time
     if verbose:
         for i in range(len(best_genome)):
-            print('Planet %d: Phi0 = %f' % (i,best_genome['T0_day'][i]))
-            print('Planet %d: m2_MJ = %f' % (i,m2_MJ[i]))
+            print('Planet %d: Phi0 = %f' % (i+1,best_genome['T0_day'][i]))
+            print('Planet %d: m2_MJ = %f' % (i+1, m2_MJ[i]))
 
     best_genome['T0_day'] += TRef_MJD
-    
+
+    best_genome['a_mas'] = a_mas
     best_genome['omega_deg'] = omega_deg
     best_genome['i_deg'] = i_deg
     best_genome['OMEGA_deg'] = OMEGA_deg

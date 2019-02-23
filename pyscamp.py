@@ -2,8 +2,9 @@
 Functions to read and interpret results obtained with astromatic's scamp
 
 """
+import copy
 import os
-import sys
+# import sys
 from astropy.io.votable import parse
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -12,14 +13,15 @@ from astropy.time import Time
 from astropy.coordinates import SkyCoord
 
 from astropy.table import Table, Column
+from astropy.table import vstack as tablevstack
 import pylab as pl
 import numpy as np
 import aplpy
 
 import pickle
-import sympy
-from sympy.abc import x as sympy_x
-from sympy.abc import y as sympy_y
+# import sympy
+# from sympy.abc import x as sympy_x
+# from sympy.abc import y as sympy_y
 
 home_dir = os.environ['HOME']
 # sys.path.append(os.path.join(home_dir, 'astro/palta/processing/src/'))
@@ -56,7 +58,7 @@ class ScampXml(object):
         self.n_epoch = len(np.unique(self.table['EPOCH']))
         self.average_pixel_scale = np.mean(self.table['Pixel_Scale'].data) * self.table['Pixel_Scale'].unit
         print('{}: target is {}, {} frames, {} epochs, {:2.1f} days timespan'.format(self.source_file, self.target, self.n_frames, self.n_epoch, self.timespan_day))
-        print('{}: Average pixel scale {:3.3f}'.format(self.source_file, self.average_pixel_scale.to(u.milliarcsecond)))
+        # print('{}: Average pixel scale {:3.3f}'.format(self.source_file, self.average_pixel_scale.to(u.milliarcsecond)))
 
     def get_catalog_index(self, catalog_number=None, catalog_name=None):
         """
@@ -109,6 +111,8 @@ class ScampFullCatalog(object):
         self.unique_source_numbers = np.unique(self.table['SOURCE_NUMBER'])
         self.n_science_catalogs = len(np.unique(self.table['CATALOG_NUMBER']))
 
+        # add column to identify fake stars used to stabilise astrometric reduction
+        self.table['artificial'] = np.zeros(len(self.table)).astype(np.int)
 
     def info(self):
         """ Print basic info
@@ -118,6 +122,73 @@ class ScampFullCatalog(object):
         print('{}: {} catalogs (catalog 0 is the scamp reference catalog e.g. 2MASS)'.format(self.source_file, len(np.unique(self.orig_table['CATALOG_NUMBER']))))
         print('{}: {} science catalogs '.format(self.source_file, self.n_science_catalogs))
         print('{}: {} unique SOURCE_NUMBERs (excluding reference catalog)'.format(self.source_file, len(self.unique_source_numbers)))
+
+
+    def complement_missing_catalogs(self, scamp_merged, threshold, verbose=False, target_number=None):
+        """Fill in 'zero rows' for stars that have not been measured in all frames.
+
+        if target_number is specified, no artifical measurements are added for the target
+
+        This expands the original table.
+
+        Returns
+        -------
+
+        """
+
+        # identify sources that have not been measured in all frames/catalogs
+        source_number_to_complement = np.unique(scamp_merged.table['SOURCE_NUMBER'][scamp_merged.table['NPOS_OK'] > threshold])
+        if verbose:
+            print('{}/{} sources have >{} scamp detections'.format(len(source_number_to_complement),
+                                                               len(
+                                                                   self.unique_source_numbers),
+                                                               threshold))
+
+
+        complemented_table = copy.deepcopy(self.table)
+
+        all_catalog_numbers = np.unique(self.table['CATALOG_NUMBER'])
+        if verbose:
+            print('There are {} catalogs'.format(len(all_catalog_numbers)))
+
+        # loop through sources
+        for source_number in source_number_to_complement:
+            if (target_number is not None) and (source_number==target_number):
+                continue
+            found_index = complemented_table['SOURCE_NUMBER'] == source_number
+            found_in_catalog_numbers = complemented_table['CATALOG_NUMBER'][found_index]
+            if verbose:
+                print('Source {} found in {} catalogs'.format(source_number, len(found_in_catalog_numbers)))
+            catalog_numbers_to_complement = np.setdiff1d(all_catalog_numbers,
+                                                         found_in_catalog_numbers)
+            if verbose:
+                print('Have to complement in {} catalogs'.format(len(catalog_numbers_to_complement)))
+            temp = copy.deepcopy(complemented_table[0:len(catalog_numbers_to_complement)])
+            for colname in complemented_table.colnames:
+                if colname == 'SOURCE_NUMBER':
+                    temp[colname] = source_number
+                elif colname == 'CATALOG_NUMBER':
+                    temp[colname] = catalog_numbers_to_complement
+                elif colname == 'artificial':
+                    temp[colname] = 1
+                # set X,Y pixel positions of artifical stars to something reasonable for reduced coordinates and basic functions
+                elif colname in ['X_IMAGE', 'Y_IMAGE']:
+                    temp[colname] = np.median(complemented_table[colname][found_index])
+                else:
+                    temp[colname] = np.zeros(len(temp)).astype(temp[colname].dtype)
+
+            complemented_table = tablevstack((complemented_table, temp))
+
+        if verbose:
+            print('Number of rows before {} after {}'.format(len(self.table), len(complemented_table)))
+
+        # index = np.where((complemented_table['SOURCE_NUMBER'] == 1971) & (
+        #     complemented_table['CATALOG_NUMBER'] == 2))[0]
+        #
+        # if len(index) > 1:
+        #     1/0
+
+        self.table = complemented_table
 
     def select_sources(self, catalog_number=None, chip_extension=None, source_number=None, ):
         """
@@ -221,7 +292,8 @@ class ScampFullCatalog(object):
             gc = aplpy.FITSFigure(hdu, extension=chip_extension, figure=fig,
                                   North=True)  # ,convention='wells')#, dimensions=[1 ,0]);
 
-        gc.show_grayscale(invert=False)  # , stretch='log', vmid=-1)#,vmid=-1)#, aspect = 1., pmax =90 )
+        # gc.show_grayscale(invert=False)  # , stretch='log', vmid=-1)#,vmid=-1)#, aspect = 1., pmax =90 )
+        gc.show_grayscale(invert=False, stretch='log')  # , stretch='log', vmid=-1)#,vmid=-1)#, aspect = 1., pmax =90 )
 
 
         if RA_deg is not None:
@@ -275,7 +347,7 @@ class ScampFullCatalog(object):
             x_in = self.table['X_IMAGE']
             y_in = self.table['Y_IMAGE']
             self.table['X_Idl'], self.table['Y_Idl'] = \
-                cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, 0, x_in, y_in)
+                cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, x_in, y_in)
         else:
             catalog_numbers = self.table['CATALOG_NUMBER'].data
             for catalog_number in np.unique(catalog_numbers):
@@ -285,7 +357,7 @@ class ScampFullCatalog(object):
                 x_in = self.table['X_IMAGE'][table_index]
                 y_in = self.table['Y_IMAGE'][table_index]
                 self.table['X_Idl'][table_index], self.table['Y_Idl'][
-                    table_index] = cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, 0, x_in, y_in)
+                    table_index] = cal_obs.lazAC.apply_polynomial_transformation(evaluation_frame_number, x_in, y_in)
 
     def suitable_reference_sources(self, selected_source_numbers, target_number, chip_extension):
         """
@@ -324,7 +396,7 @@ class ScampFullCatalog(object):
         if target_number not in good_source_numbers:
             raise RuntimeError("Target not identified in all selected frames");
 
-        return np.array(good_source_numbers), target_catalog_numbers
+        return np.array(good_source_numbers).astype(np.int), target_catalog_numbers
 
     def get_astrometry(self, scamp_xml, red_dir, good_source_numbers, target_catalog_numbers, chip_extension, verbose=True, use_Idl=True):
         """
@@ -343,24 +415,29 @@ class ScampFullCatalog(object):
         n_stars = len(good_source_numbers)
         n_frames = len(target_catalog_numbers)
 
-        p = np.zeros((n_frames, n_stars, 11))
+        p = np.zeros((n_frames, n_stars, 12))
         aux = np.zeros((n_frames, 16))
 
         tmplist = scamp_xml.table['Catalog_Number'].data.tolist()
 
         for i, catnum in enumerate(target_catalog_numbers):
+
+            # find index in list of catalog numbers
             tmplist_idx = tmplist.index(catnum)
+
+            # identify underlying FITS file
             frame_name = scamp_xml.table['Catalog_Name'][tmplist_idx].decode()
             frame = os.path.join(red_dir, frame_name.replace('.cat','.fits'))
+            header = fits.getheader(frame)
 
             if verbose:
                 print('{:03d}/{:03d}: filling catalogue with stars from {}.'.format(i+1,n_frames, frame))
 
-            header = fits.getheader(frame)
+
             if header.get('ORIGIN') == None: # OSIRIS
                 header = fits.getheader(frame, ext=2);
-                aux[i, :] = [scamp_xml.table['Observation_Date'][i], 0.0, scamp_xml.table['AirMass'][i],
-                             scamp_xml.table['Exposure_Time'][i], header['TAMBIENT'], header['PRESSURE'], header['HUMIDITY'],
+                aux[i, :] = [scamp_xml.table['Observation_Date'][tmplist_idx], 0.0, scamp_xml.table['AirMass'][tmplist_idx],
+                             scamp_xml.table['Exposure_Time'][tmplist_idx], header['TAMBIENT'], header['PRESSURE'], header['HUMIDITY'],
                              header['WINDSPEE'], header['AZIMUTH'], header['ELEVAT'],
                              SkyCoord(dec=header['LATITUDE'], ra='00:00:00.000', unit='deg').dec.deg, header['DECDEG'],
                              header['RADEG'], header['MJD-OBS'], header['AIRMASS'], 0]
@@ -371,7 +448,12 @@ class ScampFullCatalog(object):
                 elif header['INSTRUME'].strip() == 'GMOS-N':
                     latitude_string = '19:49:25.7016'
 
-                aux[i, :] = [scamp_xml.table['Observation_Date'][i], 0.0, header['AIRMASS'], header['EXPTIME'],
+
+                time_difference_day = np.abs(header['MJD-OBS'] - Time(scamp_xml.table['Observation_Date'][tmplist_idx], format='decimalyear').mjd)
+                if time_difference_day > 1.:
+                    1/0
+                # scamp_xml.table['Observation_Date'][tmplist_idx]
+                aux[i, :] = [Time(header['MJD-OBS'], format='mjd').decimalyear, catnum, header['AIRMASS'], header['EXPTIME'],
                              header['TAMBIENT'],
                              header['PRESSURE'], header['HUMIDITY'], header['WINDSPEE'], header['AZIMUTH'], header['ELEVATIO'],
                              SkyCoord(ra='00:00:00.000', dec=latitude_string, unit='deg').dec.deg, header['DEC'],
@@ -379,14 +461,13 @@ class ScampFullCatalog(object):
                              header['MJD-OBS'], header['AIRMASS'], 0.0]
 
             else:  # HAWKI
-                aux[i, :] = [scamp_xml.table['Observation_Date'][i], 0.0, header['HIERARCH ESO TEL AIRM START'],
+                aux[i, :] = [scamp_xml.table['Observation_Date'][tmplist_idx], 0.0, header['HIERARCH ESO TEL AIRM START'],
                              header['HIERARCH ESO DET DIT'], header['HIERARCH ESO TEL AMBI TEMP'],
                              header['HIERARCH ESO TEL AMBI PRES START'], header['HIERARCH ESO TEL AMBI RHUM'],
                              header['HIERARCH ESO TEL AMBI WINDSP'], header['HIERARCH ESO TEL AZ'],
                              header['HIERARCH ESO TEL ALT'], header['HIERARCH ESO TEL GEOLAT'], header['DEC'], header['RA'],
                              header['MJD-OBS'], header['HIERARCH ESO TEL AIRM START'],
                              header['HIERARCH ESO ADA ABSROT START']]
-
 
             for j, IDN in enumerate(good_source_numbers):
                 sidx = np.where((self.table['SOURCE_NUMBER'] == IDN) & (self.table['CATALOG_NUMBER'] == catnum))[0]
@@ -398,12 +479,15 @@ class ScampFullCatalog(object):
                 else:
                     p[i, j, :] = [self.table['MAG'][sidx], self.table['FLAGS_EXTRACTION'][sidx], self.table['X_Idl'][sidx],
                                   self.table['Y_Idl'][sidx], i, self.table['ERRA_WORLD'][sidx], IDN, chip_extension,
-                                  self.table['ERRA_IMAGE'][sidx], self.table['ERRB_IMAGE'][sidx], self.table['CATALOG_NUMBER'][sidx]]
+                                  self.table['ERRA_IMAGE'][sidx], self.table['ERRB_IMAGE'][sidx], self.table['CATALOG_NUMBER'][sidx], self.table['artificial'][sidx]]
 
                 # names of third dimension in p
-                col_names = np.array(['MAG', 'FLAGS_EXTRACTION', 'x', 'y', 'index', 'sigma_world', 'id' , 'CHIP_EXTENSION', 'sigma_x', 'sigma_y', 'CATALOG_NUMBER'])
+                col_names = np.array(['MAG', 'FLAGS_EXTRACTION', 'x', 'y', 'index', 'sigma_world', 'id' , 'CHIP_EXTENSION', 'sigma_x', 'sigma_y', 'CATALOG_NUMBER', 'artificial'])
 
-        aux = Table(aux, names=('epoch_yr', 'tmp0', 'airmass', 'exptime', 'temperature', 'pressure' ,'rel_humidity', 'windspeed', 'tel_azimuth', 'tel_altitude', 'geo_latitude', 'dec' , 'ra', 'MJD', 'airmass2', 'abs_rotation'))
+        # ATTENTION here: 'epoch_yr' stems from the scamp data 'Observation_Date' whereas 'MJD' comes from the file header 'MJD-OBS'
+        aux = Table(aux, names=('scamp_epoch_yr', 'catalog_number', 'airmass', 'exptime', 'temperature', 'pressure' ,'rel_humidity', 'windspeed', 'tel_azimuth', 'tel_altitude', 'geo_latitude', 'dec' , 'ra', 'MJD', 'airmass2', 'abs_rotation'))
+        if np.max(np.abs(aux['MJD'] - Time(aux['scamp_epoch_yr'], format='decimalyear').mjd)) > 1e-4:
+            raise RuntimeError
 
         mp = pystortion.distortion.multiEpochAstrometry(p, col_names, aux)
 
@@ -423,16 +507,23 @@ class ScampMergedCatalog(object):
         print('{}: {} entries'.format(self.source_file, len(self.table)))
 
     def select_alignment_source_number(self, minimum_detections):
-        """
-        return source numbers that will be used for alignment with Gaia/external catalog
-        :param minimum_detections:
-        :return:
-        """
+        """Return source numbers that will be used for alignment with Gaia/external catalog.
 
+        Parameters
+        ----------
+        minimum_detections : int
+            minimum number of scamp detections
+
+        Returns
+        -------
+            numpy array
+
+        """
         idx = np.where((self.table['FLAGS_SCAMP'] == 32) & (self.table['NPOS_OK'] > minimum_detections))[0]
         print('{}: {} sources have at least {} scamp detections and FLAGS_SCAMP == 32'.format(self.source_file, len(idx), minimum_detections))
 
         return np.array(self.table['SOURCE_NUMBER'][idx])
+
 
     def select_scamp_full(self, scamp_full, minimum_detections):
         """
@@ -821,7 +912,7 @@ def xfGetInitialAstrometricData(xmatchTable, tf, dirlist, goodSourceNumbers, tar
     aux = numpy.zeros((Nframes, 16))
     tmplist = array(xmatchTable['Catalog_Number']).tolist();
     for i, catnum in enumerate(targetCatalogNumbers):
-        tmplistIdx = tmplist.index(catnum);
+        tmplistIdx = tmplist.index(catnum)
         frameName = xmatchTable['Catalog_Name'][tmplistIdx].decode()
         frame = [dirlist[ii] for ii in range(len(dirlist)) if frameName.replace('.cat', '') in dirlist[ii]][0];
         #         print "%03d/%03d: filling catalogue with stars from %s" % (i+1,Nframes,frame);
