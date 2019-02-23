@@ -1,0 +1,77 @@
+# We set the language to c because python isn't supported on the MacOS X nodes
+# on Travis. However, the language ends up being irrelevant anyway, since we
+# install Python ourselves using conda.
+language: c
+
+os:
+    - osx
+    - linux
+
+# Setting sudo to false opts in to Travis-CI container-based builds.
+sudo: false
+
+env:
+  matrix:
+    - PYTHON_VERSION=3.5
+    - PYTHON_VERSION=3.6 SETUPTOOLS_VERSION=dev DEBUG=True
+      CONDA_DEPENDENCIES='sphinx cython numpy pytest-cov'
+      EVENT_TYPE='push pull_request cron'
+
+  global:
+    - CONDA_DEPENDENCIES="setuptools sphinx cython numpy"
+    - PIP_DEPENDENCIES="coveralls pytest-cov"
+    - EVENT_TYPE='push pull_request'
+
+matrix:
+  include:
+    - os: linux
+      env: PYTHON_VERSION=3.6 SPHINX_VERSION='>1.6'
+
+    - os: linux
+      env: PYTHON_VERSION=3.6 PIP_DEPENDENCIES='git+https://github.com/sphinx-doc/sphinx.git#egg=sphinx coveralls pytest-cov'
+           CONDA_DEPENDENCIES="setuptools cython numpy"
+
+    - os: linux
+      env: PYTHON_VERSION=3.5 SPHINX_VERSION='<1.4'
+    - os: linux
+      env: PYTHON_VERSION=3.5 SPHINX_VERSION='<1.5' SETUPTOOLS_VERSION=27
+    - os: linux
+      env: PYTHON_VERSION=3.6 SPHINX_VERSION='<1.6' SETUPTOOLS_VERSION=27
+
+  # Uncomment the following if there are issues in setuptools that we
+  # can't work around quickly - otherwise leave uncommented so that
+  # we notice when things go wrong.
+  #
+  # allow_failures:
+  #   - env: PYTHON_VERSION=3.6 SETUPTOOLS_VERSION=dev DEBUG=True
+  #          CONDA_DEPENDENCIES='sphinx cython numpy pytest-cov'
+  #          EVENT_TYPE='push pull_request cron'
+
+install:
+
+    - git clone git://github.com/astropy/ci-helpers.git
+    - source ci-helpers/travis/setup_conda.sh
+
+    # We cannot install the developer version of setuptools using pip because
+    # pip tries to remove the previous version of setuptools before the
+    # installation is complete, which causes issues. Instead, we just install
+    # setuptools manually.
+    - if [[ $SETUPTOOLS_VERSION == dev ]]; then git clone http://github.com/pypa/setuptools.git; cd setuptools; python bootstrap.py; python setup.py install; cd ..; fi
+
+before_script:
+    # Some of the tests use git commands that require a user to be configured
+    - git config --global user.name "A U Thor"
+    - git config --global user.email "author@example.com"
+
+script:
+    # Use full path for coveragerc; see issue #193
+    - py.test --cov astropy_helpers --cov-config $(pwd)/astropy_helpers/tests/coveragerc astropy_helpers
+
+    # In conftest.py we produce a .coverage.subprocess that contains coverage
+    # statistics for sub-processes, so we combine it with the main one here.
+    - mv .coverage .coverage.main
+    - coverage combine .coverage.main .coverage.subprocess
+    - coverage report
+
+after_success:
+    - coveralls --rcfile=astropy_helpers/tests/coveragerc

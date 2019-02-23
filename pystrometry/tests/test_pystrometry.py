@@ -1,6 +1,6 @@
 import copy
 from astropy import constants as const
-from ..pystrometry import keplerian_secondary_mass, pjGet_a_m_barycentre, pjGet_m2
+from pystrometry.pystrometry import keplerian_secondary_mass, pjGet_a_m_barycentre, pjGet_m2
 import astropy.units as u
 
 def test_keplerian_equations():
