@@ -7,19 +7,13 @@ Support for astrometry timeseries analysis
 
 
 
-
-License
--------
-
-This project is Copyright (c) Johannes Sahlmann and licensed under
-the terms of the BSD 3-Clause license. This package is based upon
-the `Astropy package template <https://github.com/astropy/package-template>`_
-which is licensed under the BSD 3-clause licence. See the licenses folder for
-more information.
-
-
 Contributing
 ------------
+
+Contribution work flow and (coding) guidelines should be kept close to the one described for the
+JWQL project: https://github.com/spacetelescope/jwql
+
+
 
 We love contributions! pystrometry is open source,
 built on open source, and we'd love to have you hang out in our community.
@@ -49,3 +43,13 @@ the errors and assumptions that seasoned contributors have glossed over.
 `PyCon talk <https://www.youtube.com/watch?v=6Uj746j9Heo>`_, and was adapted by
 pystrometry based on its use in the README file for the
 `MetPy project <https://github.com/Unidata/MetPy>`_.*
+
+
+License
+-------
+
+This project is Copyright (c) Johannes Sahlmann and licensed under
+the terms of the BSD 3-Clause license. This package is based upon
+the `Astropy package template <https://github.com/astropy/package-template>`_
+which is licensed under the BSD 3-clause licence. See the licenses folder for
+more information.
