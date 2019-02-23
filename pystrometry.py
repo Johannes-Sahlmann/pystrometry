@@ -1,3 +1,20 @@
+"""
+Classes and functions for high-precision astrometry timeseries analysis.
+
+Authors
+-------
+
+    - Johannes Sahlmann
+
+
+Notes
+-----
+    - should support python 2.7 and 3.5 (for the time being)
+
+
+"""
+
+
 from __future__ import print_function
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
