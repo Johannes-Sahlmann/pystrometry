@@ -103,27 +103,47 @@ def fractional_mass(m1, m2):
 
 class OrbitSystem(object):
     "2014-01-29  JSA ESAC"
-    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0., OMEGA_deg=0., i_deg=90., T0_day=0., RA_deg=0., DE_deg=0., plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0., rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None, rvCubicDrift_mspyr=None, Tref_MJD=None):
-        self.P_day = P_day
-        self.ecc = ecc
-        self.m1_MS= m1_MS
-        self.m2_MJ= m2_MJ
-        self.omega_deg = omega_deg
-        self.OMEGA_deg = OMEGA_deg
-        self.i_deg = i_deg
-        self.T0_day = T0_day
-        self.RA_deg = RA_deg
-        self.DE_deg = DE_deg
-        self.plx_mas = plx_mas
-        self.muRA_mas = muRA_mas
-        self.muDE_mas = muDE_mas
-        self.gamma_ms = gamma_ms
-        self.rvLinearDrift_mspyr = rvLinearDrift_mspyr
-        self.rvQuadraticDrift_mspyr = rvQuadraticDrift_mspyr
-        self.rvCubicDrift_mspyr = rvCubicDrift_mspyr
-        self.Tref_MJD = Tref_MJD
+    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0., OMEGA_deg=0., i_deg=90., Tp_day=0., RA_deg=0., DE_deg=0., plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0., rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None, rvCubicDrift_mspyr=None, Tref_MJD=None,
+                 attribute_dict=None):
+        if attribute_dict is not None:
+            for key, value in attribute_dict.items():
+                setattr(self, key, value)
+                print('Setting {} to {}'.format(key, value))
+
+                # set defaults
+            default_dict = {'gamma_ms': 0.,
+                            'rvLinearDrift_mspyr': 0.,
+                            'rvQuadraticDrift_mspyr': 0,
+                            'rvCubicDrift_mspyr': 0,
+                            }
+            for key, value in default_dict.items():
+                if key not in attribute_dict.keys():
+                    setattr(self, key, value)
+
+        else:
+            self.P_day = P_day
+            self.ecc = ecc
+            self.m1_MS= m1_MS
+            self.m2_MJ= m2_MJ
+            self.omega_deg = omega_deg
+            self.OMEGA_deg = OMEGA_deg
+            self.i_deg = i_deg
+            self.Tp_day = Tp_day
+            self.RA_deg = RA_deg
+            self.DE_deg = DE_deg
+            self.plx_mas = plx_mas
+            self.muRA_mas = muRA_mas
+            self.muDE_mas = muDE_mas
+            self.gamma_ms = gamma_ms
+            self.rvLinearDrift_mspyr = rvLinearDrift_mspyr
+            self.rvQuadraticDrift_mspyr = rvQuadraticDrift_mspyr
+            self.rvCubicDrift_mspyr = rvCubicDrift_mspyr
+            self.Tref_MJD = Tref_MJD
 
         self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
+
+
+
 
     def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0 ):
         """
@@ -156,7 +176,7 @@ class OrbitSystem(object):
             print("Mass ratio q = %4.6f  " %( m2_MS/self.m1_MS))
             print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day,self.ecc))
             print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
-            print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.T0_day))
+            print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.Tp_day))
 
         omega_rad = np.deg2rad(self.omega_deg)
         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
@@ -164,7 +184,7 @@ class OrbitSystem(object):
     
         #*************SIMULATION*PARAMATERS*********************************************
         if Norbit is not None:
-            t_day = np.linspace(0, self.P_day*Norbit, N) + self.T0_day
+            t_day = np.linspace(0, self.P_day*Norbit, N) + self.Tref_MJD
         elif t_MJD is not None:
             t_day = t_MJD
             N = len(t_MJD)
@@ -175,11 +195,11 @@ class OrbitSystem(object):
         # s_rv = 10.       # error bar on RV measurement in m/s
         # gnoise_aric = 0.05  # noise level on astrometry in mas RMS
         # s_aric = 0.1       # error bar on astromeric measurement in mas 
-        # t_day = span(0,P_day*Norbit,N) + T0_day   # time vector  
+        # t_day = span(0,P_day*Norbit,N) + Tp_day   # time vector
     
         #**************RADIAL*VELOCITY**************************************************
     
-        E_rad = eccentric_anomaly(self.ecc, t_day, self.T0_day, self.P_day) # eccentric anomaly
+        E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
@@ -215,7 +235,7 @@ class OrbitSystem(object):
             
         a_rel_AU = (Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(self.P_day*day2sec)**2.)**(1./3.)/AU_m
     
-        # print('i_deg = %3.2f, om_deg = %3.2f, k1_mps = %3.2f, phi0 = %3.2f, t_day[0] = %3.2f, rv[0] = %3.2f, THETA_rad[0] = %3.2f, E_rad[0] = %2.2f' % (self.i_deg,self.omega_deg,k1, self.T0_day/self.P_day, t_day[0],rv_ms[0], THETA_rad[0],E_rad[0])
+        # print('i_deg = %3.2f, om_deg = %3.2f, k1_mps = %3.2f, phi0 = %3.2f, t_day[0] = %3.2f, rv[0] = %3.2f, THETA_rad[0] = %3.2f, E_rad[0] = %2.2f' % (self.i_deg,self.omega_deg,k1, self.Tp_day/self.P_day, t_day[0],rv_ms[0], THETA_rad[0],E_rad[0])
 
         if verbose == 1:    
             print("Astrometric semimajor axis of Primary: a = %3.3f AU \t %6.3f muas " % (a_AU,a_AU/d_pc*1.e6))
@@ -237,8 +257,8 @@ class OrbitSystem(object):
         
         if psi_deg is not None:
             # psi_rad = np.deg2rad(psi_deg)
-            phi1 = astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.T0_day,TIC)
-            phi1_rel = astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.T0_day,TIC_rel)
+            phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
+            phi1_rel = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC_rel)
             phi2 = np.nan
             phi2_rel = np.nan
             
@@ -254,17 +274,17 @@ class OrbitSystem(object):
             psi_deg2 = np.ones(N)*bstart2
             # psi_rad2 = psi_deg2*deg2rad
         
-            phi1 = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.T0_day,TIC)
-            phi2 = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.T0_day,TIC)
-            phi1_rel = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.T0_day,TIC_rel)
-            phi2_rel = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.T0_day,TIC_rel)
+            phi1 = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC)
+            phi2 = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC)
+            phi1_rel = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC_rel)
+            phi2_rel = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC_rel)
     
         if returnMeanAnomaly:
-            M_rad = mean_anomaly(t_day,self.T0_day,self.P_day)
+            M_rad = mean_anomaly(t_day, self.Tp_day, self.P_day)
             return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, M_rad]
             
         elif returnTrueAnomaly:
-#           M_rad = mean_anomaly(t_day,self.T0_day,self.P_day)
+#           M_rad = mean_anomaly(t_day,self.Tp_day,self.P_day)
             return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, THETA_rad, TIC_rel]
             
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
@@ -291,7 +311,7 @@ class OrbitSystem(object):
         i_rad =     np.deg2rad(self.i_deg)
     
         #**************RADIAL*VELOCITY**************************************************    
-        E_rad = eccentric_anomaly(self.ecc,t_day,self.T0_day,self.P_day) # eccentric anomaly
+        E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
         if component=='primary':
             M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
             omega_rad = np.deg2rad(self.omega_deg)
@@ -330,7 +350,7 @@ class OrbitSystem(object):
         -------
 
         """
-        t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.T0_day + time_offset_day
+        t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = Time(t_day, format='mjd').decimalyear
         if component=='primary':
             rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
@@ -379,8 +399,8 @@ class OrbitSystem(object):
         
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         
-        phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.T0_day, TIC)
-        phi1_rel = np.nan #astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.T0_day,TIC_rel)
+        phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
+        phi1_rel = np.nan #astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.Tp_day,TIC_rel)
         phi2 = np.nan
         phi2_rel = np.nan
         rv_ms=np.nan
@@ -399,7 +419,7 @@ class OrbitSystem(object):
         #       a_rad = np.arctan2(a_m,d_pc*pc_m)
         #       a_mas = a_rad * rad2mas # semimajor axis in mas 
         #       TIC     = pjGet_TIC( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
-        #       phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC) 
+        #       phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,Tp_day,TIC)
         #       return phi1
                
 #         t_MJD = self.MjdUsedInTcspsi
@@ -418,7 +438,7 @@ class OrbitSystem(object):
         a_rad = np.arctan2(a_m,d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas         
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.T0_day, TIC)
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
         return phi1
 
 
@@ -457,7 +477,7 @@ class OrbitSystem(object):
         TIC = pjGet_TIC([a_rel, omega_rel_deg, self.OMEGA_deg, self.i_deg])
         
         # by default these are cartesian coordinates
-        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.T0_day, TIC)
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
         
         # convert to polar coordinates if requested
         if coordinate_system=='polar':
@@ -487,7 +507,7 @@ class OrbitSystem(object):
 #             print("Mass ratio q = %4.6f  " %( m2_MS/self.m1_MS))
 #             print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day,self.ecc))
 #             print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
-#             print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.T0_day))
+#             print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.Tp_day))
 #
 #         omega_rad = np.deg2rad(self.omega_deg)
 #         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
@@ -495,7 +515,7 @@ class OrbitSystem(object):
 #
 #         #*************SIMULATION*PARAMATERS*********************************************
 #         # Norbit = 2.   #number of orbits covered
-#         # t_day = np.linspace(0,self.P_day*Norbit,N) + self.T0_day
+#         # t_day = np.linspace(0,self.P_day*Norbit,N) + self.Tp_day
 #
 #         # R_rv = 50   #number of RV observations
 #         # R_aric = 50   #number of astrometric observations
@@ -503,12 +523,12 @@ class OrbitSystem(object):
 #         # s_rv = 10.       # error bar on RV measurement in m/s
 #         # gnoise_aric = 0.05  # noise level on astrometry in mas RMS
 #         # s_aric = 0.1       # error bar on astromeric measurement in mas
-#         # t_day = span(0,P_day*Norbit,N) + T0_day   # time vector
+#         # t_day = span(0,P_day*Norbit,N) + Tp_day   # time vector
 #
 #
 #         #**************RADIAL*VELOCITY**************************************************
 #
-#         # E_rad = eccentric_anomaly(self.ecc,t_day,self.T0_day,self.P_day) # eccentric anomaly
+#         # E_rad = eccentric_anomaly(self.ecc,t_day,self.Tp_day,self.P_day) # eccentric anomaly
 #         # THETA_rad = 2*np.arctan( np.sqrt( (1+self.ecc)/(1-self.ecc) ) * np.tan( E_rad/2 ) ) #position angle between radius vector and ref
 #         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
 #         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
@@ -545,14 +565,14 @@ class OrbitSystem(object):
 #         # psi_deg2 = np.ones(N)*bstart2
 #         # psi_rad2 = psi_deg2*deg2rad
 #
-#         # phi1 = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.T0_day,TIC)
-#         # phi2 = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.T0_day,TIC)
+#         # phi1 = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.Tp_day,TIC)
+#         # phi2 = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.Tp_day,TIC)
     
     
 
 #     def getPpm(self,t_MJD,psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, tref_MJD=None, externalParallaxFactors=None, horizons_file_seed=None):
-    def getPpm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
-        """
+    def ppm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
+        """Compute parallax and proper motion.
 
         Parameters
         ----------
@@ -606,15 +626,10 @@ class OrbitSystem(object):
         tcpsi = t*cpsi
         
         if psi_deg is not None:
-#             if np.all(psi_deg==0):
-#                 ppfact = parf[0]               
-
-#           added JSA 2016-03-07
             if externalParallaxFactors is None:
                 ppfact = parf[0] * cpsi + parf[1] * spsi    # see Sahlmann+11 Eq. 1 / 8
             else:
                 ppfact = parf
-                 
         else:
             xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
             yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg    
@@ -641,23 +656,43 @@ class OrbitSystem(object):
             ppm2d = [ppm[xi],ppm[yi]]
             return ppm2d
 
+
     def plot_orbits(self, timestamps_curve_2D=None, timestamps_probe_2D=None, timestamps_probe_2D_label=None,
                     delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
                     new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
                     show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
-                    timeformat='decimalyear', name_seed=''):
-        """
-        Plot barycentric, photocentric, and relative orbits in two panels
-        :param timestamps_curve_2D: in MJD
-        :param timestamps_probe_2D: in MJD
-        :param delta_mag:
-        :param N_orbit:
-        :param N_curve:
-        :return:
-        """
+                    timeformat='decimalyear', name_seed='', verbose=False):
+        """Plot barycentric, photocentric, and relative orbits in two panels.
 
+        Parameters
+        ----------
+        timestamps_curve_2D : MJD
+        timestamps_probe_2D : MJD
+        timestamps_probe_2D_label
+        delta_mag
+        N_orbit
+        N_curve
+        save_plot
+        plot_dir
+        new_figure
+        line_color
+        line_style
+        line_width
+        share_axes
+        show_orientation
+        arrow_offset_x
+        invert_xaxis
+        show_time
+        timeformat
+        name_seed
+        verbose
+
+        Returns
+        -------
+
+        """
         if timestamps_curve_2D is None:
-            timestamps_curve_2D = np.linspace(self.T0_day-self.P_day,self.T0_day+N_orbit+self.P_day,N_curve)
+            timestamps_curve_2D = np.linspace(self.Tp_day - self.P_day, self.Tp_day + N_orbit + self.P_day, N_curve)
 
         timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry( timestamps_curve_2D )
         # relative orbit
@@ -739,7 +774,8 @@ class OrbitSystem(object):
         # plot individual epochs
         if timestamps_probe_2D is not None:
             axes[1].plot(phi0_probe_relative[xi_probe],phi0_probe_relative[yi_probe], 'bo', label=timestamps_probe_2D_label)
-            print('relative separation: {}'.format(np.linalg.norm([phi0_probe_relative[xi_probe],phi0_probe_relative[yi_probe]], axis=0)))
+            if verbose:
+                print('relative separation: {}'.format(np.linalg.norm([phi0_probe_relative[xi_probe],phi0_probe_relative[yi_probe]], axis=0)))
 
         if show_orientation:
             # ax = pl.axes()
@@ -813,17 +849,17 @@ class OrbitSystem(object):
         """Plot the parallax and proper motion of the instance.
         """
         if timestamps_curve_2D is None:
-            timestamps_curve_2D = np.linspace(self.T0_day - self.P_day,
-                                          self.T0_day + N_orbit + self.P_day, N_curve)
+            timestamps_curve_2D = np.linspace(self.Tp_day - self.P_day,
+                                              self.Tp_day + N_orbit + self.P_day, N_curve)
         else:
             N_curve = len(timestamps_curve_2D)
 
-        ppm_curve_mas = self.getPpm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
-        ppm_probe_mas = self.getPpm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+        ppm_curve_mas = self.ppm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+        ppm_probe_mas = self.ppm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
         if show_difference_to is not None:
             # expect OrbitSystem instance as input
-            ppm_curve_mas_2 = show_difference_to.getPpm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
-            ppm_probe_mas_2 = show_difference_to.getPpm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+            ppm_curve_mas_2 = show_difference_to.ppm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+            ppm_probe_mas_2 = show_difference_to.ppm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
 
             ppm_curve_mas = [ppm_curve_mas[i] - ppm_curve_mas_2[i] for i in range(len(ppm_curve_mas))]
             ppm_probe_mas = [ppm_probe_mas[i] - ppm_probe_mas_2[i] for i in range(len(ppm_probe_mas))]
@@ -1437,11 +1473,11 @@ class PpmPlotter(object):
         """
 
         if self.noParallaxFit != 1:
-            orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., T0_day=0,
+            orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., Tp_day=0,
                               RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=self.p[2], muRA_mas=self.p[3],
                               muDE_mas=self.p[4], Tref_MJD=self.tref_MJD)
         else:
-            orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., T0_day=0,
+            orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., Tp_day=0,
                               RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=0, muRA_mas=self.p[2],
                               muDE_mas=self.p[3])
 
@@ -1458,10 +1494,10 @@ class PpmPlotter(object):
 
             if instrument is None:
                 if psi_deg is None:
-                    ppm_curve = orb.getPpm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                           horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
-                ppm_meas = orb.getPpm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                      horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                    ppm_curve = orb.ppm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                        horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                ppm_meas = orb.ppm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                   horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
                 if psi_deg is None:
                     pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
                     pl.plot(self.Xmean, self.Ymean, 'ko')
@@ -1485,10 +1521,10 @@ class PpmPlotter(object):
 
         if instrument is None:
             if psi_deg is None:
-                ppm_curve = orb.getPpm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                       horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
-            ppm_meas = orb.getPpm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                  horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                ppm_curve = orb.ppm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                    horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+            ppm_meas = orb.ppm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                               horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
             if psi_deg is None:
                 pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
                 pl.plot(self.Xmean, self.Ymean, 'ko')
@@ -1500,13 +1536,13 @@ class PpmPlotter(object):
                 tmpInstrument = np.array([ins] * len(self.tmodel_MJD))
                 idx = np.where(instrument == ins)[0]
                 if psi_deg is None:
-                    ppm_curve = orb.getPpm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                           instrument=tmpInstrument, psi_deg=psi_deg)
+                    ppm_curve = orb.ppm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                                        instrument=tmpInstrument, psi_deg=psi_deg)
                     pl.plot(ppm_curve[0], ppm_curve[1], c=myColours[jjj], ls='-')
                     pl.plot(self.Xmean[idx], self.Ymean[idx], marker='o', mfc=myColours[jjj], mec=myColours[jjj],
                             ls='None')
-            ppm_meas = orb.getPpm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                  instrument=instrument, psi_deg=psi_deg)
+            ppm_meas = orb.ppm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
+                               instrument=instrument, psi_deg=psi_deg)
 
 
 
@@ -1758,9 +1794,9 @@ class xfAxOrbitPlotter(object):
         # else:
         #     plx_mas = theta_0['plx_mas']
 
-        # P_day,ecc,m2_MJ,omega_deg,T0_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg = theta;
-        #         P_day,ecc,m2_MJ,omega_deg,T0_day,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,OMEGA_deg,i_deg = theta;
-        #         P_day,ecc,m2_MJ,omega_deg,T0_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg,S_x,S_y,rvQuadraticDrift_mspyr,rvCubicDrift_mspyr = theta;
+        # P_day,ecc,m2_MJ,omega_deg,Tp_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg = theta;
+        #         P_day,ecc,m2_MJ,omega_deg,Tp_day,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,OMEGA_deg,i_deg = theta;
+        #         P_day,ecc,m2_MJ,omega_deg,Tp_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg,S_x,S_y,rvQuadraticDrift_mspyr,rvCubicDrift_mspyr = theta;
 
         # compute positions at measurement dates according to best-fit model p (no DCR)
         inVec = np.array([theta_0['dRA0_mas'], theta_0['dDE0_mas'], theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
@@ -1792,7 +1828,7 @@ class xfAxOrbitPlotter(object):
             DCR = np.zeros(shape(C)[1])
         self.DCR = DCR
 
-        #       tmporb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=orb.m1_MS, m2_MJ = m2_MJ, omega_deg=omega_deg, OMEGA_deg = OMEGA_deg, i_deg = i_deg, T0_day = T0_day, gamma_ms=gamma_ms , rvLinearDrift_mspyr = rvLinearDrift_mspyr, Tref_MJD = orb.Tref_MJD);
+        #       tmporb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=orb.m1_MS, m2_MJ = m2_MJ, omega_deg=omega_deg, OMEGA_deg = OMEGA_deg, i_deg = i_deg, Tp_day = Tp_day, gamma_ms=gamma_ms , rvLinearDrift_mspyr = rvLinearDrift_mspyr, Tref_MJD = orb.Tref_MJD);
 
 
         for p in range(number_of_companions):
@@ -1806,7 +1842,7 @@ class xfAxOrbitPlotter(object):
 
             tmporb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
                                  omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
-                                 T0_day=theta_p['T0_day'], RA_deg=0., DE_deg=0., plx_mas=theta_p['plx_mas'],
+                                 Tp_day=theta_p['Tp_day'], RA_deg=0., DE_deg=0., plx_mas=theta_p['plx_mas'],
                                  muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
 
             setattr(self, 'orbit_system_companion_%d' % (p), tmporb)
@@ -2053,12 +2089,12 @@ class xfAxOrbitPlotter(object):
                 theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
             # orb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=m1_MS, m2_MJ=m2_MJ, omega_deg=omega_deg, OMEGA_deg=OMEGA_deg,
-            #                   i_deg=i_deg, T0_day=T0_day, RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=plx_mas,
+            #                   i_deg=i_deg, Tp_day=Tp_day, RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=plx_mas,
             #                   muRA_mas=muRA_mas, muDE_mas=muDE_mas, Tref_MJD=self.Tref_MJD);
             orb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
-                             omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
-                             T0_day=theta_p['T0_day'], RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=theta_p['plx_mas'],
-                             muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
+                              omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
+                              Tp_day=theta_p['Tp_day'], RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=theta_p['plx_mas'],
+                              muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
 
 
             t_curve_MJD = np.sort(np.tile(self.t_curve_MJD, 2));
@@ -2068,8 +2104,8 @@ class xfAxOrbitPlotter(object):
             cpsi_curve = tmp % 2
             spsi_curve = (tmp + 1) % 2
 
-            ppm_curve = orb.getPpm(t_curve_MJD, offsetRA_mas=theta_p['dRA0_mas'], offsetDE_mas=theta_p['dDE0_mas'],
-                                   horizons_file_seed=horizonsFileSeed)  # , tref_MJD=self.tref_MJD);
+            ppm_curve = orb.ppm(t_curve_MJD, offsetRA_mas=theta_p['dRA0_mas'], offsetDE_mas=theta_p['dDE0_mas'],
+                                horizons_file_seed=horizonsFileSeed)  # , tref_MJD=self.tref_MJD);
 
             ##################################################
             # TRIPLE PANEL FIGURE
@@ -2357,11 +2393,11 @@ class pDetLim(object):
 
         if useMeanEpochs == 1:  # fastSimu works with epoch averages
             orb_mean = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0.,
-                                   T0_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
+                                   Tp_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
                                    muDE_mas=0, Tref_MJD=xfP.tref_MJD);
             #             ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed);
-            ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
-                                                 psi_deg=xfP.psi_deg);
+            ppm1dMeas_mean_mas = orb_mean.ppm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
+                                              psi_deg=xfP.psi_deg);
             C_mean = orb_mean.coeffMatrix
             TableC1_mean = Table(C_mean.T, names=('cpsi', 'spsi', 'ppfact', 'tcpsi', 'tspsi'))
             tmp_mean, xi_mean, yi_mean = xfGetMeanParMatrix(xfP)
@@ -2458,7 +2494,7 @@ class pDetLim(object):
                                              omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j],
                                              T0_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
                                              t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi);
-                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], T0_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
+                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
                 # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
 
                 tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas  # remove noise structure
@@ -2646,9 +2682,9 @@ class pDetLim(object):
         #         # simu_da_mas = [];
         #         simu_da_mas = pjGetOrbitFast(P_day=simu_P_day[j], ecc=ecc, m1_MS=self.M1_Msun, m2_MJ=simu_M2_jup[j],
         #                                      omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j],
-        #                                      T0_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
+        #                                      Tp_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
         #                                      t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi);
-        #         # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], T0_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
+        #         # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
         #         # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
         #
         #         tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas;  # remove noise structure
@@ -3133,7 +3169,7 @@ def EllipticalRectangularCoordinates(ecc,E_rad):
 #  *   - INPUT
 #  *       - omega_rad Longitude of periastron expressed in radian 
 #  *       - ecc Eccentricity
-#  *       - T0_day Time of passage at periastron (julian date-2400000)
+#  *       - Tp_day Time of passage at periastron (julian date-2400000)
 #  *       - P_day Period of the orbit
 #  *       - t_day Date/time of the observations  (julian date-2400000)
 #  *       
@@ -3200,9 +3236,9 @@ def pjGet_TIC(GE):
     return TIC
 
 
-def astrom_signal(t_day,psi_deg,ecc,P_day,T0_day,TIC):  
+def astrom_signal(t_day, psi_deg, ecc, P_day, Tp_day, TIC):
     #USAGE of pseudo eccentricity
-    # a = [pecc,P_day,T0_day,A,B,F,G]
+    # a = [pecc,P_day,Tp_day,A,B,F,G]
     # input: xp = structure containing dates and baseline orientations of measurements
     #         a = structure containing aric orbit parameters
     # output: phi = displacment angle in mas
@@ -3213,7 +3249,7 @@ def astrom_signal(t_day,psi_deg,ecc,P_day,T0_day,TIC):
   
       
     # compute eccentric anomaly
-    E_rad = eccentric_anomaly(ecc,t_day,T0_day,P_day)
+    E_rad = eccentric_anomaly(ecc, t_day, Tp_day, P_day)
  
     # compute orbit projected on the sky
     if np.all(ecc == 0):
@@ -3869,10 +3905,10 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
     # MIKS-GA computes T0 relative to the average time
     if verbose:
         for i in range(len(best_genome)):
-            print('Planet %d: Phi0 = %f' % (i+1,best_genome['T0_day'][i]))
+            print('Planet %d: Phi0 = %f' % (i+1,best_genome['Tp_day'][i]))
             print('Planet %d: m2_MJ = %f' % (i+1, m2_MJ[i]))
 
-    best_genome['T0_day'] += TRef_MJD
+    best_genome['Tp_day'] += TRef_MJD
 
     best_genome['a_mas'] = a_mas
     best_genome['omega_deg'] = omega_deg
@@ -3881,7 +3917,7 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
     best_genome['m1_MS'] = m1_MS
     best_genome['m2_MS'] = m2_MS
 
-    # col_list = theta_names #np.array(['P_day','ecc','m1_MS','m2_MS','omega_deg','T0_day','dRA0_mas','dDE0_mas','plx_mas','muRA_mas','muDE_mas','rho_mas','d_mas','OMEGA_deg','i_deg'])
+    # col_list = theta_names #np.array(['P_day','ecc','m1_MS','m2_MS','omega_deg','Tp_day','dRA0_mas','dDE0_mas','plx_mas','muRA_mas','muDE_mas','rho_mas','d_mas','OMEGA_deg','i_deg'])
 
     for i in range(len(best_genome)):
         # generate dictionary
