@@ -645,10 +645,11 @@ class OrbitSystem(object):
         if psi_deg is not None:
             self.MjdUsedInTcspsi = t_MJD
         else:
-            self.MjdUsedInTcspsi = np.array(np.sort(np.tile(t_MJD ,2)))
+            self.MjdUsedInTcspsi = np.array(np.sort(np.tile(t_MJD, 2)))
 
         inVec = np.array([offsetRA_mas, offsetDE_mas, self.plx_mas, self.muRA_mas, self.muDE_mas])
-        ppm = np.dot(C.T,inVec)
+        print(inVec)
+        ppm = np.dot(C.T, inVec)
         self.ppm = ppm
         if psi_deg is not None:
             return ppm
@@ -1701,9 +1702,8 @@ class PpmPlotter(object):
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
 
 
-class xfAxOrbitPlotter(object):
-    """
-    A class to plot results of astrometric fitting of parallax + proper motion + orbit
+class AstrometricOrbitPlotter(object):
+    """Class to plot results of astrometric fitting of parallax + proper motion + orbit.
 
     Attributes
     ----------
@@ -1715,150 +1715,107 @@ class xfAxOrbitPlotter(object):
 
     Methods
     -------
-    printSchemaNames()
-        prints names of availabe schemas
-    getTableNames(schemaName,verbose=0):
-        return table names of a certain schema
     """
 
-    def __init__(self, theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0, outlier_sigma_threshold=3., absolute_threshold=10):#, theta_names=None):
+    def __init__(self, attribute_dict=None):
+        """
+        theta, C, T, xi, yi, Tref_MJD, omc=None, m1_MS=1.0, outlier_sigma_threshold=3., absolute_threshold=10,
+        Parameters
+        ----------
+        theta : list
+            list of dictionaries, length = nr of companions
+        C
+        T
+        xi
+        yi
+        Tref_MJD
+        omc
+        m1_MS
+        outlier_sigma_threshold
+        absolute_threshold
+        attribute_dict
         """
 
-        :param theta: list of dictionaries, length = nr of companions
-        :param C:
-        :param T:
-        :param xi:
-        :param yi:
-        :param Tref_MJD:
-        :param omc:
-        :param m1_MS:
-        :param theta_names:
-        """
-        self.theta = theta
-        # self.theta_names = theta_names
-        self.C = C
-        self.T = T
-        self.xi = xi
-        self.yi = yi
-        self.omc = omc
-        self.Tref_MJD = Tref_MJD
+        # model_parameters dict (theta)
+        # linear_coefficients dict ('matrix', 'table')
+        # 2d_indices dict 'xi', 'yi'
+        # data_type str '1d', '2d', 'mixed'
 
+        if attribute_dict is not None:
+            for key, value in attribute_dict.items():
+                setattr(self, key, value)
+                # print('Setting {} to {}'.format(key, value))
+                print('Setting {}'.format(key))
 
-        # if np.ndim(theta) == 2:
-        #     number_of_companions = theta.shape[0]
-        # else:
-        #     number_of_companions = 1
+                # set defaults
+            default_dict = {'outlier_sigma_threshold': 3.,
+                            'absolute_threshold': 10.,
+                            'residuals': None,
+                            }
 
-        number_of_companions = len(theta)
+            for key, value in default_dict.items():
+                if key not in attribute_dict.keys():
+                    setattr(self, key, value)
 
+        linear_coefficient_matrix = self.linear_coefficients['matrix']
+
+        number_of_companions = len(self.model_parameters)
 
         self.number_of_companions = number_of_companions
         model_name = 'k{:d}'.format(number_of_companions)
 
-        # exec behaves differently under python3, trying to fix it.
-        # global plx_mas
-        if 0:
-            for key, val in locals().items():
-                if key in theta_names:
-                    print('Local {} = {}'.format(key, val))
-
-        # for key, val in globals().items():
-        #     if key in theta_names:
-        #         print('Global {} = {}'.format(key, val))
+        T = self.data.epoch_data
 
         # parameters of first companion
-        theta_0 = theta[0]
-
+        theta_0 = self.model_parameters[0]
         theta_names = theta_0.keys()
-        # if model_name != 'k1':
-        #     # use first planet to get common parameters (parallax etc.)
-        #     exec(','.join(theta_names) + ' = theta[0]')
-        # else:
-        #     exec(','.join(theta_names) + ' = theta')
-        #     statement = "global plx_mas = theta[theta_names.index('{}')]".format('plx_mas')
-        #     exec('print(statement)')
-        #     exec('statement', globals(), locals())
-        #     # exec(','.join(theta_names) + ' = theta', globals(), _locals)
-        #     # exec(','.join(theta_names) + ' = theta', _locals)
-        #     # exec(','.join(theta_names) + ' = theta', globals())
-        # # locals()
-        # if 0:
-        #     for key, val in locals().items():
-        #         if key in theta_names:
-        #             print('Local {} = {}'.format(key, val))
-
-
 
         if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
             theta_0['plx_mas ']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
-        # else:
-        #     plx_mas = theta_0['plx_mas']
 
-        # P_day,ecc,m2_MJ,omega_deg,Tp_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg = theta;
-        #         P_day,ecc,m2_MJ,omega_deg,Tp_day,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,OMEGA_deg,i_deg = theta;
-        #         P_day,ecc,m2_MJ,omega_deg,Tp_day,gamma_ms,rvLinearDrift_mspyr,dRA0_mas,dDE0_mas,plx_mas,muRA_mas,muDE_mas,rho_mas,d_mas,OMEGA_deg,i_deg,S_x,S_y,rvQuadraticDrift_mspyr,rvCubicDrift_mspyr = theta;
+        # compute positions at measurement dates according to best-fit model p (no dcr)
+        ppm_parameters = np.array([theta_0['offset_alphastar_mas'], theta_0['offset_delta_mas'],
+                          theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
 
-        # compute positions at measurement dates according to best-fit model p (no DCR)
-        inVec = np.array([theta_0['dRA0_mas'], theta_0['dDE0_mas'], theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
-        self.ppm_model = np.array(np.dot(C[0:len(inVec), :].T, inVec)).flatten()
+        self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
 
         if 'rho_mas' in theta_names:
             if 'd_mas' in theta_names:
-                # inVec_DCR = np.array([rho_mas, d_mas]);
-                inVec_DCR = np.array([theta_0['rho_mas'], theta_0['d_mas']]);
+                dcr_parameters = np.array([theta_0['rho_mas'], theta_0['d_mas']])
             else:
-                inVec_DCR = np.array([theta_0['rho_mas']]);
+                dcr_parameters = np.array([theta_0['rho_mas']])
 
-            # compute measured positions (DCR-corrected)
-            if C.shape[0] == 7:
-                DCR = np.dot(C[5:7, :].T, inVec_DCR);
-            elif C.shape[0] == 6:
-                #             DCR = np.dot(C[5,:].T,inVec_DCR);
-                DCR = C[5, :] * inVec_DCR
-                #         elif (C.shape[0] == 5) & (self.noParallaxFit==1):
-                #             DCR = (np.array(C[4,:]) * p[4]).flatten()
-                #         elif C.shape[0] == 6:
-                #             DCR = (np.array(C[5,:]) * p[5]).flatten()
-                #         elif C.shape[0] == 9:
-                #             DCR = np.dot(C[7:9,:].T,p.flatten()[7:9]);
-                #             ACC = np.dot(C[5:7,:].T,p.flatten()[5:7]);
-                #             self.ACC = ACC
-
+            # compute measured positions (dcr-corrected)
+            if linear_coefficient_matrix.shape[0] == 7:
+                dcr = np.dot(linear_coefficient_matrix[5:7, :].T, dcr_parameters)
+            elif linear_coefficient_matrix.shape[0] == 6:
+                dcr = linear_coefficient_matrix[5, :] * dcr_parameters
         else:
-            DCR = np.zeros(shape(C)[1])
-        self.DCR = DCR
-
-        #       tmporb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=orb.m1_MS, m2_MJ = m2_MJ, omega_deg=omega_deg, OMEGA_deg = OMEGA_deg, i_deg = i_deg, Tp_day = Tp_day, gamma_ms=gamma_ms , rvLinearDrift_mspyr = rvLinearDrift_mspyr, Tref_MJD = orb.Tref_MJD);
-
+            dcr = np.zeros(linear_coefficient_matrix.shape[1])
+        self.DCR = dcr
 
         for p in range(number_of_companions):
-            # if model_name != 'k1':
-            #     exec (','.join(theta_names) + ' = theta[p];')
-            # else:
-            #     exec (','.join(theta_names) + ' = theta;')
-            theta_p = theta[p]
+            theta_p = self.model_parameters[p]
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
 
-            tmporb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
-                                 omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
-                                 Tp_day=theta_p['Tp_day'], RA_deg=0., DE_deg=0., plx_mas=theta_p['plx_mas'],
-                                 muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
+            tmporb = OrbitSystem(attribute_dict=theta_p)
+            setattr(self, 'orbit_system_companion_{:d}'.format(p), tmporb)
 
-            setattr(self, 'orbit_system_companion_%d' % (p), tmporb)
-
-            if 'delta_mag' in theta_names:
-                relative_orbit_mas = tmporb.relative_orbit_fast(np.array(T['MjdUsedInTcspsi']), np.array(T['spsi']),
-                                                                np.array(T['cpsi']), shift_omega_by_pi=False);
-                # fractional luminosity
-                beta = getBeta(theta_p['delta_mag'])
-                #     fractional mass
-                f = getB(m1_MS, theta_p['m2_MS'])
-                photocentric_orbit_mas = relative_orbit_mas * (f - beta)
-                orbit_model = photocentric_orbit_mas
-            else:
-                orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MjdUsedInTcspsi']),
-                                                                          np.array(T['spsi']), np.array(T['cpsi']));
+            # if 'delta_mag' in theta_names:
+            #     relative_orbit_mas = tmporb.relative_orbit_fast(np.array(T['MjdUsedInTcspsi']), np.array(T['spsi']),
+            #                                                     np.array(T['cpsi']), shift_omega_by_pi=False);
+            #     # fractional luminosity
+            #     beta = getBeta(theta_p['delta_mag'])
+            #     #     fractional mass
+            #     f = getB(m1_MS, theta_p['m2_MS'])
+            #     photocentric_orbit_mas = relative_orbit_mas * (f - beta)
+            #     orbit_model = photocentric_orbit_mas
+            # else:
+            orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
+                                                                          np.array(T['spsi']), np.array(T['cpsi']))
+            # orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MjdUsedInTcspsi']),
+            #                                                               np.array(T['spsi']), np.array(T['cpsi']))
 
             setattr(self, 'orbit_model_%d' % (p), orbit_model)
 
@@ -1868,8 +1825,10 @@ class xfAxOrbitPlotter(object):
         else:
             self.orbit_model = self.orbit_model_0 + self.orbit_model_1
 
-        if omc is None:
-            omc = np.array(T['da_mas']) - self.orbit_model - self.DCR - self.ppm_model
+        if self.residuals is None:
+            residuals = np.array(T['da_mas']) - self.orbit_model - self.DCR - self.ppm_model
+        else:
+            residuals = self.residuals
 
         self.ppm_meas = np.array(T['da_mas']) - self.DCR - self.orbit_model
         self.orb_meas = np.array(T['da_mas']) - self.DCR - self.ppm_model
@@ -1941,14 +1900,14 @@ class xfAxOrbitPlotter(object):
             self.DCR_Xmean[jj] = np.average(self.DCR[tmpIndexX]);
             self.DCR_Ymean[jj] = np.average(self.DCR[tmpIndexY]);
 
-            self.meanResidualX[jj] = np.average(omc[tmpIndexX], weights=1. / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
-            self.meanResidualY[jj] = np.average(omc[tmpIndexY], weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
+            self.meanResidualX[jj] = np.average(residuals[tmpIndexX], weights=1. / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
+            self.meanResidualY[jj] = np.average(residuals[tmpIndexY], weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
 
             self.parfXmean[jj] = np.average(self.T['ppfact'][tmpIndexX]);
             self.parfYmean[jj] = np.average(self.T['ppfact'][tmpIndexY]);
 
-            self.stdResidualX[jj] = np.std(omc[tmpIndexX]);
-            self.stdResidualY[jj] = np.std(omc[tmpIndexY]);
+            self.stdResidualX[jj] = np.std(residuals[tmpIndexX]);
+            self.stdResidualY[jj] = np.std(residuals[tmpIndexY]);
 
             # on the fly inter-epoch outlier detection
             outliers = {}
@@ -1962,18 +1921,18 @@ class xfAxOrbitPlotter(object):
             is_outlier = []
             for key in outliers.keys():
                 # boolean array
-                if absolute_threshold is not None:
-                    is_outlier = (np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']) | (
-                             np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > absolute_threshold)
+                if self.absolute_threshold is not None:
+                    is_outlier = (np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']) | (
+                             np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > absolute_threshold)
 
-                elif outlier_sigma_threshold is not None:
-                    is_outlier = np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']
+                elif self.outlier_sigma_threshold is not None:
+                    is_outlier = np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']
 
                 if any(is_outlier):
                     tmp_1D_index = np.where(is_outlier)[0]
                     print('Detected {} {}-residual outliers ({:2.1f} sigma) in epoch {} (1-indexed) '.format(
                             len(tmp_1D_index), key, outlier_sigma_threshold, epoch), end='')
-                    print(np.abs(omc[outliers[key]['index']] - np.mean(omc[outliers[key]['index']]))[tmp_1D_index], end='')
+                    print(np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']]))[tmp_1D_index], end='')
                     # 1/0
                     for ii in tmp_1D_index:
                         print(' {:.12f}'.format(self.T['MJD'][outliers[key]['index'][ii]]), end=',')
@@ -2008,9 +1967,9 @@ class xfAxOrbitPlotter(object):
             self.errResidualY[jj] = self.stdResidualY[jj] / np.sqrt(len(tmpIndexY));
 
             # %         from Lazorenko writeup:
-            self.x_e_laz[jj] = np.sum(omc[tmpIndexX] / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)) / np.sum(
+            self.x_e_laz[jj] = np.sum(residuals[tmpIndexX] / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)) / np.sum(
                 1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
-            self.y_e_laz[jj] = np.sum(omc[tmpIndexY] / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)) / np.sum(
+            self.y_e_laz[jj] = np.sum(residuals[tmpIndexY] / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)) / np.sum(
                 1 / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
 
             self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)));
@@ -2031,8 +1990,7 @@ class xfAxOrbitPlotter(object):
             [self.x_e_laz ** 2 / self.sx_star_laz ** 2, self.y_e_laz ** 2 / self.sy_star_laz ** 2]);
 
         # fixed 2018-08-18 JSA
-        # self.nFree_ep = len(medi) * 2 - (C.shape[0] + 2)
-        self.nFree_ep = len(medi) * 2 - (C.shape[0] + number_of_companions*7)
+        self.nFree_ep = len(medi) * 2 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
 
         self.chi2_laz_red = self.chi2_laz / self.nFree_ep
         self.chi2_star_laz_red = self.chi2_star_laz / self.nFree_ep
@@ -2042,7 +2000,7 @@ class xfAxOrbitPlotter(object):
         self.epoch_omc_std_Y = np.std(self.meanResidualY)
         self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
 
-        self.omc = omc
+        self.residuals = residuals
 
     def printResidualStats(self):
         print('Epoch residual RMS X %3.3f mas' % (self.epoch_omc_std_X))
