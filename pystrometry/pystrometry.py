@@ -1843,201 +1843,221 @@ class AstrometricOrbitPlotter(object):
             setattr(self, 'orb_{:d}_meas'.format(p), tmp_orb_meas)
 
         # compute epoch averages
-        medi = np.unique(T['OB']);
+        medi = np.unique(T['OB'])
         self.medi = medi
-        self.t_MJD_epoch = np.zeros(len(medi));
-        self.stdResidualX = np.zeros(len(medi));
-        self.stdResidualY = np.zeros(len(medi));
-        self.errResidualX = np.zeros(len(medi));
-        self.errResidualY = np.zeros(len(medi));
-        self.Xmean_ppm = np.zeros(len(medi));
-        self.Ymean_ppm = np.zeros(len(medi));
-        self.Xmean_orb = np.zeros(len(medi));
-        self.Ymean_orb = np.zeros(len(medi));
-        for p in range(number_of_companions):
-            setattr(self, 'Xmean_orb_{:d}'.format(p), np.zeros(len(medi)))
-            setattr(self, 'Ymean_orb_{:d}'.format(p), np.zeros(len(medi)))
+        self.t_MJD_epoch = np.zeros(len(medi))
 
-        self.parfXmean = np.zeros(len(medi));
-        self.parfYmean = np.zeros(len(medi));
-        self.DCR_Xmean = np.zeros(len(medi));
-        self.DCR_Ymean = np.zeros(len(medi));
-        self.ACC_Xmean = np.zeros(len(medi));
-        self.ACC_Ymean = np.zeros(len(medi));
-        self.meanResidualX = np.zeros(len(medi));
-        self.meanResidualY = np.zeros(len(medi));
-        self.x_e_laz = np.zeros(len(medi));
-        self.y_e_laz = np.zeros(len(medi));
-        self.sx_star_laz = np.zeros(len(medi));
-        self.sy_star_laz = np.zeros(len(medi));
+        average_quantities_1d = 'stdResidualX errResidualX Xmean_ppm Xmean_orb parfXmean ' \
+                                'DCR_Xmean ACC_Xmean meanResidualX x_e_laz sx_star_laz mean_cpsi mean_spsi'.split()
+
+        for p in range(number_of_companions):
+            average_quantities_1d += ['Xmean_orb_{:d}'.format(p)]
+
+        for attribute in average_quantities_1d:
+            setattr(self, attribute, np.zeros(len(medi)))
+        if self.data_type == '2d':
+            for attribute in average_quantities_1d:
+                setattr(self, attribute.replace('X', 'Y').replace('x_', 'y_'), np.zeros(len(medi)))
 
         outlier_1D_index = np.array([])
-        for jj, epoch in enumerate(self.medi):
-            tmpidx = np.where(self.T['OB'] == epoch)[0];
-            tmpIndexX = np.intersect1d(self.xi, tmpidx)
-            tmpIndexY = np.intersect1d(self.yi, tmpidx)
 
-            self.t_MJD_epoch[jj] = np.mean(self.T['MJD'][tmpIndexX]);
+        for jj, epoch in enumerate(self.medi):
+            tmpidx = np.where(T['OB'] == epoch)[0]
+            if self.data_type == '2d':
+                tmpIndexX = np.intersect1d(self.xi, tmpidx)
+                tmpIndexY = np.intersect1d(self.yi, tmpidx)
+            elif self.data_type == '1d':
+                tmpIndexX = tmpidx
+
+            self.t_MJD_epoch[jj] = np.mean(T['MJD'][tmpIndexX])
+            self.mean_cpsi[jj] = np.mean(T['cpsi'][tmpIndexX])
+            self.mean_spsi[jj] = np.mean(T['spsi'][tmpIndexX])
 
             self.Xmean_ppm[jj] = np.average(self.ppm_meas[tmpIndexX],
-                                            weights=1. / (np.array(self.T['sigma_da_mas'])[tmpIndexX] ** 2.));
-            self.Ymean_ppm[jj] = np.average(self.ppm_meas[tmpIndexY],
-                                            weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
+                                            weights=1. / (np.array(T['sigma_da_mas'])[tmpIndexX] ** 2.))
             self.Xmean_orb[jj] = np.average(self.orb_meas[tmpIndexX],
-                                            weights=1. / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
-            self.Ymean_orb[jj] = np.average(self.orb_meas[tmpIndexY],
-                                            weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
+                                            weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
+            if self.data_type == '2d':
+                self.Ymean_ppm[jj] = np.average(self.ppm_meas[tmpIndexY],
+                                                weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
+                self.Ymean_orb[jj] = np.average(self.orb_meas[tmpIndexY],
+                                                weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
+
             for p in range(number_of_companions):
                 getattr(self, 'Xmean_orb_{:d}'.format(p))[jj] = np.average(
                     getattr(self, 'orb_{:d}_meas'.format(p))[tmpIndexX],
-                    weights=1. / (self.T['sigma_da_mas'][tmpIndexX] ** 2.))
-                getattr(self, 'Ymean_orb_{:d}'.format(p))[jj] = np.average(
-                    getattr(self, 'orb_{:d}_meas'.format(p))[tmpIndexY],
-                    weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.))
-                # setattr(self, 'Xmean_orb_{:d}'.format(p)[jj], np.average( getattr(self, 'orb_{:d}_meas'.format(p))[tmpIndexX], weights = 1./(self.T['sigma_da_mas'][tmpIndexX]**2.)) )
-                # setattr(self, 'Ymean_orb_{:d}'.format(p)[jj], np.average( getattr(self, 'orb_{:d}_meas'.format(p))[tmpIndexY], weights = 1./(self.T['sigma_da_mas'][tmpIndexY]**2.)) )
+                    weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
+                if self.data_type == '2d':
+                    getattr(self, 'Ymean_orb_{:d}'.format(p))[jj] = np.average(
+                        getattr(self, 'orb_{:d}_meas'.format(p))[tmpIndexY],
+                        weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
 
-            self.DCR_Xmean[jj] = np.average(self.DCR[tmpIndexX]);
-            self.DCR_Ymean[jj] = np.average(self.DCR[tmpIndexY]);
-
-            self.meanResidualX[jj] = np.average(residuals[tmpIndexX], weights=1. / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
-            self.meanResidualY[jj] = np.average(residuals[tmpIndexY], weights=1. / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
-
-            self.parfXmean[jj] = np.average(self.T['ppfact'][tmpIndexX]);
-            self.parfYmean[jj] = np.average(self.T['ppfact'][tmpIndexY]);
-
-            self.stdResidualX[jj] = np.std(residuals[tmpIndexX]);
-            self.stdResidualY[jj] = np.std(residuals[tmpIndexY]);
+            self.DCR_Xmean[jj] = np.average(self.DCR[tmpIndexX])
+            self.meanResidualX[jj] = np.average(residuals[tmpIndexX], weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
+            self.parfXmean[jj] = np.average(T['ppfact'][tmpIndexX])
+            self.stdResidualX[jj] = np.std(residuals[tmpIndexX])
+            if self.data_type == '2d':
+                self.DCR_Ymean[jj] = np.average(self.DCR[tmpIndexY])
+                self.meanResidualY[jj] = np.average(residuals[tmpIndexY], weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
+                self.parfYmean[jj] = np.average(T['ppfact'][tmpIndexY])
+                self.stdResidualY[jj] = np.std(residuals[tmpIndexY])
 
             # on the fly inter-epoch outlier detection
             outliers = {}
             outliers['x'] = {}
-            outliers['y'] = {}
             outliers['x']['index'] = tmpIndexX
-            outliers['y']['index'] = tmpIndexY
             outliers['x']['std_residual'] = self.stdResidualX[jj]
-            outliers['y']['std_residual'] = self.stdResidualY[jj]
+            if self.data_type == '2d':
+                outliers['y'] = {}
+                outliers['y']['index'] = tmpIndexY
+                outliers['y']['std_residual'] = self.stdResidualY[jj]
 
             is_outlier = []
             for key in outliers.keys():
                 # boolean array
                 if self.absolute_threshold is not None:
-                    is_outlier = (np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']) | (
-                             np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > absolute_threshold)
+                    is_outlier = (np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > self.outlier_sigma_threshold * outliers[key]['std_residual']) | (
+                             np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > self.absolute_threshold)
 
                 elif self.outlier_sigma_threshold is not None:
-                    is_outlier = np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > outlier_sigma_threshold * outliers[key]['std_residual']
+                    is_outlier = np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']])) > self.outlier_sigma_threshold * outliers[key]['std_residual']
 
                 if any(is_outlier):
                     tmp_1D_index = np.where(is_outlier)[0]
                     print('Detected {} {}-residual outliers ({:2.1f} sigma) in epoch {} (1-indexed) '.format(
-                            len(tmp_1D_index), key, outlier_sigma_threshold, epoch), end='')
+                            len(tmp_1D_index), key, self.outlier_sigma_threshold, epoch), end='')
                     print(np.abs(residuals[outliers[key]['index']] - np.mean(residuals[outliers[key]['index']]))[tmp_1D_index], end='')
                     # 1/0
                     for ii in tmp_1D_index:
-                        print(' {:.12f}'.format(self.T['MJD'][outliers[key]['index'][ii]]), end=',')
+                        print(' {:.12f}'.format(T['MJD'][outliers[key]['index'][ii]]), end=',')
                     print()
 
                     outlier_1D_index = np.hstack((outlier_1D_index, outliers[key]['index'][tmp_1D_index]))
 
-            # if any(outliers_x):
-            #     tmp_1D_index_x = np.where(outliers_x)[0]
-            #     print('Detected %d X-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
-            #         len(tmp_1D_index_x), outlier_sigma_threshold, epoch), end='')
-            #     print(np.abs(omc[tmpIndexX] - np.mean(omc[tmpIndexX]))[tmp_1D_index_x], end='')
-            #     for ii in tmp_1D_index_x:
-            #         print(' {:.12f}'.format(self.T['MJD'][tmpIndexX[ii]]), end=',')
-            #     print()
-            #
-            #     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_x]))
-            #     # outlier_1D_index.append(tmpIndexX[tmp_1D_index_x].tolist())
-            #
-            # if any(outliers_y):
-            #     tmp_1D_index_y = np.where(outliers_y)[0]
-            #     print('Detected %d Y-residual outliers (%2.1f sigma) in epoch %d (1-indexed) ' % (
-            #         len(tmp_1D_index_y), outlier_sigma_threshold, epoch), end='')
-            #     print(np.abs(omc[tmpIndexY] - np.mean(omc[tmpIndexY]))[tmp_1D_index_y], end='')
-            #     for ii in tmp_1D_index_y:
-            #         print(' {:.12f}'.format(self.T['MJD'][tmpIndexY[ii]]), end=',')
-            #     print()
-            #     outlier_1D_index = np.hstack((outlier_1D_index, tmpIndexX[tmp_1D_index_y]))
-            #     # outlier_1D_index.append(tmpIndexY[tmp_1D_index_y].tolist())
 
-            self.errResidualX[jj] = self.stdResidualX[jj] / np.sqrt(len(tmpIndexX));
-            self.errResidualY[jj] = self.stdResidualY[jj] / np.sqrt(len(tmpIndexY));
+            self.errResidualX[jj] = self.stdResidualX[jj] / np.sqrt(len(tmpIndexX))
+            if self.data_type == '2d':
+                self.errResidualY[jj] = self.stdResidualY[jj] / np.sqrt(len(tmpIndexY))
 
             # %         from Lazorenko writeup:
-            self.x_e_laz[jj] = np.sum(residuals[tmpIndexX] / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)) / np.sum(
-                1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.));
-            self.y_e_laz[jj] = np.sum(residuals[tmpIndexY] / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)) / np.sum(
-                1 / (self.T['sigma_da_mas'][tmpIndexY] ** 2.));
+            self.x_e_laz[jj] = np.sum(residuals[tmpIndexX] / (T['sigma_da_mas'][tmpIndexX] ** 2.)) / np.sum(
+                1 / (T['sigma_da_mas'][tmpIndexX] ** 2.))
+            self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (T['sigma_da_mas'][tmpIndexX] ** 2.)));
 
-            self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)));
-            self.sy_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)));
+            if self.data_type == '2d':
+                self.y_e_laz[jj] = np.sum(residuals[tmpIndexY] / (T['sigma_da_mas'][tmpIndexY] ** 2.)) / np.sum(
+                    1 / (T['sigma_da_mas'][tmpIndexY] ** 2.))
+                self.sy_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (T['sigma_da_mas'][tmpIndexY] ** 2.)));
 
         if len(outlier_1D_index) != 0:
             print('MJD of outliers:')
             for ii in np.unique(outlier_1D_index.astype(np.int)):
-                print('{:.12f}'.format(self.T['MJD'][ii]), end=',')
+                print('{:.12f}'.format(T['MJD'][ii]), end=',')
             print()
 
-
-        self.chi2_naive = np.sum(
-            [self.meanResidualX ** 2 / self.errResidualX ** 2, self.meanResidualY ** 2 / self.errResidualY ** 2])
-        self.chi2_laz = np.sum(
-            [self.x_e_laz ** 2 / self.errResidualX ** 2, self.y_e_laz ** 2 / self.errResidualY ** 2]);
-        self.chi2_star_laz = np.sum(
-            [self.x_e_laz ** 2 / self.sx_star_laz ** 2, self.y_e_laz ** 2 / self.sy_star_laz ** 2]);
+        # compute chi squared values
+        if self.data_type == '1d':
+            self.chi2_naive = np.sum([self.meanResidualX ** 2 / self.errResidualX ** 2])
+            self.chi2_laz = np.sum([self.x_e_laz ** 2 / self.errResidualX ** 2])
+            self.chi2_star_laz = np.sum([self.x_e_laz ** 2 / self.sx_star_laz ** 2])
+        elif self.data_type == '2d':
+            self.chi2_naive = np.sum(
+                [self.meanResidualX ** 2 / self.errResidualX ** 2, self.meanResidualY ** 2 / self.errResidualY ** 2])
+            self.chi2_laz = np.sum(
+                [self.x_e_laz ** 2 / self.errResidualX ** 2, self.y_e_laz ** 2 / self.errResidualY ** 2])
+            self.chi2_star_laz = np.sum(
+                [self.x_e_laz ** 2 / self.sx_star_laz ** 2, self.y_e_laz ** 2 / self.sy_star_laz ** 2])
 
         # fixed 2018-08-18 JSA
-        self.nFree_ep = len(medi) * 2 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
+        if self.data_type == '1d':
+            self.nFree_ep = len(medi) * 1 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
+        elif self.data_type == '2d':
+            self.nFree_ep = len(medi) * 2 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
 
         self.chi2_laz_red = self.chi2_laz / self.nFree_ep
         self.chi2_star_laz_red = self.chi2_star_laz / self.nFree_ep
         self.chi2_naive_red = self.chi2_naive / self.nFree_ep
 
         self.epoch_omc_std_X = np.std(self.meanResidualX)
-        self.epoch_omc_std_Y = np.std(self.meanResidualY)
-        self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
+        if self.data_type == '1d':
+            self.epoch_omc_std = self.epoch_omc_std_X
+        if self.data_type == '2d':
+            self.epoch_omc_std_Y = np.std(self.meanResidualY)
+            self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
 
         self.residuals = residuals
 
-    def printResidualStats(self):
+    def print_residual_statistics(self):
         print('Epoch residual RMS X %3.3f mas' % (self.epoch_omc_std_X))
-        print('Epoch residual RMS Y %3.3f mas' % (self.epoch_omc_std_Y))
+        if self.data_type == '2d':
+            print('Epoch residual RMS Y %3.3f mas' % (self.epoch_omc_std_Y))
         print('Epoch residual RMS   %3.3f mas' % (self.epoch_omc_std))
         print('Degrees of freedom %d' % (self.nFree_ep))
         for elm in ['chi2_laz_red', 'chi2_star_laz_red', 'chi2_naive_red']:
             print('reduced chi^2 : %3.2f (%s)' % (eval('self.%s' % elm), elm))
         print('Epoch   precision (naive)'),
-        print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
-        print('Epoch   precision (x_e_laz)'),
-        print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
-        print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
-        print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
+        if self.data_type == '1d':
+            print((np.mean([self.errResidualX], axis=0)))
+            print('Epoch   precision (x_e_laz)'),
+            print(np.mean([self.sx_star_laz], axis=0))
+            print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX])))
+            print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
+        if self.data_type == '2d':
+            print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
+            print('Epoch   precision (x_e_laz)'),
+            print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
+            print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
+            print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
 
-    def myPlot(self, savePlot=0, plotDir=None, name_seed='', ppm_description=None, omc2D=0, arrowOffsetX=0, arrowOffsetY=0, arrow_length_factor=1,
-               m1_MS=1.0, horizonsFileSeed=None, orbit_only_panel=False, frame_residual_panel=False, omc_description=None, orbit_description=None, omc_panel=True):
+    def plot(self, save_plot=0, plot_dir=None, name_seed='', ppm_description=None, omc2D=0,
+             arrow_offset_x=0, arrow_offset_y=0, arrow_length_factor=1, m1_MS=1.0,
+             horizons_file_seed=None, orbit_only_panel=False, frame_residual_panel=False,
+             omc_description=None, orbit_description=None, omc_panel=True, ppm_panel=True):
+        """Make the astrometric orbit plots.
+
+        Parameters
+        ----------
+        save_plot
+        plot_dir
+        name_seed
+        ppm_description
+        omc2D
+        arrow_offset_x
+        arrow_offset_y
+        arrow_length_factor
+        m1_MS
+        horizons_file_seed
+        orbit_only_panel
+        frame_residual_panel
+        omc_description
+        orbit_description
+        omc_panel
+
+        Returns
+        -------
+
+        """
 
         if ppm_description == 'default':
-            ppm_description = '$\\varpi_\\mathrm{{rel}}={:2.1f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
-                        ':2.1f}$ mas/yr\n$\mu_\\mathrm{{dec}}={:2.1f}$ mas/yr'.format(
-                self.theta[0]['plx_mas'], self.theta[0]['muDE_mas'], self.theta[0]['muRA_mas'])
+            ppm_description = '$\\varpi={:2.3f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
+                        ':2.3f}$ mas/yr\n$\mu_\\mathrm{{dec}}={:2.3f}$ mas/yr'.format(
+                self.model_parameters[0]['plx_mas'], self.model_parameters[0]['muRA_mas'], self.model_parameters[0]['muDE_mas'])
+
         if omc_description == 'default':
             omc_description = '$N_e={}$, $N_f={}$, $\Delta t={:.0f}$ d\nDOF$_\\mathrm{{eff}}$={}, ' \
-                              '$\Sigma_\\mathrm{{O-C}}$={:2.2f} mas'.format(
-                len(np.unique(self.T['OB'])), len(self.T), np.ptp(self.T['MJD']), self.nFree_ep, self.epoch_omc_std)
+                              '$\Sigma_\\mathrm{{O-C}}$={:2.3f} mas'.format(
+                len(np.unique(self.data.epoch_data['OB'])), len(self.data.epoch_data), np.ptp(self.data.epoch_data['MJD']), self.nFree_ep, self.epoch_omc_std)
 
         for p in range(self.number_of_companions):
             if orbit_description == 'default':
-                tmp_orbit_description = '$P={:2.1f}$ d\n$e={:2.2f}$\n$\\alpha={:2.1f}$ mas\n$i={:2.1f}$ deg'.format(self.theta[p]['P_day'], self.theta[p]['ecc'], self.theta[p]['a_mas'], self.theta[p]['i_deg'])
+                tmp_orbit_description = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], self.model_parameters[p]['a_mas'], self.model_parameters[p]['i_deg'])
             else:
                 tmp_orbit_description = orbit_description
 
 
 
 
-            theta_p = self.theta[p]
+            theta_p = self.model_parameters[p]
             theta_names = theta_p.keys()
             name_seed_2 = name_seed + '_companion{:d}'.format(p)
 
@@ -2046,24 +2066,18 @@ class AstrometricOrbitPlotter(object):
             if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
                 theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
-            # orb = OrbitSystem(P_day=P_day, ecc=ecc, m1_MS=m1_MS, m2_MJ=m2_MJ, omega_deg=omega_deg, OMEGA_deg=OMEGA_deg,
-            #                   i_deg=i_deg, Tp_day=Tp_day, RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=plx_mas,
-            #                   muRA_mas=muRA_mas, muDE_mas=muDE_mas, Tref_MJD=self.Tref_MJD);
-            orb = OrbitSystem(P_day=theta_p['P_day'], ecc=theta_p['ecc'], m1_MS=m1_MS, m2_MJ=theta_p['m2_MJ'],
-                              omega_deg=theta_p['omega_deg'], OMEGA_deg=theta_p['OMEGA_deg'], i_deg=theta_p['i_deg'],
-                              Tp_day=theta_p['Tp_day'], RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=theta_p['plx_mas'],
-                              muRA_mas=theta_p['muRA_mas'], muDE_mas=theta_p['muDE_mas'], Tref_MJD=self.Tref_MJD)
+            orb = OrbitSystem(attribute_dict=theta_p)
 
-
-            t_curve_MJD = np.sort(np.tile(self.t_curve_MJD, 2));
-            tmp = np.arange(1., len(t_curve_MJD) + 1);
-            xi_curve = np.where(np.remainder(tmp + 1, 2) == 0);  # index of X coordinates (cpsi = 1) psi =  0 deg
-            yi_curve = np.where(np.remainder(tmp, 2) == 0);  # index of X coordinates (cpsi = 1) psi =  0 deg
+            # if ppm_panel:
+            t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
+            tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
+            xi_curve = np.where(np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+            yi_curve = np.where(np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
             cpsi_curve = tmp % 2
             spsi_curve = (tmp + 1) % 2
 
-            ppm_curve = orb.ppm(t_curve_MJD, offsetRA_mas=theta_p['dRA0_mas'], offsetDE_mas=theta_p['dDE0_mas'],
-                                horizons_file_seed=horizonsFileSeed)  # , tref_MJD=self.tref_MJD);
+            ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=theta_p['offset_alphastar_mas'], offsetDE_mas=theta_p['offset_delta_mas'],
+                                horizons_file_seed=horizons_file_seed)
 
             ##################################################
             # TRIPLE PANEL FIGURE
@@ -2075,26 +2089,28 @@ class AstrometricOrbitPlotter(object):
                 pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
                 n_panels = 2
             pl.clf()
-            pl.subplot(n_panels, 1, 1)
-            pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
-            pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
-            plt.annotate('', xy=(np.float(theta_p['muRA_mas'])*arrow_length_factor + arrowOffsetX, np.float(theta_p['muDE_mas'])*arrow_length_factor + arrowOffsetY),
-                         xytext=(0. + arrowOffsetX, 0. + arrowOffsetY),
-                         arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
+            if ppm_panel:
+                pl.subplot(n_panels, 1, 1)
+                pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
+                if self.data_type == '2d':
+                    pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
+                plt.annotate('', xy=(np.float(theta_p['muRA_mas']) * arrow_length_factor + arrow_offset_x, np.float(theta_p['muDE_mas']) * arrow_length_factor + arrow_offset_y),
+                             xytext=(0. + arrow_offset_x, 0. + arrow_offset_y),
+                             arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
 
-            pl.axis('equal');
-            ax = plt.gca()
-            ax.invert_xaxis()
-            pl.xlabel('Offset in Right Ascension (mas)');
-            pl.ylabel('Offset in Declination (mas)');
-            pl.title(self.title)
-            if ppm_description is not None:
-                pl.text(0.01, 0.99, ppm_description, horizontalalignment='left', verticalalignment='top',
-                        transform=ax.transAxes)
+                pl.axis('equal')
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
+                pl.title(self.title)
+                if ppm_description is not None:
+                    pl.text(0.01, 0.99, ppm_description, horizontalalignment='left', verticalalignment='top',
+                            transform=ax.transAxes)
 
 
             if 'delta_mag' in theta_names:
-                relative_orbit_mas = orb.relative_orbit_fast(t_curve_MJD, spsi_curve, cpsi_curve,
+                relative_orbit_mas = orb.relative_orbit_fast(t_curve_mjd_2d, spsi_curve, cpsi_curve,
                                                              shift_omega_by_pi=False)
                 # fractional luminosity
                 beta = getBeta(theta_p['delta_mag'])
@@ -2103,19 +2119,22 @@ class AstrometricOrbitPlotter(object):
                 photocentric_orbit_mas = relative_orbit_mas * (f - beta)
                 orbit_curve = photocentric_orbit_mas
             else:
-                orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_MJD, spsi_curve, cpsi_curve);
+                orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d, spsi_curve, cpsi_curve)
 
             phi1_curve = orbit_curve[xi_curve]
             phi2_curve = orbit_curve[yi_curve]
-            tmpt_day = np.unique(t_curve_MJD)
-
-            Xmean_orb = getattr(self, 'Xmean_orb_{:d}'.format(p))
-            Ymean_orb = getattr(self, 'Ymean_orb_{:d}'.format(p))
+            tmpt_day = np.unique(t_curve_mjd_2d)
 
             pl.subplot(n_panels, 1, 2)
-            pl.plot(phi1_curve, phi2_curve, 'k-')
-            pl.plot(Xmean_orb, Ymean_orb, 'ko')
-            pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='k')
+            self.insert_orbit_plot(orb)
+            if 0:
+                pl.plot(phi1_curve, phi2_curve, 'k-')
+
+                Xmean_orb = getattr(self, 'Xmean_orb_{:d}'.format(p))
+                if self.data_type == '2d':
+                    Ymean_orb = getattr(self, 'Ymean_orb_{:d}'.format(p))
+                    pl.plot(Xmean_orb, Ymean_orb, 'ko')
+                    pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='k')
 
             if orbit_description is not None:
                 pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
@@ -2128,19 +2147,24 @@ class AstrometricOrbitPlotter(object):
             pl.ylabel('Offset in Declination (mas)')
 
             if frame_residual_panel:
-                pl.subplot(3, 1, 3)
-                epochTime = self.t_MJD_epoch - self.Tref_MJD;
-                epochOrdinateLabel = 'MJD - %3.1f' % self.Tref_MJD
-                # pl.figure(figsize=(6, 4),facecolor='w', edgecolor='k'); pl.clf();
-                pl.plot(epochTime, self.meanResidualX, 'ko', color='0.7')
-                pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='0.7')
-                pl.plot(epochTime, self.meanResidualY, 'ko')
-                pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+                pl.subplot(n_panels, 1, 3)
+                epochTime = self.t_MJD_epoch - theta_p['Tref_MJD']
+                epochOrdinateLabel = 'MJD - %3.1f' % theta_p['Tref_MJD']
+                if self.data_type == '2d':
+                    x_residual_color = '0.7'
+                else:
+                    x_residual_color = 'k'
+                pl.plot(epochTime, self.meanResidualX, 'ko', color=x_residual_color)
+                pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor=x_residual_color)
+                if self.data_type == '2d':
+                    pl.plot(epochTime, self.meanResidualY, 'ko')
+                    pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
                 plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
                 pl.ylabel('O-C (mas)')
                 pl.xlabel(epochOrdinateLabel)
                 if omc_description is not None:
+                    ax = plt.gca()
                     pl.text(0.01, 0.99, omc_description, horizontalalignment='left',
                             verticalalignment='top',
                             transform=ax.transAxes)
@@ -2149,8 +2173,8 @@ class AstrometricOrbitPlotter(object):
             pl.show()
             # pdb.set_trace()
 
-            if savePlot:
-                figName = os.path.join(plotDir, 'ORBIT_%s.pdf' % (name_seed_2.replace('.', 'p')))
+            if save_plot:
+                figName = os.path.join(plot_dir, 'ORBIT_%s.pdf' % (name_seed_2.replace('.', 'p')))
                 plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
             ##################################################
@@ -2160,59 +2184,107 @@ class AstrometricOrbitPlotter(object):
             ##################################################
             #  ORBIT only
             if orbit_only_panel:
-                t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
-                tmp = np.arange(1., len(t_epoch_MJD) + 1);
-                xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
-                yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0];  # index of Y coordinates (cpsi = 0) psi =  90 deg
-                cpsi_epoch = tmp % 2
-                spsi_epoch = (tmp + 1) % 2
+                pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+                pl.clf()
 
-                if 'delta_mag' in theta_names:
-                    relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
-                                                                 shift_omega_by_pi=False);
-                    # fractional luminosity
-                    beta = getBeta(delta_mag)
-                    #     fractional mass
-                    f = getB(m1_MS, m2_MS)
-                    photocentric_orbit_mas = relative_orbit_mas * (f - beta)
-                    orbit_epoch = photocentric_orbit_mas
-                else:
-                    #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_MJD,spsi_curve,cpsi_curve);
-                    orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch);
+                self.insert_orbit_plot(orb)
+                pl.title(self.title)
+                if 0:
+                    t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
+                    tmp = np.arange(1., len(t_epoch_MJD) + 1)
+                    xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+                    yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+                    cpsi_epoch = tmp % 2
+                    spsi_epoch = (tmp + 1) % 2
 
-                phi1_model = orbit_epoch[xi_epoch]
-                phi2_model = orbit_epoch[yi_epoch]
+                    if 'delta_mag' in theta_names:
+                        relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
+                                                                     shift_omega_by_pi=False)
+                        # fractional luminosity
+                        beta = getBeta(delta_mag)
+                        #     fractional mass
+                        f = getB(m1_MS, m2_MS)
+                        photocentric_orbit_mas = relative_orbit_mas * (f - beta)
+                        orbit_epoch = photocentric_orbit_mas
+                    else:
+                        #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d,spsi_curve,cpsi_curve)
+                        orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
 
-                pl.figure(figsize=(5, 5), facecolor='w', edgecolor='k');
-                pl.clf();
-                pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5)
-                pl.plot(phi1_model, phi2_model, 'ko', color='0.7', ms=2)
-                pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
-                pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='0.6',
-                            zorder=-49)
-                # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
-                # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
-                #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
-                for j in range(len(phi1_model)):
-                    # pl.plot([self.Xmean_orb[j],phi1_model[j]],[self.Ymean_orb[j],phi2_model[j]], 'k--', color='0.7',zorder=-50)
-                    pl.plot([Xmean_orb[j], phi1_model[j]], [Ymean_orb[j], phi2_model[j]], 'k--', color='0.7', zorder=-50)
-                pl.plot(0, 0, 'kx')
-                pl.axis('equal');
+                    phi1_model_epoch = orbit_epoch[xi_epoch]
+                    phi2_model_epoch = orbit_epoch[yi_epoch]
+
+                    t_frame_mjd = np.sort(np.tile(self.data.epoch_data['MJD'], 2))
+                    tmp = np.arange(1., len(t_frame_mjd) + 1)
+                    xi_frame = np.where(np.remainder(tmp + 1, 2) == 0)[0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+                    yi_frame = np.where(np.remainder(tmp, 2) == 0)[0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+                    cpsi_frame = tmp % 2
+                    spsi_frame = (tmp + 1) % 2
+
+                    orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
+
+                    phi1_model_frame = orbit_frame[xi_frame]
+                    phi2_model_frame = orbit_frame[yi_frame]
+
+                    pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+                    pl.clf()
+                    pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5, color='0.5')
+                    pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
+
+
+                    if self.data_type == '1d':
+                        frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                        frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                        epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
+                        epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
+
+
+
+                        frame_residual_color = '0.8'
+                        pl.plot(phi1_model_frame+frame_residual_alphastar_along_scan, phi2_model_frame+frame_residual_delta_along_scan, 'ko', color=frame_residual_color, ms=4, mfc=frame_residual_color, mec=frame_residual_color)
+                        pl.plot(phi1_model_epoch+epoch_residual_alphastar_along_scan, phi2_model_epoch+epoch_residual_delta_along_scan, 'ko', color='k', ms=5)#, mfc='none', mew=2)
+
+                        # plot epoch-level error-bars
+                        for jj in range(len(self.meanResidualX)):
+                            x1 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                            x2 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
+                            y1 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                            y2 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
+                            pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
+
+                        # pass
+                        #  from yorick code
+                        #     // psi is the scan angle from north to east (better, from west to north)
+                        # // scanning direction
+                        # dx1_mas = cpsi_obs *  myresidual;//*hd.SRES;
+                        # dy1_mas = spsi_obs *  myresidual;// *hd.SRES;
+
+                    elif self.data_type == '2d':
+                        pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
+                        pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='0.6',
+                                    zorder=-49)
+                        # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
+                        # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
+                        #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
+                        for j in range(len(phi1_model_epoch)):
+                            # pl.plot([self.Xmean_orb[j],phi1_model_epoch[j]],[self.Ymean_orb[j],phi2_model_epoch[j]], 'k--', color='0.7',zorder=-50)
+                            pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]], 'k--', color='0.7', zorder=-50)
+                    pl.plot(0, 0, 'kx')
+                pl.axis('equal')
                 ax = plt.gca()
                 ax.invert_xaxis()
-                pl.xlabel('Offset in Right Ascension (mas)');
-                pl.ylabel('Offset in Declination (mas)');
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
                 pl.show()
-                if savePlot:
-                    figName = os.path.join(plotDir, 'ORBITonly_%s.pdf' % (name_seed_2.replace('.', 'p')))
+                if save_plot:
+                    figName = os.path.join(plot_dir, 'ORBITonly_%s.pdf' % (name_seed_2.replace('.', 'p')))
                     plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
-
+                # 1/0
             ##################################################
 
 
             if 0 == 1:
-                pl.figure(figsize=(12, 6), facecolor='w', edgecolor='k');
-                pl.clf();
+                pl.figure(figsize=(12, 6), facecolor='w', edgecolor='k')
+                pl.clf()
                 pl.subplot(2, 2, 1)
                 pl.plot(tmpt_day, phi1_curve, 'k-')
                 pl.plot(self.t_MJD_epoch, self.Xmean_orb, 'ko')
@@ -2232,20 +2304,24 @@ class AstrometricOrbitPlotter(object):
             ##################################################
             # 4 PANEL FIGURE SHOWING RA AND Dec OFFSETS AND RESIDUALS
 
-            offset_MJD = self.Tref_MJD
+            offset_MJD = theta_p['Tref_MJD']#Tref_MJD
+            if self.data_type == '1d':
+                n_columns = 1
+            if self.data_type == '2d':
+                n_columns = 2
+
             if frame_residual_panel:
-                fig, axes = pl.subplots(3, 2, sharex=True, figsize=(9, 9), facecolor='w',
-                                        edgecolor='k')
+                fig, axes = pl.subplots(3, n_columns, sharex=True, figsize=(9, 9), facecolor='w',
+                                        edgecolor='k', squeeze=False)
             elif omc_panel is False:
-                fig, axes = pl.subplots(1, 2, sharex=True, figsize=(9, 3), facecolor='w',
+                fig, axes = pl.subplots(1, n_columns, sharex=True, figsize=(9, 3), facecolor='w',
                                         edgecolor='k', squeeze=False)
             else:
-                fig, axes = pl.subplots(2, 2, sharex=True, figsize=(9, 4.5), facecolor='w',
-                                        edgecolor='k')
+                fig, axes = pl.subplots(2, n_columns, sharex=True, figsize=(9, 4.5), facecolor='w',
+                                        edgecolor='k', squeeze=False)
 
-            axes[0][0].plot(tmpt_day - offset_MJD, phi1_curve, 'k-')
-            axes[0][0].plot(self.t_MJD_epoch - offset_MJD, Xmean_orb, 'ko')
-            axes[0][0].errorbar(self.t_MJD_epoch - offset_MJD, Xmean_orb, yerr=self.errResidualX, fmt=None, ecolor='k')
+            axes[0][0].plot(self.t_MJD_epoch - offset_MJD, self.Xmean_orb, 'ko')
+            axes[0][0].errorbar(self.t_MJD_epoch - offset_MJD, self.Xmean_orb, yerr=self.errResidualX, fmt=None, ecolor='k')
             if orbit_description is not None:
                 pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
                         transform=axes[0][0].transAxes)
@@ -2253,14 +2329,20 @@ class AstrometricOrbitPlotter(object):
 
             if 0:
                 axes[0][0].plot(self.T['MjdUsedInTcspsi'][self.xi] - offset_MJD, self.orbit_model[self.xi], 'k.', mfc='0.7')
-            axes[0][0].set_ylabel('Offset in RA (mas)')
 
-            axes[0][1].plot(tmpt_day - offset_MJD, phi2_curve, 'k-')
-            axes[0][1].plot(self.t_MJD_epoch - offset_MJD, Ymean_orb, 'ko')
-            axes[0][1].errorbar(self.t_MJD_epoch - offset_MJD, Ymean_orb, yerr=self.errResidualY, fmt=None, ecolor='k')
-            axes[0][1].set_ylabel('Offset in Dec (mas)')
+            if self.data_type == '1d':
+                axes[0][0].set_ylabel('Offset along scan (mas)')
+                axes[0][0].set_title(self.title)
 
-            fig.suptitle(self.title)
+            if self.data_type == '2d':
+                axes[0][0].plot(tmpt_day - offset_MJD, phi1_curve, 'k-')
+                axes[0][0].set_ylabel('Offset in RA (mas)')
+                axes[0][1].plot(tmpt_day - offset_MJD, phi2_curve, 'k-')
+                axes[0][1].plot(self.t_MJD_epoch - offset_MJD, Ymean_orb, 'ko')
+                axes[0][1].errorbar(self.t_MJD_epoch - offset_MJD, Ymean_orb, yerr=self.errResidualY, fmt=None, ecolor='k')
+                axes[0][1].set_ylabel('Offset in Dec (mas)')
+
+                fig.suptitle(self.title)
 
             if omc_panel:
                 axes[1][0].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualX, 'ko')
@@ -2274,47 +2356,159 @@ class AstrometricOrbitPlotter(object):
                             transform=axes[1][0].transAxes)
 
                 # axes[1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
-
-                axes[1][1].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualY, 'ko')
-                axes[1][1].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualY, yerr=self.errResidualY, fmt=None,
-                                    ecolor='k')
-                axes[1][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
-                axes[1][1].set_ylabel('O-C (mas)')
+                if self.data_type == '2d':
+                    axes[1][1].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualY, 'ko')
+                    axes[1][1].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualY, yerr=self.errResidualY, fmt=None,
+                                        ecolor='k')
+                    axes[1][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                    axes[1][1].set_ylabel('O-C (mas)')
 
             if frame_residual_panel:
-                axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.omc[self.xi], 'ko')
-                axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                if self.data_type == '1d':
+                    # axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
+                    axes[2][0].plot(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, 'ko')
+                    axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+                elif self.data_type == '2d':
+                    axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
+                    axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                    axes[2][1].plot(self.T['MJD'][self.yi] - offset_MJD, self.residuals[self.yi], 'ko')
+                    axes[2][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
+                    axes[-1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
+                    labels = axes[-1][1].get_xticklabels()
+                    plt.setp(labels, rotation=30)
+
                 axes[2][0].set_ylabel('Frame O-C (mas)')
 
-                axes[2][1].plot(self.T['MJD'][self.yi] - offset_MJD, self.omc[self.yi], 'ko')
-                axes[2][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
-
-            axes[-1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
             axes[-1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
 
 
 
-            #         for GJ676A
-            #         axes[0][0].set_ylim((-2,1.5))
-            #         axes[0][1].set_ylim((-2,1.5))
-            #         axes[1][0].set_ylim((-1,1.5))
-            #         axes[1][1].set_ylim((-1,1.5))
-
             labels = axes[-1][0].get_xticklabels()
             plt.setp(labels, rotation=30)
-            labels = axes[-1][1].get_xticklabels()
-            plt.setp(labels, rotation=30)
 
-            #         plt.tight_layout()
             fig.tight_layout(h_pad=0.0)
             pl.show()
-            if savePlot:
+            if save_plot:
                 if frame_residual_panel:
-                    figName = os.path.join(plotDir, 'Orbit_time_%s_frameres.pdf' % (name_seed_2.replace('.', 'p')))
+                    figName = os.path.join(plot_dir, 'Orbit_time_%s_frameres.pdf' % (name_seed_2.replace('.', 'p')))
                 else:
-                    figName = os.path.join(plotDir,
+                    figName = os.path.join(plot_dir,
                                            'Orbit_time_%s.pdf' % (name_seed_2.replace('.', 'p')))
                 plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+
+    def insert_orbit_plot(self, orb):
+        """Add orbit to current figure.
+
+        Returns
+        -------
+
+        """
+
+        t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
+        tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
+        xi_curve = np.where(
+            np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        yi_curve = np.where(
+            np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        cpsi_curve = tmp % 2
+        spsi_curve = (tmp + 1) % 2
+        orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d, spsi_curve,
+                                                               cpsi_curve)
+
+        phi1_curve = orbit_curve[xi_curve]
+        phi2_curve = orbit_curve[yi_curve]
+
+        t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
+        tmp = np.arange(1., len(t_epoch_MJD) + 1)
+        xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[
+            0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+        yi_epoch = np.where(np.remainder(tmp, 2) == 0)[
+            0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+        cpsi_epoch = tmp % 2
+        spsi_epoch = (tmp + 1) % 2
+
+        # if 'delta_mag' in theta_names:
+        #     relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
+        #                                                  shift_omega_by_pi=False)
+        #     # fractional luminosity
+        #     beta = getBeta(delta_mag)
+        #     #     fractional mass
+        #     f = getB(m1_MS, m2_MS)
+        #     photocentric_orbit_mas = relative_orbit_mas * (f - beta)
+        #     orbit_epoch = photocentric_orbit_mas
+        # else:
+            #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d,spsi_curve,cpsi_curve)
+        if 1:
+            orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch,
+                                                                   cpsi_epoch)
+
+        phi1_model_epoch = orbit_epoch[xi_epoch]
+        phi2_model_epoch = orbit_epoch[yi_epoch]
+
+        t_frame_mjd = np.sort(np.tile(self.data.epoch_data['MJD'], 2))
+        tmp = np.arange(1., len(t_frame_mjd) + 1)
+        xi_frame = np.where(np.remainder(tmp + 1, 2) == 0)[
+            0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+        yi_frame = np.where(np.remainder(tmp, 2) == 0)[
+            0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+        cpsi_frame = tmp % 2
+        spsi_frame = (tmp + 1) % 2
+
+        orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
+
+        phi1_model_frame = orbit_frame[xi_frame]
+        phi2_model_frame = orbit_frame[yi_frame]
+
+        pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5, color='0.5')
+        pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
+
+        if self.data_type == '1d':
+            frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+            frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
+            epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
+            epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
+
+            frame_residual_color = '0.8'
+            pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
+                    phi2_model_frame + frame_residual_delta_along_scan, 'ko',
+                    color=frame_residual_color, ms=4, mfc=frame_residual_color,
+                    mec=frame_residual_color)
+            pl.plot(phi1_model_epoch + epoch_residual_alphastar_along_scan,
+                    phi2_model_epoch + epoch_residual_delta_along_scan, 'ko', color='k',
+                    ms=5)  # , mfc='none', mew=2)
+
+            # plot epoch-level error-bars
+            for jj in range(len(self.meanResidualX)):
+                x1 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (
+                self.meanResidualX[jj] + self.errResidualX[jj])
+                x2 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (
+                self.meanResidualX[jj] - self.errResidualX[jj])
+                y1 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (
+                self.meanResidualX[jj] + self.errResidualX[jj])
+                y2 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (
+                self.meanResidualX[jj] - self.errResidualX[jj])
+                pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
+
+                # pass
+                #  from yorick code
+                #     // psi is the scan angle from north to east (better, from west to north)
+                # // scanning direction
+                # dx1_mas = cpsi_obs *  myresidual;//*hd.SRES;
+                # dy1_mas = spsi_obs *  myresidual;// *hd.SRES;
+
+        elif self.data_type == '2d':
+            pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
+            pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
+                        fmt=None, ecolor='0.6', zorder=-49)
+            # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
+            # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
+            #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
+            for j in range(len(phi1_model_epoch)):
+                # pl.plot([self.Xmean_orb[j],phi1_model_epoch[j]],[self.Ymean_orb[j],phi2_model_epoch[j]], 'k--', color='0.7',zorder=-50)
+                pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]],
+                        'k--', color='0.7', zorder=-50)
+        pl.plot(0, 0, 'kx')
 
 
 class pDetLim(object):
@@ -2352,17 +2546,17 @@ class pDetLim(object):
         if useMeanEpochs == 1:  # fastSimu works with epoch averages
             orb_mean = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0.,
                                    Tp_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
-                                   muDE_mas=0, Tref_MJD=xfP.tref_MJD);
-            #             ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed);
+                                   muDE_mas=0, Tref_MJD=xfP.tref_MJD)
+            #             ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed)
             ppm1dMeas_mean_mas = orb_mean.ppm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
-                                              psi_deg=xfP.psi_deg);
+                                              psi_deg=xfP.psi_deg)
             C_mean = orb_mean.coeffMatrix
             TableC1_mean = Table(C_mean.T, names=('cpsi', 'spsi', 'ppfact', 'tcpsi', 'tspsi'))
             tmp_mean, xi_mean, yi_mean = xfGetMeanParMatrix(xfP)
             S_mean = np.mat(np.diag(1. / np.power(tmp_mean['sigma_da_mas'], 2)));
-            M_mean = np.mat(tmp_mean['da_mas']);
-            # res_mean = linfit(M_mean, S_mean, C_mean);
-            res_mean = linearfit.LinearFit(M_mean, S_mean, C_mean);
+            M_mean = np.mat(tmp_mean['da_mas'])
+            # res_mean = linfit(M_mean, S_mean, C_mean)
+            res_mean = linearfit.LinearFit(M_mean, S_mean, C_mean)
             res_mean.fit()
             # res_mean.makeReadableNumbers()
 
@@ -2374,13 +2568,13 @@ class pDetLim(object):
             # res_mean.disp()
 
     def run_simulation(self, simuRun=1, log_P_day_grid=True):
-        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N);
+        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N)
         if log_P_day_grid:
             self.P_day_grid = np.logspace(np.log10(self.P_day_grid_min), np.log10(self.P_day_grid_max),
-                                          self.P_day_grid_N);
+                                          self.P_day_grid_N)
         else:
-            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N);
-            # P_day_grid  = np.linspace((P_day_grid_min),(P_day_grid_max),num=P_day_grid_N); # for comparison with GAIA
+            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N)
+            # P_day_grid  = np.linspace((P_day_grid_min),(P_day_grid_max),num=P_day_grid_N) # for comparison with GAIA
 
         #         simuRun = 1;
         simuDir = self.dwDir + 'simu/simuRun%d/' % simuRun;
@@ -2388,32 +2582,32 @@ class pDetLim(object):
             os.makedirs(simuDir)
 
         mcFileName = simuDir + 'dw%02d_detectionLimits_%d%s.pkl' % (
-        self.dwNr, self.N_sim, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p'));
+        self.dwNr, self.N_sim, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p'))
         # meanResiduals = np.zeros((self.N_sim, len(self.res_mean.omc[0])))
         meanResiduals = np.zeros((self.N_sim, len(self.res_mean.residuals)))
         meanResidualRMS = np.zeros(self.N_sim)
 
         if ((not os.path.isfile(mcFileName)) or (self.overwrite == 1)):
 
-            OMEGA_deg_vals = np.linspace(0, 359, 360);
-            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, self.N_sim);
+            OMEGA_deg_vals = np.linspace(0, 359, 360)
+            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, self.N_sim)
 
-            i_deg_vals = np.linspace(0, 179, 180);
+            i_deg_vals = np.linspace(0, 179, 180)
             PDF_i_deg = 1. / 2 * np.sin(np.deg2rad(i_deg_vals))
-            PDF_i_deg_normed = PDF_i_deg / np.sum(PDF_i_deg);
-            simu_i_deg = np.random.choice(i_deg_vals, self.N_sim, p=PDF_i_deg_normed);
+            PDF_i_deg_normed = PDF_i_deg / np.sum(PDF_i_deg)
+            simu_i_deg = np.random.choice(i_deg_vals, self.N_sim, p=PDF_i_deg_normed)
 
-            simu_M2_jup = np.zeros(self.N_sim);
-            temp_M2 = np.zeros(self.M2_jup_grid_N * self.N_sim_perPeriod);
+            simu_M2_jup = np.zeros(self.N_sim)
+            temp_M2 = np.zeros(self.M2_jup_grid_N * self.N_sim_perPeriod)
             for jj in range(self.M2_jup_grid_N):
-                tempIdx = np.arange(jj * self.N_sim_perPeriod, (jj + 1) * self.N_sim_perPeriod);
-                temp_M2[tempIdx] = self.M2_jup_grid[jj] * np.ones(self.N_sim_perPeriod);
+                tempIdx = np.arange(jj * self.N_sim_perPeriod, (jj + 1) * self.N_sim_perPeriod)
+                temp_M2[tempIdx] = self.M2_jup_grid[jj] * np.ones(self.N_sim_perPeriod)
 
-            simu_P_day = np.zeros(self.N_sim);
+            simu_P_day = np.zeros(self.N_sim)
             for jj in range(self.P_day_grid_N):
                 tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-                                    (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N);
-                simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N);
+                                    (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
+                simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N)
                 simu_M2_jup[tempIdx] = temp_M2;
 
             simu_T0_day = self.T0_MJD + np.random.rand(self.N_sim) * simu_P_day;
@@ -2422,8 +2616,8 @@ class pDetLim(object):
             omega_deg = 0.;
 
             if 0 == 1:
-                pl.figure(figsize=(10, 10), facecolor='w', edgecolor='k');
-                pl.clf();
+                pl.figure(figsize=(10, 10), facecolor='w', edgecolor='k')
+                pl.clf()
                 pl.subplot(2, 2, 1)
                 pl.hist(simu_i_deg)
                 pl.xlabel('inc')
@@ -2451,12 +2645,12 @@ class pDetLim(object):
                 simu_da_mas = pjGetOrbitFast(P_day=simu_P_day[j], ecc=ecc, m1_MS=self.M1_Msun, m2_MJ=simu_M2_jup[j],
                                              omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j],
                                              T0_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
-                                             t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi);
-                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
+                                             t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi)
+                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] )
                 # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
 
                 tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas  # remove noise structure
-                # simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean);
+                # simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
                 simu_res = linearfit.LinearFit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
                 simu_res.fit()
                 # meanResiduals[j,:] = np.array(simu_res.omc)[0]
@@ -2464,7 +2658,7 @@ class pDetLim(object):
                 if np.mod(j, 10000) == 0:
                     print('\b\b\b\b\b\b\b%07d' % j)
                     # print '\x1b[%07d\r' % j,
-            pickle.dump((meanResidualRMS), open(mcFileName, "wb"));
+            pickle.dump((meanResidualRMS), open(mcFileName, "wb"))
 
         else:
             meanResidualRMS = pickle.load(open(mcFileName, "rb"))
@@ -2487,14 +2681,14 @@ class pDetLim(object):
             os.makedirs(simulation_dir)
 
         # generate grid of companion masses
-        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N);
+        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N)
 
         # generate grid of orbital periods (log or linear spacing)
         if log_P_day_grid:
             self.P_day_grid = np.logspace(np.log10(self.P_day_grid_min), np.log10(self.P_day_grid_max),
-                                          self.P_day_grid_N);
+                                          self.P_day_grid_N)
         else:
-            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N);
+            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N)
 
         # pickle file to save results
         mc_file_name = os.path.join(simulation_dir, 'dw%02d_detectionLimits_%d%s.pkl' % (
@@ -2546,11 +2740,11 @@ class pDetLim(object):
         if ((not os.path.isfile(mc_file_name)) or (self.overwrite == 1)):
             random_seed = 1234
 
-            OMEGA_deg_vals = np.linspace(0, 359, 360);
+            OMEGA_deg_vals = np.linspace(0, 359, 360)
             np.random.seed(random_seed)
-            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, N_sim_within_loop);
+            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, N_sim_within_loop)
 
-            i_deg_vals = np.linspace(0, 179, 180);
+            i_deg_vals = np.linspace(0, 179, 180)
             PDF_i_deg = 1. / 2 * np.sin(np.deg2rad(i_deg_vals))
             PDF_i_deg_normed = PDF_i_deg / np.sum(PDF_i_deg)
             np.random.seed(random_seed)
@@ -2562,11 +2756,11 @@ class pDetLim(object):
                 tempIdx = np.arange(jj * self.N_sim_perPeriod, (jj + 1) * self.N_sim_perPeriod)
                 simu_M2_jup[tempIdx] = self.M2_jup_grid[jj] * np.ones(self.N_sim_perPeriod)
 
-            # simu_P_day = np.zeros(self.N_sim);
+            # simu_P_day = np.zeros(self.N_sim)
             # for jj in range(self.P_day_grid_N):
             #     tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-            #                         (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N);
-            #     simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N);
+            #                         (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
+            #     simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N)
             #     simu_M2_jup[tempIdx] = temp_M2;
 
 
@@ -2614,7 +2808,7 @@ class pDetLim(object):
 
             pool.close()
 
-            pickle.dump((mean_residual_rms.flatten()), open(mc_file_name, "wb"));
+            pickle.dump((mean_residual_rms.flatten()), open(mc_file_name, "wb"))
 
         else:
             mean_residual_rms = pickle.load(open(mc_file_name, "rb"))
@@ -2641,18 +2835,18 @@ class pDetLim(object):
         #         simu_da_mas = pjGetOrbitFast(P_day=simu_P_day[j], ecc=ecc, m1_MS=self.M1_Msun, m2_MJ=simu_M2_jup[j],
         #                                      omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j],
         #                                      Tp_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
-        #                                      t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi);
-        #         # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] );
+        #                                      t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi)
+        #         # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] )
         #         # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
         #
         #         tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas;  # remove noise structure
-        #         simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean);
+        #         simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
         #         # meanResiduals[j,:] = np.array(simu_res.omc)[0]
         #         mean_residual_rms[j] = np.std(np.array(simu_res.omc)[0])
         #         if np.mod(j, 10000) == 0:
         #             print('\b\b\b\b\b\b\b%07d' % j)
         #             # print '\x1b[%07d\r' % j,
-        #     pickle.dump((mean_residual_rms), open(mc_file_name, "wb"));
+        #     pickle.dump((mean_residual_rms), open(mc_file_name, "wb"))
         #
         # else:
         #     mean_residual_rms = pickle.load(open(mc_file_name, "rb"))
@@ -2668,14 +2862,14 @@ class pDetLim(object):
         print('Detection criterion is %3.3f mas ' % (criterion))
         print('Using confidence limit of {:.3f}'.format(confidence_limit))
 
-        Nsmaller = np.zeros((self.P_day_grid_N, self.M2_jup_grid_N));
+        Nsmaller = np.zeros((self.P_day_grid_N, self.M2_jup_grid_N))
         for jj in range(self.P_day_grid_N):
             tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-                                (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N);
+                                (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
             for kk in range(self.M2_jup_grid_N):
-                pix = np.arange(kk * self.N_sim_perPeriod, (kk + 1) * self.N_sim_perPeriod);
-                # Nsmaller[jj,kk] = np.sum( np.std(meanResiduals[tempIdx[pix]],axis=1) <= criterion );
-                Nsmaller[jj, kk] = np.sum(self.meanResidualRMS[tempIdx[pix]] <= criterion);
+                pix = np.arange(kk * self.N_sim_perPeriod, (kk + 1) * self.N_sim_perPeriod)
+                # Nsmaller[jj,kk] = np.sum( np.std(meanResiduals[tempIdx[pix]],axis=1) <= criterion )
+                Nsmaller[jj, kk] = np.sum(self.meanResidualRMS[tempIdx[pix]] <= criterion)
 
         detLimit = np.zeros((self.P_day_grid_N, 2))
         for jj in range(self.P_day_grid_N):
@@ -2699,7 +2893,7 @@ class pDetLim(object):
             x_axis_label = 'Period ({})'.format(x_axis_unit)
 
             if new_figure:
-                pl.figure(figsize=(6, 3), facecolor='w', edgecolor='k');
+                pl.figure(figsize=(6, 3), facecolor='w', edgecolor='k')
                 pl.clf()
             if semilogx:
                 if y_data_divisor is not None:
@@ -3156,18 +3350,18 @@ def get_geomElem(TIC):
     p = (A ** 2 + B ** 2 + G ** 2 + F ** 2) / 2;
     q = A * G - B * F;
 
-    a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2));
-    # i_rad = math.acos(q/(a_mas**2.));
+    a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2))
+    # i_rad = math.acos(q/(a_mas**2.))
     # omega_rad = (math.atan2(B-F,A+G)+math.atan2(-B-F,A-G))/2.;
     # OMEGA_rad = (math.atan2(B-F,A+G)-math.atan2(-B-F,A-G))/2.;
 
-    i_rad = np.arccos(q / (a_mas ** 2.));
+    i_rad = np.arccos(q / (a_mas ** 2.))
     omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.;
     OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.;
 
     i_deg = i_rad * 360 / 2. / np.pi;
-    omega_deg = omega_rad * 360. / (2. * np.pi);
-    OMEGA_deg = OMEGA_rad * 360. / (2. * np.    pi);
+    omega_deg = omega_rad * 360. / (2. * np.pi)
+    OMEGA_deg = OMEGA_rad * 360. / (2. * np.    pi)
 
     GE = [a_mas, omega_deg, OMEGA_deg, i_deg];
     return GE;
