@@ -1981,9 +1981,11 @@ class AstrometricOrbitPlotter(object):
         self.epoch_omc_std_X = np.std(self.meanResidualX)
         if self.data_type == '1d':
             self.epoch_omc_std = self.epoch_omc_std_X
-        if self.data_type == '2d':
+            self.epoch_precision_mean = np.mean([self.errResidualX])
+        elif self.data_type == '2d':
             self.epoch_omc_std_Y = np.std(self.meanResidualY)
             self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
+            self.epoch_precision_mean = np.mean([self.errResidualX, self.errResidualY], axis=0)
 
         self.residuals = residuals
 
@@ -1996,23 +1998,20 @@ class AstrometricOrbitPlotter(object):
         for elm in ['chi2_laz_red', 'chi2_star_laz_red', 'chi2_naive_red']:
             print('reduced chi^2 : %3.2f (%s)' % (eval('self.%s' % elm), elm))
         print('Epoch   precision (naive)'),
+        print(self.epoch_precision_mean)
         if self.data_type == '1d':
-            print((np.mean([self.errResidualX], axis=0)))
             print('Epoch   precision (x_e_laz)'),
             print(np.mean([self.sx_star_laz], axis=0))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
-        if self.data_type == '2d':
-            print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
+        elif self.data_type == '2d':
+            # print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
             print('Epoch   precision (x_e_laz)'),
             print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
 
-    def plot(self, save_plot=0, plot_dir=None, name_seed='', ppm_description=None, omc2D=0,
-             arrow_offset_x=0, arrow_offset_y=0, arrow_length_factor=1, m1_MS=1.0,
-             horizons_file_seed=None, orbit_only_panel=False, frame_residual_panel=False,
-             omc_description=None, orbit_description=None, omc_panel=True, ppm_panel=True):
+    def plot(self, argument_dict=None):
         """Make the astrometric orbit plots.
 
         Parameters
@@ -2029,7 +2028,7 @@ class AstrometricOrbitPlotter(object):
         horizons_file_seed
         orbit_only_panel
         frame_residual_panel
-        omc_description
+        epoch_omc_description
         orbit_description
         omc_panel
 
@@ -2037,29 +2036,45 @@ class AstrometricOrbitPlotter(object):
         -------
 
         """
+        # set defaults
+        if argument_dict is not None:
+            default_argument_dict = {'arrow_length_factor': 1.,
+                            'horizons_file_seed': None,
+                            'frame_omc_description': 'default',
+                            'orbit_description': 'default',
+                            }
 
-        if ppm_description == 'default':
-            ppm_description = '$\\varpi={:2.3f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
+            for key, value in default_argument_dict.items():
+                if key not in argument_dict.keys():
+                    argument_dict[key] = value
+
+        if argument_dict['ppm_description'] == 'default':
+            argument_dict['ppm_description'] = '$\\varpi={:2.3f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
                         ':2.3f}$ mas/yr\n$\mu_\\mathrm{{dec}}={:2.3f}$ mas/yr'.format(
-                self.model_parameters[0]['plx_mas'], self.model_parameters[0]['muRA_mas'], self.model_parameters[0]['muDE_mas'])
+                self.model_parameters[0]['plx_mas'], self.model_parameters[0]['muRA_mas'],
+                self.model_parameters[0]['muDE_mas'])
 
-        if omc_description == 'default':
-            omc_description = '$N_e={}$, $N_f={}$, $\Delta t={:.0f}$ d\nDOF$_\\mathrm{{eff}}$={}, ' \
-                              '$\Sigma_\\mathrm{{O-C}}$={:2.3f} mas'.format(
-                len(np.unique(self.data.epoch_data['OB'])), len(self.data.epoch_data), np.ptp(self.data.epoch_data['MJD']), self.nFree_ep, self.epoch_omc_std)
+        if argument_dict['epoch_omc_description'] == 'default':
+            argument_dict['epoch_omc_description'] = '$N_e={}$, $N_f={}$, $\Delta t={:.0f}$ d\nDOF$_\\mathrm{{eff}}$={}, ' \
+                              '$\Sigma_\\mathrm{{O-C,epoch}}$={:2.3f} mas\n$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
+                len(np.unique(self.data.epoch_data['OB'])), len(self.data.epoch_data),
+                np.ptp(self.data.epoch_data['MJD']), self.nFree_ep, self.epoch_omc_std,
+                self.epoch_precision_mean)
+
+        if argument_dict['frame_omc_description'] == 'default':
+            argument_dict['frame_omc_description'] = '$N_f={}$, $\Sigma_\\mathrm{{O-C,frame}}$={:2.3f} mas\n' \
+                                    '$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
+                len(self.data.epoch_data), np.std(self.residuals), np.mean(self.data.epoch_data['sigma_da_mas']))
 
         for p in range(self.number_of_companions):
-            if orbit_description == 'default':
-                tmp_orbit_description = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], self.model_parameters[p]['a_mas'], self.model_parameters[p]['i_deg'])
+            if argument_dict['orbit_description'] == 'default':
+                argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], self.model_parameters[p]['a_mas'], self.model_parameters[p]['i_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
             else:
-                tmp_orbit_description = orbit_description
-
-
-
+                argument_dict['tmp_orbit_description'] = argument_dict['orbit_description']
 
             theta_p = self.model_parameters[p]
             theta_names = theta_p.keys()
-            name_seed_2 = name_seed + '_companion{:d}'.format(p)
+            name_seed_2 = argument_dict['name_seed'] + '_companion{:d}'.format(p)
 
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
@@ -2068,336 +2083,370 @@ class AstrometricOrbitPlotter(object):
 
             orb = OrbitSystem(attribute_dict=theta_p)
 
-            # if ppm_panel:
-            t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
-            tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
-            xi_curve = np.where(np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-            yi_curve = np.where(np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-            cpsi_curve = tmp % 2
-            spsi_curve = (tmp + 1) % 2
 
-            ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=theta_p['offset_alphastar_mas'], offsetDE_mas=theta_p['offset_delta_mas'],
-                                horizons_file_seed=horizons_file_seed)
+            # 1D astrometry overview figure
+            if argument_dict['make_1d_overview_figure']:
+                n_rows = 3
+                n_columns = 2
+                fig = pl.figure(figsize=(14, 9), facecolor='w', edgecolor='k')
+                pl.clf()
 
-            ##################################################
-            # TRIPLE PANEL FIGURE
-            # plot PPM and residuals
-            if frame_residual_panel:
-                pl.figure(figsize=(6, 9), facecolor='w', edgecolor='k')
-                n_panels = 3
-            else:
-                pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
-                n_panels = 2
-            pl.clf()
-            if ppm_panel:
-                pl.subplot(n_panels, 1, 1)
-                pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
-                if self.data_type == '2d':
-                    pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
-                plt.annotate('', xy=(np.float(theta_p['muRA_mas']) * arrow_length_factor + arrow_offset_x, np.float(theta_p['muDE_mas']) * arrow_length_factor + arrow_offset_y),
-                             xytext=(0. + arrow_offset_x, 0. + arrow_offset_y),
-                             arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
-
+                # PPM panel
+                pl.subplot(n_rows, n_columns, 1)
+                self.insert_ppm_plot(orb, argument_dict)
                 pl.axis('equal')
                 ax = plt.gca()
                 ax.invert_xaxis()
                 pl.xlabel('Offset in Right Ascension (mas)')
                 pl.ylabel('Offset in Declination (mas)')
                 pl.title(self.title)
-                if ppm_description is not None:
-                    pl.text(0.01, 0.99, ppm_description, horizontalalignment='left', verticalalignment='top',
-                            transform=ax.transAxes)
 
+                # orbit panel
+                pl.subplot(n_rows-1, n_columns, 3)
+                self.insert_orbit_plot(orb, argument_dict)
+                pl.axis('equal')
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
 
-            if 'delta_mag' in theta_names:
-                relative_orbit_mas = orb.relative_orbit_fast(t_curve_mjd_2d, spsi_curve, cpsi_curve,
-                                                             shift_omega_by_pi=False)
-                # fractional luminosity
-                beta = getBeta(theta_p['delta_mag'])
-                #     fractional mass
-                f = getB(m1_MS, theta_p['m2_MS'])
-                photocentric_orbit_mas = relative_orbit_mas * (f - beta)
-                orbit_curve = photocentric_orbit_mas
-            else:
-                orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d, spsi_curve, cpsi_curve)
+                pl.subplot(n_rows, n_columns, 2)
+                self.insert_orbit_timeseries_plot(orb, argument_dict)
+                pl.subplot(n_rows, n_columns, 4)
+                self.insert_orbit_epoch_residuals_plot(orb, argument_dict)
+                pl.subplot(n_rows, n_columns, 6)
+                self.insert_orbit_frame_residuals_plot(orb, argument_dict, direction='x')
+                pl.xlabel('MJD - {:3.1f}'.format(orb.Tref_MJD))
 
-            phi1_curve = orbit_curve[xi_curve]
-            phi2_curve = orbit_curve[yi_curve]
-            tmpt_day = np.unique(t_curve_mjd_2d)
-
-            pl.subplot(n_panels, 1, 2)
-            self.insert_orbit_plot(orb)
-            if 0:
-                pl.plot(phi1_curve, phi2_curve, 'k-')
-
-                Xmean_orb = getattr(self, 'Xmean_orb_{:d}'.format(p))
-                if self.data_type == '2d':
-                    Ymean_orb = getattr(self, 'Ymean_orb_{:d}'.format(p))
-                    pl.plot(Xmean_orb, Ymean_orb, 'ko')
-                    pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='k')
-
-            if orbit_description is not None:
-                pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
-                        transform=pl.gca().transAxes)
-
-            pl.axis('equal')
-            ax = plt.gca()
-            ax.invert_xaxis()
-            pl.xlabel('Offset in Right Ascension (mas)')
-            pl.ylabel('Offset in Declination (mas)')
-
-            if frame_residual_panel:
-                pl.subplot(n_panels, 1, 3)
-                epochTime = self.t_MJD_epoch - theta_p['Tref_MJD']
-                epochOrdinateLabel = 'MJD - %3.1f' % theta_p['Tref_MJD']
-                if self.data_type == '2d':
-                    x_residual_color = '0.7'
-                else:
-                    x_residual_color = 'k'
-                pl.plot(epochTime, self.meanResidualX, 'ko', color=x_residual_color)
-                pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor=x_residual_color)
-                if self.data_type == '2d':
-                    pl.plot(epochTime, self.meanResidualY, 'ko')
-                    pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
-                plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
-
-                pl.ylabel('O-C (mas)')
-                pl.xlabel(epochOrdinateLabel)
-                if omc_description is not None:
-                    ax = plt.gca()
-                    pl.text(0.01, 0.99, omc_description, horizontalalignment='left',
-                            verticalalignment='top',
-                            transform=ax.transAxes)
-
-            plt.tight_layout()
-            pl.show()
-            # pdb.set_trace()
-
-            if save_plot:
-                figName = os.path.join(plot_dir, 'ORBIT_%s.pdf' % (name_seed_2.replace('.', 'p')))
-                plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                # fig.tight_layout(h_pad=0.0)
+                pl.show()
+                if argument_dict['save_plot']:
+                    figure_file_name = os.path.join(argument_dict['plot_dir'],
+                                                        'orbit_1d_summary_{}.pdf'.format(
+                                                            name_seed_2.replace('.', 'p')))
+                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                                pad_inches=0.05)
 
             ##################################################
+            # TRIPLE PANEL FIGURE (PPM + ORBIT + EPOCH RESIDUALS)
+            # plot PPM and residuals
+
+            if argument_dict['make_condensed_summary_figure']:
+                if argument_dict['frame_residual_panel']:
+                    pl.figure(figsize=(6, 9), facecolor='w', edgecolor='k')
+                    n_panels = 3
+                else:
+                    pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
+                    n_panels = 2
+                pl.clf()
+
+                # PPM panel
+                pl.subplot(n_panels, 1, 1)
+                self.insert_ppm_plot(orb, argument_dict)
+                pl.axis('equal')
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
+                pl.title(self.title)
+
+                # orbit panel
+                pl.subplot(n_panels, 1, 2)
+                self.insert_orbit_plot(orb, argument_dict)
+                pl.axis('equal')
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
+
+                # frame residual panel
+                if argument_dict['frame_residual_panel']:
+                    pl.subplot(n_panels, 1, 3)
+                    self.insert_epoch_residual_plot(orb, argument_dict)
+
+                plt.tight_layout()
+                pl.show()
+
+                if argument_dict['save_plot']:
+                    figure_file_name = os.path.join(argument_dict['plot_dir'], 'ppm_orbit_{}.pdf'.format(name_seed_2.replace('.', 'p')))
+                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                ##################################################
 
 
 
             ##################################################
             #  ORBIT only
-            if orbit_only_panel:
+            if argument_dict['orbit_only_panel']:
                 pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
                 pl.clf()
 
-                self.insert_orbit_plot(orb)
+                self.insert_orbit_plot(orb, argument_dict)
                 pl.title(self.title)
-                if 0:
-                    t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
-                    tmp = np.arange(1., len(t_epoch_MJD) + 1)
-                    xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0]  # index of X coordinates (cpsi = 1) psi =  0 deg
-                    yi_epoch = np.where(np.remainder(tmp, 2) == 0)[0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
-                    cpsi_epoch = tmp % 2
-                    spsi_epoch = (tmp + 1) % 2
-
-                    if 'delta_mag' in theta_names:
-                        relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
-                                                                     shift_omega_by_pi=False)
-                        # fractional luminosity
-                        beta = getBeta(delta_mag)
-                        #     fractional mass
-                        f = getB(m1_MS, m2_MS)
-                        photocentric_orbit_mas = relative_orbit_mas * (f - beta)
-                        orbit_epoch = photocentric_orbit_mas
-                    else:
-                        #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d,spsi_curve,cpsi_curve)
-                        orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
-
-                    phi1_model_epoch = orbit_epoch[xi_epoch]
-                    phi2_model_epoch = orbit_epoch[yi_epoch]
-
-                    t_frame_mjd = np.sort(np.tile(self.data.epoch_data['MJD'], 2))
-                    tmp = np.arange(1., len(t_frame_mjd) + 1)
-                    xi_frame = np.where(np.remainder(tmp + 1, 2) == 0)[0]  # index of X coordinates (cpsi = 1) psi =  0 deg
-                    yi_frame = np.where(np.remainder(tmp, 2) == 0)[0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
-                    cpsi_frame = tmp % 2
-                    spsi_frame = (tmp + 1) % 2
-
-                    orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
-
-                    phi1_model_frame = orbit_frame[xi_frame]
-                    phi2_model_frame = orbit_frame[yi_frame]
-
-                    pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
-                    pl.clf()
-                    pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5, color='0.5')
-                    pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
-
-
-                    if self.data_type == '1d':
-                        frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-                        frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
-                        epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
-                        epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
-
-
-
-                        frame_residual_color = '0.8'
-                        pl.plot(phi1_model_frame+frame_residual_alphastar_along_scan, phi2_model_frame+frame_residual_delta_along_scan, 'ko', color=frame_residual_color, ms=4, mfc=frame_residual_color, mec=frame_residual_color)
-                        pl.plot(phi1_model_epoch+epoch_residual_alphastar_along_scan, phi2_model_epoch+epoch_residual_delta_along_scan, 'ko', color='k', ms=5)#, mfc='none', mew=2)
-
-                        # plot epoch-level error-bars
-                        for jj in range(len(self.meanResidualX)):
-                            x1 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
-                            x2 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
-                            y1 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
-                            y2 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
-                            pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
-
-                        # pass
-                        #  from yorick code
-                        #     // psi is the scan angle from north to east (better, from west to north)
-                        # // scanning direction
-                        # dx1_mas = cpsi_obs *  myresidual;//*hd.SRES;
-                        # dy1_mas = spsi_obs *  myresidual;// *hd.SRES;
-
-                    elif self.data_type == '2d':
-                        pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
-                        pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None, ecolor='0.6',
-                                    zorder=-49)
-                        # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
-                        # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
-                        #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
-                        for j in range(len(phi1_model_epoch)):
-                            # pl.plot([self.Xmean_orb[j],phi1_model_epoch[j]],[self.Ymean_orb[j],phi2_model_epoch[j]], 'k--', color='0.7',zorder=-50)
-                            pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]], 'k--', color='0.7', zorder=-50)
-                    pl.plot(0, 0, 'kx')
                 pl.axis('equal')
                 ax = plt.gca()
                 ax.invert_xaxis()
                 pl.xlabel('Offset in Right Ascension (mas)')
                 pl.ylabel('Offset in Declination (mas)')
                 pl.show()
-                if save_plot:
-                    figName = os.path.join(plot_dir, 'ORBITonly_%s.pdf' % (name_seed_2.replace('.', 'p')))
-                    plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
-                # 1/0
+                if argument_dict['save_plot']:
+                    figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_only_{}.pdf'.format(name_seed_2.replace('.', 'p')))
+                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
             ##################################################
 
 
-            if 0 == 1:
-                pl.figure(figsize=(12, 6), facecolor='w', edgecolor='k')
-                pl.clf()
-                pl.subplot(2, 2, 1)
-                pl.plot(tmpt_day, phi1_curve, 'k-')
-                pl.plot(self.t_MJD_epoch, self.Xmean_orb, 'ko')
-                pl.errorbar(self.t_MJD_epoch, self.Xmean_orb, yerr=self.errResidualX, fmt=None, ecolor='k')
-                pl.subplot(2, 2, 2)
-                pl.plot(tmpt_day, phi2_curve, 'k-')
-                pl.plot(self.t_MJD_epoch, self.Ymean_orb, 'ko')
-                pl.errorbar(self.t_MJD_epoch, self.Ymean_orb, yerr=self.errResidualY, fmt=None, ecolor='k')
-                pl.subplot(2, 2, 3)
-                pl.plot(self.t_MJD_epoch, self.meanResidualX, 'ko')
-                pl.errorbar(self.t_MJD_epoch, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='k')
-                pl.subplot(2, 2, 4)
-                pl.plot(self.t_MJD_epoch, self.meanResidualY, 'ko')
-                pl.errorbar(self.t_MJD_epoch, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
-                pl.show()
-
             ##################################################
-            # 4 PANEL FIGURE SHOWING RA AND Dec OFFSETS AND RESIDUALS
+            # FIGURE SHOWING RA AND Dec OFFSETS AND RESIDUALS
 
-            offset_MJD = theta_p['Tref_MJD']#Tref_MJD
-            if self.data_type == '1d':
-                n_columns = 1
-            if self.data_type == '2d':
-                n_columns = 2
-
-            if frame_residual_panel:
-                fig, axes = pl.subplots(3, n_columns, sharex=True, figsize=(9, 9), facecolor='w',
-                                        edgecolor='k', squeeze=False)
-            elif omc_panel is False:
-                fig, axes = pl.subplots(1, n_columns, sharex=True, figsize=(9, 3), facecolor='w',
-                                        edgecolor='k', squeeze=False)
-            else:
-                fig, axes = pl.subplots(2, n_columns, sharex=True, figsize=(9, 4.5), facecolor='w',
-                                        edgecolor='k', squeeze=False)
-
-            axes[0][0].plot(self.t_MJD_epoch - offset_MJD, self.Xmean_orb, 'ko')
-            axes[0][0].errorbar(self.t_MJD_epoch - offset_MJD, self.Xmean_orb, yerr=self.errResidualX, fmt=None, ecolor='k')
-            if orbit_description is not None:
-                pl.text(0.01, 0.99, tmp_orbit_description, horizontalalignment='left', verticalalignment='top',
-                        transform=axes[0][0].transAxes)
-
-
-            if 0:
-                axes[0][0].plot(self.T['MjdUsedInTcspsi'][self.xi] - offset_MJD, self.orbit_model[self.xi], 'k.', mfc='0.7')
-
-            if self.data_type == '1d':
-                axes[0][0].set_ylabel('Offset along scan (mas)')
-                axes[0][0].set_title(self.title)
-
-            if self.data_type == '2d':
-                axes[0][0].plot(tmpt_day - offset_MJD, phi1_curve, 'k-')
-                axes[0][0].set_ylabel('Offset in RA (mas)')
-                axes[0][1].plot(tmpt_day - offset_MJD, phi2_curve, 'k-')
-                axes[0][1].plot(self.t_MJD_epoch - offset_MJD, Ymean_orb, 'ko')
-                axes[0][1].errorbar(self.t_MJD_epoch - offset_MJD, Ymean_orb, yerr=self.errResidualY, fmt=None, ecolor='k')
-                axes[0][1].set_ylabel('Offset in Dec (mas)')
-
-                fig.suptitle(self.title)
-
-            if omc_panel:
-                axes[1][0].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualX, 'ko')
-                axes[1][0].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualX, yerr=self.errResidualX, fmt=None,
-                                    ecolor='k')
-                axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
-                axes[1][0].set_ylabel('O-C (mas)')
-                if omc_description is not None:
-                    pl.text(0.01, 0.99, omc_description, horizontalalignment='left',
-                            verticalalignment='top',
-                            transform=axes[1][0].transAxes)
-
-                # axes[1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
-                if self.data_type == '2d':
-                    axes[1][1].plot(self.t_MJD_epoch - offset_MJD, self.meanResidualY, 'ko')
-                    axes[1][1].errorbar(self.t_MJD_epoch - offset_MJD, self.meanResidualY, yerr=self.errResidualY, fmt=None,
-                                        ecolor='k')
-                    axes[1][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
-                    axes[1][1].set_ylabel('O-C (mas)')
-
-            if frame_residual_panel:
+            if argument_dict['make_xy_residual_figure']:
                 if self.data_type == '1d':
-                    # axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
-                    axes[2][0].plot(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, 'ko')
-                    axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
-
+                    n_columns = 1
                 elif self.data_type == '2d':
-                    axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
-                    axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
-                    axes[2][1].plot(self.T['MJD'][self.yi] - offset_MJD, self.residuals[self.yi], 'ko')
-                    axes[2][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
-                    axes[-1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
+                    n_columns = 2
+
+                if argument_dict['frame_residual_panel']:
+                    n_rows = 3
+                elif argument_dict['omc_panel'] is False:
+                    n_rows = 1
+                else:
+                    n_rows = 2
+
+                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(9, 9), facecolor='w',
+                                        edgecolor='k', squeeze=False)
+
+                self.insert_orbit_timeseries_plot(orb, argument_dict, ax=axes[0][0])
+                if self.data_type == '2d':
+                    self.insert_orbit_timeseries_plot(orb, argument_dict, direction='y', ax=axes[0][1])
+                    fig.suptitle(self.title)
+
+                if argument_dict['omc_panel']:
+                    self.insert_orbit_epoch_residuals_plot(orb, argument_dict, ax=axes[1][0])
+                    if self.data_type == '2d':
+                        self.insert_orbit_epoch_residuals_plot(orb, argument_dict, direction='y', ax=axes[1][1])
+
+                if argument_dict['frame_residual_panel']:
+                    self.insert_orbit_frame_residuals_plot(orb, argument_dict, direction='x', ax=axes[2][0])
+                    if self.data_type == '2d':
+                        self.insert_orbit_frame_residuals_plot(orb, argument_dict, direction='y',
+                                                               ax=axes[2][1])
+                axes[-1][0].set_xlabel('MJD - %3.1f' % orb.Tref_MJD)
+                labels = axes[-1][0].get_xticklabels()
+                plt.setp(labels, rotation=30)
+                if self.data_type == '2d':
+                    axes[-1][1].set_xlabel('MJD - %3.1f' % orb.Tref_MJD)
                     labels = axes[-1][1].get_xticklabels()
                     plt.setp(labels, rotation=30)
 
-                axes[2][0].set_ylabel('Frame O-C (mas)')
+                fig.tight_layout(h_pad=0.0)
+                pl.show()
+                if argument_dict['save_plot']:
+                    if argument_dict['frame_residual_panel']:
+                        figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_time_{}_frameres.pdf'.format(name_seed_2.replace('.', 'p')))
+                    else:
+                        figure_file_name = os.path.join(argument_dict['plot_dir'],
+                                               'orbit_time_{}.pdf'.format(name_seed_2.replace('.', 'p')))
+                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
-            axes[-1][0].set_xlabel('MJD - %3.1f' % offset_MJD)
+    def insert_ppm_plot(self, orb, argument_dict):
+
+        t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
+        tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
+        xi_curve = np.where(
+            np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        yi_curve = np.where(
+            np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        cpsi_curve = tmp % 2
+        spsi_curve = (tmp + 1) % 2
+
+        ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
+                            offsetDE_mas=orb.offset_delta_mas,
+                            horizons_file_seed=argument_dict['horizons_file_seed'])
+
+        pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
+        if self.data_type == '2d':
+            pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
+        plt.annotate('', xy=(np.float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'],
+                             np.float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y']),
+                     xytext=(0. + argument_dict['arrow_offset_x'], 0. + argument_dict['arrow_offset_y']),
+                     arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
+
+        if argument_dict['ppm_description'] is not None:
+            ax = pl.gca()
+            pl.text(0.01, 0.99, argument_dict['ppm_description'], horizontalalignment='left',
+                    verticalalignment='top', transform=ax.transAxes)
+
+
+    def insert_orbit_timeseries_plot(self, orb, argument_dict, direction='x', ax=None):
+
+        if ax is None:
+            ax = pl.gca()
+
+        if direction=='x':
+            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, 'ko')
+            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, yerr=self.errResidualX,
+                                fmt=None, ecolor='k')
+            if argument_dict['orbit_description'] is not None:
+                pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',
+                        verticalalignment='top', transform=ax.transAxes)
+
+        if self.data_type == '1d':
+            ax.set_ylabel('Offset along scan (mas)')
+            # ax.set_title(self.title)
+
+        elif self.data_type == '2d':
+            if direction=='x':
+                ax.plot(tmpt_day - orb.Tref_MJD, phi1_curve, 'k-')
+                ax.set_ylabel('Offset in RA (mas)')
+            elif direction=='y':
+                axes[0][1].plot(tmpt_day - orb.Tref_MJD, phi2_curve, 'k-')
+                axes[0][1].plot(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, 'ko')
+                axes[0][1].errorbar(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, yerr=self.errResidualY,
+                                    fmt=None, ecolor='k')
+                axes[0][1].set_ylabel('Offset in Dec (mas)')
 
 
 
-            labels = axes[-1][0].get_xticklabels()
-            plt.setp(labels, rotation=30)
+    def insert_orbit_epoch_residuals_plot(self, orb, argument_dict, direction='x', ax=None):
+        """
 
-            fig.tight_layout(h_pad=0.0)
-            pl.show()
-            if save_plot:
-                if frame_residual_panel:
-                    figName = os.path.join(plot_dir, 'Orbit_time_%s_frameres.pdf' % (name_seed_2.replace('.', 'p')))
-                else:
-                    figName = os.path.join(plot_dir,
-                                           'Orbit_time_%s.pdf' % (name_seed_2.replace('.', 'p')))
-                plt.savefig(figName, transparent=True, bbox_inches='tight', pad_inches=0.05)
+        Parameters
+        ----------
+        orb
+        argument_dict
+        direction
+        ax
 
-    def insert_orbit_plot(self, orb):
+        Returns
+        -------
+
+        """
+
+        if ax is None:
+            ax = pl.gca()
+
+        if direction=='x':
+            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX, 'ko')
+            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX,
+                                yerr=self.errResidualX, fmt=None, ecolor='k')
+            ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+            ax.set_ylabel('O-C (mas)')
+            if argument_dict['epoch_omc_description'] is not None:
+                pl.text(0.01, 0.99, argument_dict['epoch_omc_description'], horizontalalignment='left',
+                        verticalalignment='top', transform=ax.transAxes)
+
+        elif direction=='y':
+            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
+            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
+                                yerr=self.errResidualY, fmt=None, ecolor='k')
+            ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+            ax.set_ylabel('O-C (mas)')
+
+    def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None):
+        """
+
+        Parameters
+        ----------
+        orb
+        argument_dict
+        direction
+        ax
+
+        Returns
+        -------
+
+        """
+
+        if ax is None:
+            ax = pl.gca()
+
+        # if self.data_type == '1d':
+        #     axes[2][0].plot(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, 'ko', mfc='k', ms=4)
+        #     axes[2][0].errorbar(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt=None, ecolor='k')
+        #     axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+        #
+        # elif self.data_type == '2d':
+        #     axes[2][0].plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
+        #     axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+        #     axes[2][1].plot(self.T['MJD'][self.yi] - offset_MJD, self.residuals[self.yi], 'ko')
+        #     axes[2][1].axhline(y=0, color='0.5', ls='--', zorder=-50)
+        #     axes[-1][1].set_xlabel('MJD - %3.1f' % offset_MJD)
+        #     labels = axes[-1][1].get_xticklabels()
+        #     plt.setp(labels, rotation=30)
+        #
+        # if frame_omc_description is not None:
+        #     ax = plt.gca()
+        #     pl.text(0.01, 0.99, frame_omc_description, horizontalalignment='left',
+        #             verticalalignment='top', transform=ax.transAxes)
+
+
+        if self.data_type == '1d':
+            ax.plot(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, 'ko', mfc='k', ms=4)
+            ax.errorbar(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt=None, ecolor='k')
+            ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+            # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX, 'ko')
+            # ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX,
+            #                     yerr=self.errResidualX, fmt=None, ecolor='k')
+            # ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+            # ax.set_ylabel('O-C (mas)')
+            if argument_dict['frame_omc_description'] is not None:
+                pl.text(0.01, 0.99, argument_dict['frame_omc_description'], horizontalalignment='left',
+                        verticalalignment='top', transform=ax.transAxes)
+
+        elif self.data_type == '2d':
+
+            if direction=='x':
+                ax.plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
+                ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+
+            elif direction=='y':
+                ax.plot(self.T['MJD'][self.yi] - offset_MJD, self.residuals[self.yi], 'ko')
+                ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+            # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
+            # ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
+            #                     yerr=self.errResidualY, fmt=None, ecolor='k')
+            # ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+            # ax.set_ylabel('O-C (mas)')
+
+        ax.set_ylabel('Frame O-C (mas)')
+
+
+    def insert_epoch_residual_plot(self, orb, argument_dict):
+        """Plot the epoch-average residuals.
+
+        Parameters
+        ----------
+        orb
+        argument_dict
+
+        Returns
+        -------
+
+        """
+
+        epochTime = self.t_MJD_epoch - orb.Tref_MJD
+        epochOrdinateLabel = 'MJD - {:3.1f}'.format(orb.Tref_MJD)
+        if self.data_type == '2d':
+            x_residual_color = '0.7'
+        else:
+            x_residual_color = 'k'
+        pl.plot(epochTime, self.meanResidualX, 'ko', color=x_residual_color)
+        pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None,
+                    ecolor=x_residual_color)
+        if self.data_type == '2d':
+            pl.plot(epochTime, self.meanResidualY, 'ko')
+            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+        plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+        pl.ylabel('O-C (mas)')
+        pl.xlabel(epochOrdinateLabel)
+        if argument_dict['epoch_omc_description'] is not None:
+            ax = plt.gca()
+            pl.text(0.01, 0.99, argument_dict['epoch_omc_description'], horizontalalignment='left',
+                    verticalalignment='top', transform=ax.transAxes)
+
+    def insert_orbit_plot(self, orb, argument_dict):
         """Add orbit to current figure.
 
         Returns
@@ -2501,14 +2550,16 @@ class AstrometricOrbitPlotter(object):
             pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
             pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
                         fmt=None, ecolor='0.6', zorder=-49)
-            # pl.plot(self.Xmean_orb,self.Ymean_orb,'ko',ms=8)
-            # pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='0.6',zorder=-49)
-            #         pl.errorbar(self.Xmean_orb,self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY, fmt=None,ecolor='k')
             for j in range(len(phi1_model_epoch)):
-                # pl.plot([self.Xmean_orb[j],phi1_model_epoch[j]],[self.Ymean_orb[j],phi2_model_epoch[j]], 'k--', color='0.7',zorder=-50)
                 pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]],
                         'k--', color='0.7', zorder=-50)
+
+        # show origin
         pl.plot(0, 0, 'kx')
+
+        if argument_dict['tmp_orbit_description'] is not None:
+            pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',
+                    verticalalignment='top', transform=pl.gca().transAxes)
 
 
 class pDetLim(object):
