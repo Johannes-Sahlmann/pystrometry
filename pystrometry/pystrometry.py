@@ -115,6 +115,7 @@ class OrbitSystem(object):
                             'rvLinearDrift_mspyr': 0.,
                             'rvQuadraticDrift_mspyr': 0,
                             'rvCubicDrift_mspyr': 0,
+                            'scan_angle_definition': 'hipparcos'
                             }
             for key, value in default_dict.items():
                 if key not in attribute_dict.keys():
@@ -408,11 +409,11 @@ class OrbitSystem(object):
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
-    def pjGetBarycentricAstrometricOrbitFast(self, t_MJD, spsi, cpsi):
-    # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
-    #    written: J. Sahlmann   18 May 2015   ESAC
-    #    updated: J. Sahlmann   25.01.2016   STScI/ESA
-    # */
+    def pjGetBarycentricAstrometricOrbitFast(self, t_MJD, spsi, cpsi):#, scan_angle_definition='hipparcos'):
+        # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
+        #    written: J. Sahlmann   18 May 2015   ESAC
+        #    updated: J. Sahlmann   25.01.2016   STScI/ESA
+        # */
         #       #**************ASTROMETRY********************************************************
         #       M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #       a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
@@ -438,7 +439,7 @@ class OrbitSystem(object):
         a_rad = np.arctan2(a_m,d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas         
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC, scan_angle_definition=self.scan_angle_definition)
         return phi1
 
 
@@ -617,10 +618,11 @@ class OrbitSystem(object):
             cpsi = np.cos(psi_rad)
             t = trel_year 
         else:
-            tmp = np.arange(1,2*Nframes+1)
-            spsi = (np.arange(1,2*Nframes+1)+1)%2# % first X then Y
-            cpsi = (np.arange(1,2*Nframes+1)  )%2
-            t = np.sort(np.tile(trel_year ,2))
+            t, cpsi, spsi, xi, yi = get_spsi_cpsi_for_2Dastrometry(trel_year, scan_angle_definition=self.scan_angle_definition)
+            # tmp = np.arange(1,2*Nframes+1)
+            # spsi = (np.arange(1,2*Nframes+1)+1)%2# % first X then Y
+            # cpsi = (np.arange(1,2*Nframes+1)  )%2
+            # t = np.sort(np.tile(trel_year ,2))
             
         tspsi = t*spsi
         tcpsi = t*cpsi
@@ -631,15 +633,18 @@ class OrbitSystem(object):
             else:
                 ppfact = parf
         else:
-            xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
-            yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg    
+            # xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
+            # yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg
             ppfact = np.zeros(2*Nframes)
             ppfact[xi] = parf[0]
             ppfact[yi] = parf[1]
             self.xi = np.where(xi)[0]
             self.yi = np.where(yi)[0]
-                        
-        C = np.array([cpsi, spsi, ppfact, tcpsi, tspsi])
+
+        if self.scan_angle_definition == 'hipparcos':
+            C = np.array([cpsi, spsi, ppfact, tcpsi, tspsi])
+        elif self.scan_angle_definition == 'gaia':
+            C = np.array([spsi, cpsi, ppfact, tspsi, tcpsi])
         self.coeffMatrix = C
         self.timeUsedInTcspsi = np.array(t)
         if psi_deg is not None:
@@ -1751,6 +1756,7 @@ class AstrometricOrbitPlotter(object):
             default_dict = {'outlier_sigma_threshold': 3.,
                             'absolute_threshold': 10.,
                             'residuals': None,
+                            'scan_angle_definition': 'hipparcos'
                             }
 
             for key, value in default_dict.items():
@@ -1799,6 +1805,7 @@ class AstrometricOrbitPlotter(object):
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
 
+            # 1/0
             tmporb = OrbitSystem(attribute_dict=theta_p)
             setattr(self, 'orbit_system_companion_{:d}'.format(p), tmporb)
 
@@ -1813,7 +1820,8 @@ class AstrometricOrbitPlotter(object):
             #     orbit_model = photocentric_orbit_mas
             # else:
             orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
-                                                                          np.array(T['spsi']), np.array(T['cpsi']))
+                                                                      np.array(T['spsi']),
+                                                                      np.array(T['cpsi']))
             # orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MjdUsedInTcspsi']),
             #                                                               np.array(T['spsi']), np.array(T['cpsi']))
 
@@ -2042,6 +2050,7 @@ class AstrometricOrbitPlotter(object):
                             'horizons_file_seed': None,
                             'frame_omc_description': 'default',
                             'orbit_description': 'default',
+                            'scan_angle_definition': 'gaia',
                             }
 
             for key, value in default_argument_dict.items():
@@ -2249,13 +2258,13 @@ class AstrometricOrbitPlotter(object):
     def insert_ppm_plot(self, orb, argument_dict):
 
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
-        tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
-        xi_curve = np.where(
-            np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        yi_curve = np.where(
-            np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        cpsi_curve = tmp % 2
-        spsi_curve = (tmp + 1) % 2
+        # tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
+        # xi_curve = np.where(
+        #     np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        # yi_curve = np.where(
+        #     np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        # cpsi_curve = tmp % 2
+        # spsi_curve = (tmp + 1) % 2
 
         ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
                             offsetDE_mas=orb.offset_delta_mas,
@@ -2455,27 +2464,46 @@ class AstrometricOrbitPlotter(object):
         """
 
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
-        tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
-        xi_curve = np.where(
-            np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        yi_curve = np.where(
-            np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        cpsi_curve = tmp % 2
-        spsi_curve = (tmp + 1) % 2
-        orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d, spsi_curve,
-                                                               cpsi_curve)
+        # tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
+
+        timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
+
+        # if argument_dict['scan_angle_definition'] == 'hipparcos':
+        #     xi_curve = np.where(
+        #         np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        #     yi_curve = np.where(
+        #         np.remainder(tmp, 2) == 0)  # index of Y coordinates (cpsi = 1) psi =  0 deg
+        #     cpsi_curve = tmp % 2
+        #     spsi_curve = (tmp + 1) % 2
+        # elif argument_dict['scan_angle_definition'] == 'gaia':
+        #     yi_curve = np.where(
+        #         np.remainder(tmp + 1, 2) == 0)  # index of Y coordinates (cpsi = 1) psi =  0 deg
+        #     xi_curve = np.where(
+        #         np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
+        #     spsi_curve = tmp % 2
+        #     cpsi_curve = (tmp + 1) % 2
+        # orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d, spsi_curve, cpsi_curve)
+        orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve, cpsi_curve)
 
         phi1_curve = orbit_curve[xi_curve]
         phi2_curve = orbit_curve[yi_curve]
 
-        t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
-        tmp = np.arange(1., len(t_epoch_MJD) + 1)
-        xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[
-            0]  # index of X coordinates (cpsi = 1) psi =  0 deg
-        yi_epoch = np.where(np.remainder(tmp, 2) == 0)[
-            0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
-        cpsi_epoch = tmp % 2
-        spsi_epoch = (tmp + 1) % 2
+        t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch = get_spsi_cpsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
+
+        # t_epoch_MJD = np.sort(np.tile(self.t_MJD_epoch, 2))
+        # tmp = np.arange(1., len(t_epoch_MJD) + 1)
+        # if argument_dict['scan_angle_definition'] == 'hipparcos':
+        #     xi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[
+        #         0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+        #     yi_epoch = np.where(np.remainder(tmp, 2) == 0)[
+        #         0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+        #     cpsi_epoch = tmp % 2
+        #     spsi_epoch = (tmp + 1) % 2
+        # elif argument_dict['scan_angle_definition'] == 'gaia':
+        #     yi_epoch = np.where(np.remainder(tmp + 1, 2) == 0)[0]
+        #     xi_epoch = np.where(np.remainder(tmp, 2) == 0)[0]
+        #     spsi_epoch = tmp % 2
+        #     cpsi_epoch = (tmp + 1) % 2
 
         # if 'delta_mag' in theta_names:
         #     relative_orbit_mas = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch,
@@ -2488,21 +2516,22 @@ class AstrometricOrbitPlotter(object):
         #     orbit_epoch = photocentric_orbit_mas
         # else:
             #             orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_curve_mjd_2d,spsi_curve,cpsi_curve)
-        if 1:
-            orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch,
-                                                                   cpsi_epoch)
+        # if 1:
+        orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
 
         phi1_model_epoch = orbit_epoch[xi_epoch]
         phi2_model_epoch = orbit_epoch[yi_epoch]
 
-        t_frame_mjd = np.sort(np.tile(self.data.epoch_data['MJD'], 2))
-        tmp = np.arange(1., len(t_frame_mjd) + 1)
-        xi_frame = np.where(np.remainder(tmp + 1, 2) == 0)[
-            0]  # index of X coordinates (cpsi = 1) psi =  0 deg
-        yi_frame = np.where(np.remainder(tmp, 2) == 0)[
-            0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
-        cpsi_frame = tmp % 2
-        spsi_frame = (tmp + 1) % 2
+        t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_spsi_cpsi_for_2Dastrometry(self.data.epoch_data['MJD'], scan_angle_definition=argument_dict['scan_angle_definition'])
+
+        # t_frame_mjd = np.sort(np.tile(self.data.epoch_data['MJD'], 2))
+        # tmp = np.arange(1., len(t_frame_mjd) + 1)
+        # xi_frame = np.where(np.remainder(tmp + 1, 2) == 0)[
+        #     0]  # index of X coordinates (cpsi = 1) psi =  0 deg
+        # yi_frame = np.where(np.remainder(tmp, 2) == 0)[
+        #     0]  # index of Y coordinates (cpsi = 0) psi =  90 deg
+        # cpsi_frame = tmp % 2
+        # spsi_frame = (tmp + 1) % 2
 
         orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
 
@@ -2513,10 +2542,16 @@ class AstrometricOrbitPlotter(object):
         pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
 
         if self.data_type == '1d':
-            frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-            frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
-            epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
-            epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
+            if argument_dict['scan_angle_definition'] == 'hipparcos':
+                frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
+            elif argument_dict['scan_angle_definition'] == 'gaia':
+                frame_residual_alphastar_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
 
             frame_residual_color = '0.8'
             pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
@@ -2529,14 +2564,16 @@ class AstrometricOrbitPlotter(object):
 
             # plot epoch-level error-bars
             for jj in range(len(self.meanResidualX)):
-                x1 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (
-                self.meanResidualX[jj] + self.errResidualX[jj])
-                x2 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (
-                self.meanResidualX[jj] - self.errResidualX[jj])
-                y1 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (
-                self.meanResidualX[jj] + self.errResidualX[jj])
-                y2 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (
-                self.meanResidualX[jj] - self.errResidualX[jj])
+                if argument_dict['scan_angle_definition'] == 'hipparcos':
+                    x1 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = phi1_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = phi2_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
+                elif argument_dict['scan_angle_definition'] == 'gaia':
+                    x1 = phi1_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = phi1_model_epoch[jj] + self.mean_spsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = phi2_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = phi2_model_epoch[jj] + self.mean_cpsi[jj] * (self.meanResidualX[jj] - self.errResidualX[jj])
                 pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
 
                 # pass
@@ -3021,23 +3058,44 @@ def xfGetMeanParMatrix(xfP):
     return tmp, xi, yi
 
 
-def get_spsi_cpsi_for_2Dastrometry( timestamps_2D ):
-    '''
-    xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
-    yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg    
+def get_spsi_cpsi_for_2Dastrometry( timestamps_2D , scan_angle_definition='hipparcos'):
+    """Return cos(psi) and sin(psi) for regular 2D astrometry, where psi is the scan angle.
 
-    '''
+    For Hipparcos
+    xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
+    yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg
+
+
+    Parameters
+    ----------
+    timestamps_2D
+    scan_angle_definition
+
+    Returns
+    -------
+
+    """
 
     # every 2D timestamp is duplicated to obtain the 1D timestamps 
-    timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D))) 
+    timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D)))
+    n_1d = len(timestamps_1D)
     
-    # compute cos(psi) and sin(psi) factors assuming orthogonal axes    
-    spsi = (np.arange(1,len(timestamps_1D)+1)+1)%2# % first X then Y
-    cpsi = (np.arange(1,len(timestamps_1D)+1)  )%2
+    # compute cos(psi) and sin(psi) factors assuming orthogonal axes
+    if scan_angle_definition == 'hipparcos':
+        spsi = (np.arange(1, n_1d+1)+1)%2# % first Ra then Dec
+        cpsi = (np.arange(1, n_1d+1)  )%2
 
-    # indices of X and Y measurements
-    xi = np.where(spsi==0)[0]    #index of X coordinates (cpsi = 1) psi =  0 deg
-    yi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg    
+        # indices of X and Y measurements
+        xi = np.where(spsi==0)[0]    #index of X coordinates (cpsi = 1) psi =  0 deg
+        yi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg
+
+    elif scan_angle_definition == 'gaia':
+        cpsi = (np.arange(1, n_1d+1)+1)%2
+        spsi = (np.arange(1, n_1d+1)  )%2
+
+        # indices of X and Y measurements
+        yi = np.where(spsi==0)[0]    #index of X coordinates (cpsi = 1) psi =  0 deg
+        xi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg
 
     return timestamps_1D, cpsi, spsi, xi, yi
 
@@ -3474,8 +3532,8 @@ def astrom_signal(t_day, psi_deg, ecc, P_day, Tp_day, TIC):
     return phi
 
 
-def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
-    """
+def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC, scan_angle_definition='hipparcos'):
+    """Return astrometric orbit signal.
 
     Parameters
     ----------
@@ -3489,11 +3547,13 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
 
     Returns
     -------
+    phi : numpy array
+        Orbit signal along scan angle psi.
 
     """
         
     # compute eccentric anomaly
-    E_rad = eccentric_anomaly(ecc,t_day,T0_day,P_day)
+    E_rad = eccentric_anomaly(ecc, t_day, T0_day, P_day)
  
     # compute orbit projected on the sky
     if np.all(ecc == 0):
@@ -3502,11 +3562,12 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
     else:
         X = np.cos(E_rad)-ecc
         Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
-        
-    # pdb.set_trace()
-    phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
-    # phi = np.multiply((np.multiply(TIC[0],spsi)+np.multiply(TIC[1],cpsi)),X) + np.multiply((np.multiply(TIC[2],spsi) + np.multiply(TIC[3],cpsi)),Y)
-    # return np.array(phi)
+
+    if scan_angle_definition == 'hipparcos':
+        phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
+    elif scan_angle_definition == 'gaia':
+        phi = (TIC[0]*cpsi + TIC[1]*spsi)*X + (TIC[2]*cpsi + TIC[3]*spsi)*Y
+
     return phi
 
 

@@ -10,7 +10,10 @@ Authors
 """
 
 import os
+
 from astropy.table import Table
+import numpy as np
+
 
 
 
@@ -28,8 +31,14 @@ class GaiaIad(object):
 
     def load_data(self, verbose=0, write_modified_iad=0, use_modified_epoch_data=False):
 
-        self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA.csv'.format(self.source_id))
+        # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA.csv'.format(self.source_id))
+        self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_DETAILED.csv'.format(self.source_id))
         self.epoch_data = Table.read(self.epoch_data_file)
+
+        if 'direction_AL0_AC1' in self.epoch_data.colnames:
+            remove_index = np.where(self.epoch_data['direction_AL0_AC1'] == 1)[0]
+            self.epoch_data.remove_rows(remove_index)
+
 
         # sort by time
         self.epoch_data.sort(self.time_column)
