@@ -35,9 +35,14 @@ class GaiaIad(object):
         self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_DETAILED.csv'.format(self.source_id))
         self.epoch_data = Table.read(self.epoch_data_file)
 
+
         if 'direction_AL0_AC1' in self.epoch_data.colnames:
-            remove_index = np.where(self.epoch_data['direction_AL0_AC1'] == 1)[0]
-            self.epoch_data.remove_rows(remove_index)
+            if 0:
+                self.xi = np.where(self.epoch_data['direction_AL0_AC1'] == 0)[0]
+                self.yi = np.where(self.epoch_data['direction_AL0_AC1'] == 1)[0]
+            else:
+                remove_index = np.where(self.epoch_data['direction_AL0_AC1'] == 1)[0]
+                self.epoch_data.remove_rows(remove_index)
 
 
         # sort by time
