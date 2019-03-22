@@ -3414,7 +3414,12 @@ def read_ephemeris(horizons_file_seed, overwrite=False, ephemeris_path=None, ver
 
 
 def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=False, instrument=None, overwrite=False):
-    
+
+    if horizons_file_seed == -1:
+        parfRA = np.zeros(len(t_JD))
+        parfDE = np.zeros(len(t_JD))
+        return [parfRA, parfDE]
+
     ephFactor = -1
     RA_rad = np.deg2rad(RA_deg)
     DE_rad = np.deg2rad(DE_deg)
@@ -3801,7 +3806,7 @@ class ImagingAstrometryData(object):
     
     def set_data_1D(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None):
         tmp_2D = self.data_2D[self.time_column_name,'RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame']
-        tmp_1D = tablevstack( (tmp_2D,tmp_2D) )
+        tmp_1D = tablevstack( (tmp_2D, tmp_2D) )
         tmp_1D.sort(self.time_column_name)
 
 
