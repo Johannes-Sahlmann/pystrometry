@@ -33,7 +33,7 @@ from astropy.time import Time
 from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
 from astroquery.simbad import Simbad
-import pyslalib as sla
+#import pyslalib as sla
 import sys
 if sys.version_info[0] == 3:
     # import urllib.request as urllib
@@ -41,7 +41,15 @@ if sys.version_info[0] == 3:
     from urllib.error import HTTPError
 import pickle
 
-from linearfit import linearfit
+#from linearfit import linearfit
+
+# 0J0: In case these packages are not installed, skip so we can continue
+try:
+    import pyslalib as sla
+    from linearfit import linearfit
+except ModuleNotFoundError:
+    pass
+
 # from modules.functionsAndClasses import *
 # from .functionsAndClasses import *
 # import sys
@@ -65,8 +73,8 @@ deg2as = u.deg.to(u.arcsec)
 year2day = u.year.to(u.day)
 MJ2MS = MJ_kg/MS_kg
 
-ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv', 
-'HST': 'horizons_XYZ_1990-2016_EQUATORIAL_HST_1day_csv', 
+ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
+'HST': 'horizons_XYZ_1990-2016_EQUATORIAL_HST_1day_csv',
 'WISE': 'horizons_XYZ_2009-2016_EQUATORIAL_WISE_1day_csv',
 'JWST': 'horizons_XYZ_2012-2023_EQUATORIAL_JWST_1day_csv',
 'L2': 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
@@ -162,12 +170,12 @@ class OrbitSystem(object):
         """
 
         # #***********SYSTEM*PARAMETERS**************************************************
-       
-    
+
+
         m2_MS = self.m2_MJ * MJ_kg/MS_kg # #companion mass in units of SOLAR mass
         #         gamma_ms = 0. #systemic velocity / m s^-1
         d_pc  = 1./ (self.plx_mas/1000.)
-    
+
         if verbose:
             print("%s " % "++++++++++++++++++++")
             print("Primary   mass = %1.3f Msol \t = %4.3f Mjup " % (self.m1_MS, self.m1_MS*MS_kg/MJ_kg))
@@ -181,7 +189,7 @@ class OrbitSystem(object):
         omega_rad = np.deg2rad(self.omega_deg)
         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
         i_rad =     np.deg2rad(self.i_deg)
-    
+
         #*************SIMULATION*PARAMATERS*********************************************
         if Norbit is not None:
             t_day = np.linspace(0, self.P_day*Norbit, N) + self.Tref_MJD
@@ -194,99 +202,99 @@ class OrbitSystem(object):
         # gnoise_rv = 0.5  # noise level on RV in m/s RMS
         # s_rv = 10.       # error bar on RV measurement in m/s
         # gnoise_aric = 0.05  # noise level on astrometry in mas RMS
-        # s_aric = 0.1       # error bar on astromeric measurement in mas 
+        # s_aric = 0.1       # error bar on astromeric measurement in mas
         # t_day = span(0,P_day*Norbit,N) + Tp_day   # time vector
-    
+
         #**************RADIAL*VELOCITY**************************************************
-    
+
         E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         a_AU = a_m / AU_m #  in AU
-        
-        if 0==1:        
+
+        if 0==1:
             THETA_rad = 2*np.arctan( np.sqrt( (1+self.ecc)/(1-self.ecc) ) * np.tan( E_rad/2 ) ) #position angle between radius vector and ref
             THETA_rad = np.arctan2( np.cos(THETA_rad), np.sin(THETA_rad) )
-            
+
             k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
             rv_ms = k1 * ( np.cos( THETA_rad + omega_rad ) + self.ecc*np.cos(omega_rad) ) + self.gamma_ms #radial velocity in m/s.
 
         else: # damien's method
             THETA_rad = TrueAnomaly(self.ecc,E_rad)
-            k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude            
+            k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
             a_mps = RadialVelocitiesConstants(k1,omega_rad,self.ecc)
-#             print(a_mps 
+#             print(a_mps
             rv_ms = RadialVelocitiesKepler(a_mps[0],a_mps[1],a_mps[2],THETA_rad) + self.gamma_ms
-            
+
         if self.rvLinearDrift_mspyr is not None:
-            drift_ms = (t_day - self.Tref_MJD)/year2day * self.rvLinearDrift_mspyr                      
-            rv_ms += drift_ms 
+            drift_ms = (t_day - self.Tref_MJD)/year2day * self.rvLinearDrift_mspyr
+            rv_ms += drift_ms
 
         if self.rvQuadraticDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**2 * self.rvQuadraticDrift_mspyr                                            
-            rv_ms += drift_ms 
+            drift_ms = ((t_day - self.Tref_MJD)/year2day)**2 * self.rvQuadraticDrift_mspyr
+            rv_ms += drift_ms
 
         if self.rvCubicDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**3 * self.rvCubicDrift_mspyr                                            
-            rv_ms += drift_ms 
-            
-            
-            
+            drift_ms = ((t_day - self.Tref_MJD)/year2day)**3 * self.rvCubicDrift_mspyr
+            rv_ms += drift_ms
+
+
+
         a_rel_AU = (Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(self.P_day*day2sec)**2.)**(1./3.)/AU_m
-    
+
         # print('i_deg = %3.2f, om_deg = %3.2f, k1_mps = %3.2f, phi0 = %3.2f, t_day[0] = %3.2f, rv[0] = %3.2f, THETA_rad[0] = %3.2f, E_rad[0] = %2.2f' % (self.i_deg,self.omega_deg,k1, self.Tp_day/self.P_day, t_day[0],rv_ms[0], THETA_rad[0],E_rad[0])
 
-        if verbose == 1:    
+        if verbose == 1:
             print("Astrometric semimajor axis of Primary: a = %3.3f AU \t %6.3f muas " % (a_AU,a_AU/d_pc*1.e6))
             print("Relative semimajor axis of Primary: a = %3.3f AU \t %6.2f mas " %(a_rel_AU,a_rel_AU/d_pc*1.e3))
             print("Radial velocity semi-amplitude: K1 =  %4.2f m/s  " % k1)
-        
+
         #**************ASTROMETRY********************************************************
         # a_rad = a_m / (d_pc*pc_m) #for small angles
         a_rad = np.arctan2(a_m,d_pc*pc_m)
         # print a_rad, a_rad2
         # 1/0
         a_mas = a_rad * rad2mas # semimajor axis in mas
- 
+
         aRel_mas = np.arctan2(a_rel_AU*AU_m,d_pc*pc_m) * rad2mas # relative semimajor axis in mas
 #         print 'aRel_mas = %3.3f mas' % aRel_mas
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         TIC_rel = pjGet_TIC( [ aRel_mas, self.omega_deg+180., self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         # A = TIC[0] B = TIC[1] F = TIC[2] G = TIC[3]
-        
+
         if psi_deg is not None:
             # psi_rad = np.deg2rad(psi_deg)
             phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
             phi1_rel = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC_rel)
             phi2 = np.nan
             phi2_rel = np.nan
-            
+
         else:
             #first baseline  second baseline
             bstart1 = 0.
             bstart2 = 90.    #baseline offset in deg
 #             bspread1 = 0.    bspread2 = 0.    #baseline spread around offset in deg
-    
-            # for FORS aric + CRIRES RV simulation, the aric measurement gives both axis simultaneously    
+
+            # for FORS aric + CRIRES RV simulation, the aric measurement gives both axis simultaneously
             psi_deg1 = np.ones(N)*bstart1# array(bstart1,N)
             # psi_rad1 = psi_deg1*deg2rad
             psi_deg2 = np.ones(N)*bstart2
             # psi_rad2 = psi_deg2*deg2rad
-        
+
             phi1 = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC)
             phi2 = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC)
             phi1_rel = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC_rel)
             phi2_rel = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC_rel)
-    
+
         if returnMeanAnomaly:
             M_rad = mean_anomaly(t_day, self.Tp_day, self.P_day)
             return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, M_rad]
-            
+
         elif returnTrueAnomaly:
 #           M_rad = mean_anomaly(t_day,self.Tp_day,self.P_day)
             return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, THETA_rad, TIC_rel]
-            
+
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
@@ -309,8 +317,8 @@ class OrbitSystem(object):
 
         # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
         i_rad =     np.deg2rad(self.i_deg)
-    
-        #**************RADIAL*VELOCITY**************************************************    
+
+        #**************RADIAL*VELOCITY**************************************************
         E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
         if component=='primary':
             M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
@@ -321,25 +329,25 @@ class OrbitSystem(object):
 
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the component mass in m
         # a_AU = a_m / AU_m #  in AU
-        
+
         # damien's method
         THETA_rad = TrueAnomaly(self.ecc,E_rad)
         k_m = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
         a_mps = RadialVelocitiesConstants(k_m, omega_rad, self.ecc)
         rv_ms = RadialVelocitiesKepler(a_mps[0], a_mps[1], a_mps[2], THETA_rad) + self.gamma_ms
-            
+
         if self.rvLinearDrift_mspyr is not None:
             drift_ms = (t_day - self.Tref_MJD)/year2day * self.rvLinearDrift_mspyr
-            rv_ms += drift_ms 
-            
+            rv_ms += drift_ms
+
         if self.rvQuadraticDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**2 * self.rvQuadraticDrift_mspyr                                            
-            rv_ms += drift_ms 
+            drift_ms = ((t_day - self.Tref_MJD)/year2day)**2 * self.rvQuadraticDrift_mspyr
+            rv_ms += drift_ms
 
         if self.rvCubicDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**3 * self.rvCubicDrift_mspyr                                           
-            rv_ms += drift_ms 
-                                                       
+            drift_ms = ((t_day - self.Tref_MJD)/year2day)**3 * self.rvCubicDrift_mspyr
+            rv_ms += drift_ms
+
         return rv_ms
 
 
@@ -369,42 +377,42 @@ class OrbitSystem(object):
             pl.plot(t_plot, rv_mps_1-rv_mps_2, ls=line_style, color=line_color, lw=line_width+2, label='difference')
 
 
-    
+
     def pjGetOrbitFast(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0):
     # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
     #    written: J. Sahlmann   18 May 2015   ESAC
     # */
-               
-    
-        m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass 
-        d_pc  = 1./ (self.plx_mas/1000.)    
+
+
+        m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
+        d_pc  = 1./ (self.plx_mas/1000.)
 
         omega_rad = np.deg2rad(self.omega_deg)
         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
         i_rad = np.deg2rad(self.i_deg)
-    
+
         t_day = t_MJD
         N = len(t_MJD)
         #**************ASTROMETRY********************************************************
-        
+
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         a_AU = a_m / AU_m #  in AU
         a_rel_AU = (Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(self.P_day*day2sec)**2.)**(1./3.)/AU_m
-    
-        
+
+
         a_rad = np.arctan2(a_m,d_pc*pc_m)
-        a_mas = a_rad * rad2mas # semimajor axis in mas 
+        a_mas = a_rad * rad2mas # semimajor axis in mas
         aRel_mas = np.arctan2(a_rel_AU*AU_m,d_pc*pc_m) * rad2mas # relative semimajor axis in mas
-        
+
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        
+
         phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
         phi1_rel = np.nan #astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.Tp_day,TIC_rel)
         phi2 = np.nan
         phi2_rel = np.nan
         rv_ms=np.nan
-    
+
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
@@ -417,26 +425,26 @@ class OrbitSystem(object):
         #       M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #       a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         #       a_rad = np.arctan2(a_m,d_pc*pc_m)
-        #       a_mas = a_rad * rad2mas # semimajor axis in mas 
+        #       a_mas = a_rad * rad2mas # semimajor axis in mas
         #       TIC     = pjGet_TIC( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
         #       phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,Tp_day,TIC)
         #       return phi1
-               
+
 #         t_MJD = self.MjdUsedInTcspsi
-    
+
         # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-        d_pc  = 1./ (self.plx_mas/1000.)    
+        d_pc  = 1./ (self.plx_mas/1000.)
 
         # omega_rad = np.deg2rad(self.omega_deg)
         # OMEGA_rad = np.deg2rad(self.OMEGA_deg)
         # i_rad = np.deg2rad(self.i_deg)
-    
+
         #**************ASTROMETRY********************************************************
-        
+
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m        
+        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         a_rad = np.arctan2(a_m,d_pc*pc_m)
-        a_mas = a_rad * rad2mas # semimajor axis in mas         
+        a_mas = a_rad * rad2mas # semimajor axis in mas
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
         return phi1
@@ -449,36 +457,36 @@ class OrbitSystem(object):
         updated: J. Sahlmann   25.01.2016   STScI/ESA
         updated: J. Sahlmann   27 February 2017   STScI/AURA
 
-        returns relative orbit in linear or angular units       
+        returns relative orbit in linear or angular units
         '''
-    
+
         #mass term of relative orbit
-        M_rel = Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) 
-        
+        M_rel = Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg)
+
         # semimajor axis of the relative orbit in m
-        a_rel_m = ( M_rel / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  
+        a_rel_m = ( M_rel / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)
 
         # shift argument of periastron relative to barycentric orbit of primary mass M1
         if shift_omega_by_pi:
             omega_rel_deg = self.omega_deg + 180.
         else:
             omega_rel_deg = self.omega_deg
-    
-        if unit == 'mas':           
-            d_pc  = 1./ (self.plx_mas/1000.)    
+
+        if unit == 'mas':
+            d_pc  = 1./ (self.plx_mas/1000.)
             a_rad = np.arctan2(a_rel_m,d_pc*pc_m)
-            # semimajor axis in mas         
-            a_rel_mas = a_rad * rad2mas 
+            # semimajor axis in mas
+            a_rel_mas = a_rad * rad2mas
             a_rel = a_rel_mas
         elif unit == 'meter':
-            a_rel = a_rel_m     
-            
-        #Thiele-Innes constants 
+            a_rel = a_rel_m
+
+        #Thiele-Innes constants
         TIC = pjGet_TIC([a_rel, omega_rel_deg, self.OMEGA_deg, self.i_deg])
-        
+
         # by default these are cartesian coordinates
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
-        
+
         # convert to polar coordinates if requested
         if coordinate_system=='polar':
             xi = np.where(cpsi==1)[0]
@@ -487,14 +495,14 @@ class OrbitSystem(object):
             phi_deg = np.rad2deg(np.arctan2(phi1[xi], phi1[yi]))%360.
             phi1[xi] = rho
             phi1[yi] = phi_deg
-        
+
         return phi1
 
-    
-        
-    
-    
-    
+
+
+
+
+
 #     def pjGetParameters(self, verbose = 0):
 #         m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
 # #         gamma_ms = 0. #systemic velocity / m s^-1
@@ -567,8 +575,8 @@ class OrbitSystem(object):
 #
 #         # phi1 = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.Tp_day,TIC)
 #         # phi2 = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.Tp_day,TIC)
-    
-    
+
+
 
 #     def getPpm(self,t_MJD,psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, tref_MJD=None, externalParallaxFactors=None, horizons_file_seed=None):
     def ppm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
@@ -599,13 +607,13 @@ class OrbitSystem(object):
         t_JD = t_MJD + 2400000.5
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
-        else:                
+        else:
             parf = getParallaxFactors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
-                        
+
         self.parf = parf
         if self.Tref_MJD is not None:
             t0_MJD = self.Tref_MJD
-        else:    
+        else:
             t0_MJD = np.mean(t_MJD)
         trel_year = (t_MJD - t0_MJD)/year2day
 
@@ -615,16 +623,16 @@ class OrbitSystem(object):
             psi_rad = np.deg2rad(psi_deg)
             spsi = np.sin(psi_rad)
             cpsi = np.cos(psi_rad)
-            t = trel_year 
+            t = trel_year
         else:
             tmp = np.arange(1,2*Nframes+1)
             spsi = (np.arange(1,2*Nframes+1)+1)%2# % first X then Y
             cpsi = (np.arange(1,2*Nframes+1)  )%2
             t = np.sort(np.tile(trel_year ,2))
-            
+
         tspsi = t*spsi
         tcpsi = t*cpsi
-        
+
         if psi_deg is not None:
             if externalParallaxFactors is None:
                 ppfact = parf[0] * cpsi + parf[1] * spsi    # see Sahlmann+11 Eq. 1 / 8
@@ -632,13 +640,13 @@ class OrbitSystem(object):
                 ppfact = parf
         else:
             xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
-            yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg    
+            yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg
             ppfact = np.zeros(2*Nframes)
             ppfact[xi] = parf[0]
             ppfact[yi] = parf[1]
             self.xi = np.where(xi)[0]
             self.yi = np.where(yi)[0]
-                        
+
         C = np.array([cpsi, spsi, ppfact, tcpsi, tspsi])
         self.coeffMatrix = C
         self.timeUsedInTcspsi = np.array(t)
@@ -699,16 +707,16 @@ class OrbitSystem(object):
         # relative orbit
         phi0_curve_relative = self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve, shift_omega_by_pi = True)
 
-        if timestamps_probe_2D is not None:   
+        if timestamps_probe_2D is not None:
             timestamps_probe_1D, cpsi_probe, spsi_probe, xi_probe, yi_probe = get_spsi_cpsi_for_2Dastrometry( timestamps_probe_2D )
             phi0_probe_relative = self.relative_orbit_fast(timestamps_probe_1D, spsi_probe, cpsi_probe, shift_omega_by_pi = True)
-    
-        if delta_mag is not None:        
+
+        if delta_mag is not None:
             # fractional luminosity
             beta = fractional_luminosity( 0. , 0.+delta_mag )
             #     fractional mass
             f = getB(self.m1_MS, self.m2_MS)
-    
+
             # photocentre orbit about the system's barycentre
             phi0_curve_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve, shift_omega_by_pi = False)
             if timestamps_probe_2D is not None:
@@ -730,7 +738,7 @@ class OrbitSystem(object):
             axes = pl.gcf().axes
         # plot smooth orbit curve
         axes[0].plot(phi0_curve_barycentre[xi_curve] ,phi0_curve_barycentre[yi_curve],'k--',lw=line_width, color=line_color, ls=line_style) #, label='Barycentre'
-        # plot individual epochs    
+        # plot individual epochs
         if timestamps_probe_2D is not None:
             axes[0].plot(phi0_probe_barycentre[xi_probe],phi0_probe_barycentre[yi_probe],'bo',mfc='0.7', label=timestamps_probe_2D_label)
 
@@ -1611,20 +1619,20 @@ class PpmPlotter(object):
 
         if self.C.shape[0] > 7:
             pl.figure(figsize=(6, 8), facecolor='w', edgecolor='k')
-            pl.clf() 
+            pl.clf()
             pl.subplot(2, 1, 1)
             # pl.plot(self.Xmean - ppm_meas[0],self.Ymean-ppm_meas[1],'ko')
             pl.plot(self.ACC_Xmean, self.ACC_Ymean, 'ko')
-            pl.axis('equal') 
+            pl.axis('equal')
             ax = plt.gca()
             ax.invert_xaxis()
-            pl.xlabel('Offset in Right Ascension (mas)') 
-            pl.ylabel('Offset in Declination (mas)') 
+            pl.xlabel('Offset in Right Ascension (mas)')
+            pl.ylabel('Offset in Declination (mas)')
             pl.title('Acceleration')
             pl.subplot(2, 1, 2)
             pl.plot(self.t_MJD_epoch, self.ACC_Xmean, 'ko', color='0.7')
             pl.plot(self.t_MJD_epoch, self.ACC_Ymean, 'ko')
-            pl.xlabel('MJD') 
+            pl.xlabel('MJD')
             pl.show()
 
             if save_plot:
@@ -3024,20 +3032,20 @@ def xfGetMeanParMatrix(xfP):
 def get_spsi_cpsi_for_2Dastrometry( timestamps_2D ):
     '''
     xi = spsi==0    #index of X coordinates (cpsi = 1) psi =  0 deg
-    yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg    
+    yi = cpsi==0    #index of Y coordinates (spsi = 1) psi = 90 deg
 
     '''
 
-    # every 2D timestamp is duplicated to obtain the 1D timestamps 
-    timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D))) 
-    
-    # compute cos(psi) and sin(psi) factors assuming orthogonal axes    
+    # every 2D timestamp is duplicated to obtain the 1D timestamps
+    timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D)))
+
+    # compute cos(psi) and sin(psi) factors assuming orthogonal axes
     spsi = (np.arange(1,len(timestamps_1D)+1)+1)%2# % first X then Y
     cpsi = (np.arange(1,len(timestamps_1D)+1)  )%2
 
     # indices of X and Y measurements
     xi = np.where(spsi==0)[0]    #index of X coordinates (cpsi = 1) psi =  0 deg
-    yi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg    
+    yi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg
 
     return timestamps_1D, cpsi, spsi, xi, yi
 
@@ -3196,44 +3204,44 @@ def pjGet_m2(m1_kg, a_m, P_day):
     if 0 == 1:
         # from sympy import Eq, Symbol, solve
         import sympy as sp
-        # (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.) * (P_day*day2sec)**2. =  Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. 
+        # (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.) * (P_day*day2sec)**2. =  Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2.
         # m2_MJ = sp.Symbol('m2_MJ')
         # P_day = sp.Symbol('P_day')
         # a = (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.)
         # b = a * (P_day*day2sec)**2 / Ggrav
         # m2 = m2_MJ * MJ_kg
-        # m1 = m1_MS*MS_kg    
+        # m1 = m1_MS*MS_kg
         a = sp.Symbol('a')
         p = sp.Symbol('p')
         G = sp.Symbol('G')
         m1 = sp.Symbol('m1')
         m2 = sp.Symbol('m2')
-        # g1 = b -  (m2)**3 / ( m1 + m2 )**2    
+        # g1 = b -  (m2)**3 / ( m1 + m2 )**2
         # a_AU = a_m / AU_m #  in AU
-        # a1_mas*d_pc*AU_m / 1e3 = a_m     
+        # a1_mas*d_pc*AU_m / 1e3 = a_m
         # p1 =     (4. * np.pi**2.)
         # p2 = (self.P_day*day2sec)**2
         # p = p2/p1*G
         # a_m = a1_detection_mas / 1.e3 * d_pc * AU_m
         # a = (a1_detection_mas / 1.e3 * d_pc * AU_m)**3
 
-        # M/G =  m2**3 / ( m1 + m2 )**2    
-        # a = M * p 
-        # g1 = a - M*p  
-        g1 = p * m2**3  / ( m1 + m2 )**2 - a     
+        # M/G =  m2**3 / ( m1 + m2 )**2
+        # a = M * p
+        # g1 = a - M*p
+        g1 = p * m2**3  / ( m1 + m2 )**2 - a
         res = sp.solvers.solve( (g1), (m2))
         print(res)
 
-                
+
     return m2_kg
-    
+
 
 def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas ):
     M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
     a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
     d_pc  = 1./ (plx_mas/1000.)
     a_rad = np.arctan2(a_m,d_pc*pc_m)
-    a_mas = a_rad * rad2mas # semimajor axis in mas         
+    a_mas = a_rad * rad2mas # semimajor axis in mas
     return a_mas
 
 
@@ -3247,30 +3255,30 @@ def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas ):
     a_rel_m = (Ggrav*(m1_MS*MS_kg+m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(P_day*day2sec)**2.)**(1./3.)
 #     M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
 #     a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-    d_pc  = 1./ (plx_mas/1000.)    
+    d_pc  = 1./ (plx_mas/1000.)
     a_rel_rad = np.arctan2(a_rel_m,d_pc*pc_m)
-    a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas         
+    a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
     return a_rel_mas
 
 
 def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
-    
+
     a_m = a1_detection_mas / 1.e3 * d_pc * AU_m
-    m1_kg = m1_MS * MS_kg    
+    m1_kg = m1_MS * MS_kg
     P_day = Period_day
-    
+
     m2_kg = pjGet_m2( m1_kg, a_m, P_day )
     m2_MJ = m2_kg / MJ_kg
     return m2_MJ
-    
+
     # p1 =     (4. * np.pi**2.)
     # p2 = (P_day*day2sec)**2
     # p = p2/p1*Ggrav
     # a = (a1_detection_mas / 1.e3 * d_pc * AU_m)**3
     # m1 = m1_MS
-    
+
     # m2 = a/(3*p) + (-a**2/(9*p**2) - 2*a*m1/(3*p))/(-a**3/(27*p**3) - a**2*m1/(3*p**2) - a*m1**2/(2*p) + ((-a**2/(9*p**2) - 2*a*m1/(3*p))**3 + (-2*a**3/(27*p**3) - 2*a**2*m1/(3*p**2) - a*m1**2/p)**2/4)**(1/2))**(1/3) - (-a**3/(27*p**3) - a**2*m1/(3*p**2) - a*m1**2/(2*p) + ((-a**2/(9*p**2) - 2*a*m1/(3*p))**3 + (-2*a**3/(27*p**3) - 2*a**2*m1/(3*p**2) - a*m1**2/p)**2/4)**(1/2))**(1/3)
-    
+
     # # a = (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.)
     # # P_day = Period_day
     # # b = a * (P_day*day2sec)**2 / Ggrav
@@ -3280,34 +3288,34 @@ def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
 
     # res = m2
     # return res
-    
+
 #             #
-   
+
 #         # M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-#         # a1_detection_mas = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.) / AU_m /d_pc*1.e3 
+#         # a1_detection_mas = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.) / AU_m /d_pc*1.e3
 
 #         from sympy import Eq, Symbol, solve
 #         m2_MJ = Symbol('m2_MJ')
-#         (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.) * (P_day*day2sec)**2. =  Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. 
+#         (a1_detection_mas/1.e3 * AU_m * d_pc)**3 * (4. * np.pi**2.) * (P_day*day2sec)**2. =  Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2.
 
-                                        
-            
-            
+
+
+
         # M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        # a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.) 
+        # a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)
         # a_AU = a_m / AU_m
-        # a1_mas = a_AU/d_pc*1.e3 
+        # a1_mas = a_AU/d_pc*1.e3
         #
 
 
 def mean_anomaly(t_day, T0_day, P_day):
-    return 2*np.pi*(t_day-T0_day)/P_day        
+    return 2*np.pi*(t_day-T0_day)/P_day
     # M_rad= 2*pi*(nu_daym1*t_day - phi0)
-            
-        
+
+
 def eccentric_anomaly(ecc,t_day, T0_day, P_day):
     # following /Users/sahlmann/astro/palta/processing/src/MIKS-GA4FORS_v0.4/genetic/kepler-genetic.i
-    
+
     M_rad = mean_anomaly(t_day, T0_day, P_day)
     if np.all(ecc) == 0.0:
 #         print 'eccentric_anomaly: Assuming circular orbit'
@@ -3321,7 +3329,7 @@ def eccentric_anomaly(ecc,t_day, T0_day, P_day):
         E_rad_tmp = 1000.
         while ( (np.max(np.abs(Enew_rad-E_rad_tmp)) >1.e-8) & (cnt<200) ):
             E_rad_tmp = Enew_rad
-            f   =  E_rad_tmp - ecc*np.sin(E_rad_tmp) - M_rad   
+            f   =  E_rad_tmp - ecc*np.sin(E_rad_tmp) - M_rad
             fp  =  1-ecc*np.cos(E_rad_tmp)#derivee de f par rapport a E
             fpp =  ecc*np.sin(E_rad_tmp)
             # //Enew_rad = E_rad_tmp - f/fp //
@@ -3333,53 +3341,53 @@ def eccentric_anomaly(ecc,t_day, T0_day, P_day):
 
 
 def RadialVelocitiesConstants(k1_mps,om_rad,ecc):
-    
+
     alpha_mps = +k1_mps*np.cos(om_rad)
     beta_mps  = -k1_mps*np.sin(om_rad)
     delta_mps = +k1_mps*ecc*np.cos(om_rad)
-  
+
     return np.array([alpha_mps,beta_mps,delta_mps])
 
 
 def TrueAnomaly(ecc,E_rad):
   # if ( ecc > 0.99) {ecc=0.99}//write,"error, ecc>=0.95, set it arbitrary to 0.3"}
-  # if ( ecc <  0.00) {ecc=0.00}//write,"error, ecc<0., set it arbitrary to 0.3"}   
+  # if ( ecc <  0.00) {ecc=0.00}//write,"error, ecc<0., set it arbitrary to 0.3"}
   #  if (ecc!=0.) theta_rad = 2.*atan( sqrt((1.+ecc)/(1.-ecc))*tan(E_rad/2.) )
   #  if (ecc==0.) theta_rad = E_rad
 
     theta_rad = 2.*np.arctan( np.sqrt((1.+ecc)/(1.-ecc))*np.tan(E_rad/2.) )
-    
+
     # BUG FOUND 2016-02-08, NOT SURE WHERE THIS CAME FROM
     #     theta_rad_tmp = 2.*np.arctan( np.sqrt((1.+ecc)/(1.-ecc))*np.tan(E_rad/2.) )
     #     theta_rad = np.arctan2( np.cos(theta_rad_tmp), np.sin(theta_rad_tmp) )
-    
+
     return theta_rad
 
 
-def RadialVelocitiesKepler(alpha_mps,beta_mps,delta_mps,theta_rad):    
+def RadialVelocitiesKepler(alpha_mps,beta_mps,delta_mps,theta_rad):
     Vrad_mps   = alpha_mps * np.cos(theta_rad) + beta_mps * np.sin(theta_rad) + delta_mps
     return Vrad_mps
 
-    
+
 def EllipticalRectangularCoordinates(ecc,E_rad):
 # /*
 #  * DOCUMENT
 #  *   EllipticalRectangularCoordinates(ecc,E_rad)
 #  *
-#  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$ 
+#  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$
 #  *
 #  *
 #  *   - INPUT
-#  *       - omega_rad Longitude of periastron expressed in radian 
+#  *       - omega_rad Longitude of periastron expressed in radian
 #  *       - ecc Eccentricity
 #  *       - Tp_day Time of passage at periastron (julian date-2400000)
 #  *       - P_day Period of the orbit
 #  *       - t_day Date/time of the observations  (julian date-2400000)
-#  *       
+#  *
 #  *    OUTPUT
 #  *       Position on the sky. Needs the Thieles-Innes coef
-#  *      
-#  *   
+#  *
+#  *
 #  *
 #  *  SEE ALSO EccentricAnomaly
 #  */
@@ -3449,11 +3457,11 @@ def astrom_signal(t_day, psi_deg, ecc, P_day, Tp_day, TIC):
 
     # psi_rad = psi_deg *2*np.pi/360
     psi_rad = np.deg2rad(psi_deg)
-  
-      
+
+
     # compute eccentric anomaly
     E_rad = eccentric_anomaly(ecc, t_day, Tp_day, P_day)
- 
+
     # compute orbit projected on the sky
     if np.all(ecc == 0):
 #       print 'Assuming circular orbit'
@@ -3491,10 +3499,10 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
     -------
 
     """
-        
+
     # compute eccentric anomaly
     E_rad = eccentric_anomaly(ecc,t_day,T0_day,P_day)
- 
+
     # compute orbit projected on the sky
     if np.all(ecc == 0):
         X = np.cos(E_rad)
@@ -3502,7 +3510,7 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC):
     else:
         X = np.cos(E_rad)-ecc
         Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
-        
+
     # pdb.set_trace()
     phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
     # phi = np.multiply((np.multiply(TIC[0],spsi)+np.multiply(TIC[1],cpsi)),X) + np.multiply((np.multiply(TIC[2],spsi) + np.multiply(TIC[3],cpsi)),Y)
@@ -3653,7 +3661,7 @@ def read_ephemeris(horizons_file_seed, overwrite=False, ephemeris_path=None, ver
 
 
 def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=False, instrument=None, overwrite=False):
-    
+
     ephFactor = -1
     RA_rad = np.deg2rad(RA_deg)
     DE_rad = np.deg2rad(DE_deg)
@@ -3664,9 +3672,9 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
         Xip_val = np.zeros(Nepoch)
         Yip_val = np.zeros(Nepoch)
         Zip_val = np.zeros(Nepoch)
-        
+
         for ins in instr:
-            idx = np.where( instrument == ins )[0]                
+            idx = np.where( instrument == ins )[0]
             if verbose:
                 print('Getting Parallax factors for %s using Seed: \t%s' % (ins,ephDict[ins]))
             xyzdata = read_ephemeris(ephDict[ins])
@@ -3675,15 +3683,15 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
             Zip = interp1d(xyzdata['JD'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
 #             if ins=='JWST':
 #                 pdb.set_trace()
-            try:    
+            try:
                 Xip_val[idx] = Xip(t_JD[idx])
                 Yip_val[idx] = Yip(t_JD[idx])
                 Zip_val[idx] = Zip(t_JD[idx])
             except ValueError:
                 print('Error in time interpolation for parallax factors: range %3.1f--%3.2f (%s--%s)\n' % (np.min(t_JD[idx]),np.max(t_JD[idx]), Time(np.min(t_JD[idx]),format='jd',scale='utc').iso, Time(np.max(t_JD[idx]),format='jd',scale='utc').iso )),
-                print('Ephemeris file contains data from %s to %s' % (Time(np.min(xyzdata['JD']),format='jd').iso, Time(np.max(xyzdata['JD']),format='jd').iso)) 
+                print('Ephemeris file contains data from %s to %s' % (Time(np.min(xyzdata['JD']),format='jd').iso, Time(np.max(xyzdata['JD']),format='jd').iso))
                 pdb.set_trace()
-                1/0   
+                1/0
 
             parfRA  = ephFactor* ( Xip_val*np.sin(RA_rad) - Yip_val*np.cos(RA_rad) )
             parfDE =  ephFactor*(( Xip_val*np.cos(RA_rad) + Yip_val*np.sin(RA_rad) )*np.sin(DE_rad) - Zip_val*np.cos(DE_rad))
@@ -3702,7 +3710,7 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
         Yip = interp1d(xyzdata['JDTDB'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
         Zip = interp1d(xyzdata['JDTDB'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
 
-        try:    
+        try:
             parfRA  = ephFactor* ( Xip(t_JD)*np.sin(RA_rad) - Yip(t_JD)*np.cos(RA_rad) )
             parfDE =  ephFactor*(( Xip(t_JD)*np.cos(RA_rad) + Yip(t_JD)*np.sin(RA_rad) )*np.sin(DE_rad) - Zip(t_JD)*np.cos(DE_rad))
         except ValueError:
@@ -3711,8 +3719,8 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
                              'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso, np.min(xyzdata['JDTDB']),np.max(xyzdata['JDTDB']), Time(np.min(xyzdata['JDTDB']),format='jd',scale='utc').iso, Time(np.max(xyzdata['JDTDB']),format='jd',scale='utc').iso
                                                                                 ) )
 
-        
-        
+
+
     return [parfRA,parfDE]
 
 
@@ -3734,7 +3742,7 @@ class SubplotAnimation(animation.TimedAnimation):
         # ax3 = fig.add_subplot(2, 2, 4)
 
         self.t = np.linspace(0, 80, len(phi[0]))
-        
+
         self.x1 = ppm[0]
         self.y1 = ppm[1]
         self.x2 = phi[0]
@@ -3774,7 +3782,7 @@ class SubplotAnimation(animation.TimedAnimation):
         ax2.plot(self.x2,self.y2,'k:')
         ax2.invert_xaxis()
         ax2.set_aspect('equal', 'datalim')
-    
+
         # ax2.set_xlim(-1, 1)
         # ax2.set_ylim(0, 800)
 
@@ -3791,7 +3799,7 @@ class SubplotAnimation(animation.TimedAnimation):
 
         # self._drawn_artists = [self.line1, self.line1a, self.line1e,
         #     self.line2, self.line2a, self.line2e]
-        
+
         animation.TimedAnimation.__init__(self, fig, interval=50, blit=True, repeat = False)
 
     def _draw_frame(self, framedata):
@@ -3833,14 +3841,14 @@ def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=
 #    written: J. Sahlmann   18 May 2015   ESAC
 # */
     m2_MS = m2_MJ * MJ2MS
-    d_pc  = 1./ (plx_mas/1000.)    
+    d_pc  = 1./ (plx_mas/1000.)
     #**************ASTROMETRY********************************************************
     M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
     a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
     a_rad = np.arctan2(a_m,d_pc*pc_m)
-    a_mas = a_rad * rad2mas # semimajor axis in mas 
+    a_mas = a_rad * rad2mas # semimajor axis in mas
     TIC     = pjGet_TIC( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
-    phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC) 
+    phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC)
     return phi1
 
 
@@ -3901,41 +3909,41 @@ class ImagingAstrometryData(object):
         # sort data table by increasing time
         self.time_column_name = 'MJD'
         data_table.sort(self.time_column_name)
-        
+
         self.data_table = data_table
         self.number_of_frames = len(np.unique(self.data_table['frame']))
         self.number_of_observing_blocks = len(np.unique(self.data_table['OB']))
         self.observing_time_span_day = np.ptp(data_table[self.time_column_name])
-        
+
         # unique Julian dates of observations, i.e. of 2D astrometry
         self.observing_times_2D_MJD, unique_index = np.unique(np.array(data_table[self.time_column_name]), return_index=True)
         self.data_2D = self.data_table[unique_index]
-        
+
         self.number_of_1D_measurements = 2 * len(self.data_2D)
-        
+
         self.simbad_object_name = None
         if out_dir is not None:
             self.out_dir = out_dir
         else:
-            self.out_dir = os.getcwd()   
-        
+            self.out_dir = os.getcwd()
+
     def info(self):
         print('Number of OBs: \t %d' % self.number_of_observing_blocks)
         print('Number of frames / measurements: \t %d / %d' % (self.number_of_frames,self.number_of_1D_measurements))
         print('Observation time span: \t %3.1f days' % self.observing_time_span_day)
-        
+
 
     def set_object_coordinates(self, RA_deg=None, Dec_deg=None, overwrite=False):
         if (self.simbad_object_name is None) & (RA_deg is None) & (Dec_deg is None):
             print('Error: provide simbad name or coordinates')
             1/0
         elif (RA_deg is not None) & (Dec_deg is not None):
-            self.RA_deg = RA_deg    
-            self.Dec_deg = Dec_deg    
+            self.RA_deg = RA_deg
+            self.Dec_deg = Dec_deg
             return
-            
+
         elif self.simbad_object_name is not None:
-            
+
             object_string = self.simbad_object_name.replace(' ','')
             outFile = os.path.join(self.out_dir,'%s_simbad_parameters.txt' % object_string)
         if (not(os.path.isfile(outFile))) | (overwrite is True):
@@ -3945,38 +3953,38 @@ class ImagingAstrometryData(object):
             pt.write(outFile, format='ascii.basic',delimiter=',')
         else:
             pt = Table.read(outFile,format='ascii.basic',delimiter=',')
-        
+
         self.simbad_object_parameters = pt
         self.RA_deg  = np.float(self.simbad_object_parameters['RA_d'])
         self.Dec_deg = np.float(self.simbad_object_parameters['DEC_d'])
-        
+
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
-   
+
     def set_five_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None, overwrite=False):
-    
+
         observing_times_2D_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
-        
+
         # compute parallax factors, this is a 2xN_obs array
         observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_JD, horizons_file_seed=earth_ephemeris_file_seed,verbose=verbose, overwrite=overwrite)
-          
-        # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi   
+
+        # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi
         if reference_epoch_MJD is None:
             self.reference_epoch_MJD = np.mean(self.observing_times_2D_MJD)
         else:
-            self.reference_epoch_MJD = reference_epoch_MJD    
+            self.reference_epoch_MJD = reference_epoch_MJD
 
         # time relative to reference epoch in years for proper motion coefficients
         observing_relative_time_2D_year = (self.observing_times_2D_MJD - self.reference_epoch_MJD)/year2day
 
         observing_relative_time_1D_year, observing_1D_cpsi, observing_1D_spsi, self.observing_1D_xi, self.observing_1D_yi = get_spsi_cpsi_for_2Dastrometry( observing_relative_time_2D_year )
 
-        observing_1D_tcpsi = observing_1D_cpsi * observing_relative_time_1D_year      
-        observing_1D_tspsi = observing_1D_spsi * observing_relative_time_1D_year      
-            
+        observing_1D_tcpsi = observing_1D_cpsi * observing_relative_time_1D_year
+        observing_1D_tspsi = observing_1D_spsi * observing_relative_time_1D_year
+
         observing_1D_ppfact = np.zeros(self.number_of_1D_measurements)
         observing_1D_ppfact[self.observing_1D_xi] = observing_parallax_factors[0]
         observing_1D_ppfact[self.observing_1D_yi] = observing_parallax_factors[1]
-                        
+
         self.five_parameter_coefficients_table = Table(np.array([observing_1D_cpsi,observing_1D_spsi,observing_1D_ppfact,observing_1D_tcpsi,observing_1D_tspsi]).T, names=('cpsi','spsi','ppfact','tcpsi','tspsi'))
         self.five_parameter_coefficients_array = np.array([self.five_parameter_coefficients_table[c].data for c in self.five_parameter_coefficients_table.colnames])
         self.observing_relative_time_1D_year = observing_relative_time_1D_year
@@ -3987,12 +3995,12 @@ class ImagingAstrometryData(object):
 
         if not hasattr(self, 'five_parameter_coefficients'):
             self.set_five_parameter_coefficients(earth_ephemeris_file_seed=earth_ephemeris_file_seed, verbose=verbose, reference_epoch_MJD=reference_epoch_MJD)
-            
-            
-        if ('fx[1]' in self.data_2D.colnames) & ('fx[2]' in self.data_2D.colnames):    
-            # the VLT/FORS2 case with a DCR corrector    
-            tmp_2D = self.data_2D[self.time_column_name,'fx[1]','fy[1]','fx[2]','fy[2]'] #,'RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame']            
-        elif ('fx[1]' in self.data_2D.colnames) & ('fx[2]' not in self.data_2D.colnames):    
+
+
+        if ('fx[1]' in self.data_2D.colnames) & ('fx[2]' in self.data_2D.colnames):
+            # the VLT/FORS2 case with a DCR corrector
+            tmp_2D = self.data_2D[self.time_column_name,'fx[1]','fy[1]','fx[2]','fy[2]'] #,'RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame']
+        elif ('fx[1]' in self.data_2D.colnames) & ('fx[2]' not in self.data_2D.colnames):
             # for GTC/OSIRIS, Gemini/GMOS-N/GMOS-S, VLT/HAWK-I
             tmp_2D = self.data_2D[self.time_column_name, 'fx[1]', 'fy[1]']
         elif ('fx[1]' not in self.data_2D.colnames) & ('fx[2]' not in self.data_2D.colnames):
@@ -4006,38 +4014,38 @@ class ImagingAstrometryData(object):
 
         tmp_1D = tablevstack( (tmp_2D,tmp_2D) )
         tmp_1D.sort(self.time_column_name)
-        
-        
+
+
         # sign factors to get DCR coefficients right
         xfactor = -1
         yfactor =  1
 
-        
-        if 'fx[1]' in self.data_2D.colnames:                    
+
+        if 'fx[1]' in self.data_2D.colnames:
             tmp_1D.add_column(Column(name='rho_factor',data=np.zeros(len(tmp_1D))))
             tmp_1D['rho_factor'][self.observing_1D_xi] = xfactor * tmp_1D['fx[1]'][self.observing_1D_xi]
             tmp_1D['rho_factor'][self.observing_1D_yi] = yfactor * tmp_1D['fy[1]'][self.observing_1D_yi]
-        if 'fx[2]' in self.data_2D.colnames:                    
+        if 'fx[2]' in self.data_2D.colnames:
             tmp_1D.add_column(Column(name='d_factor',data=np.zeros(len(tmp_1D))))
             tmp_1D['d_factor'][self.observing_1D_xi] = xfactor * tmp_1D['fx[2]'][self.observing_1D_xi]
             tmp_1D['d_factor'][self.observing_1D_yi] = yfactor * tmp_1D['fy[2]'][self.observing_1D_yi]
-            
-        if self.instrument == 'FORS2':    
-            self.dcr_parameter_coefficients_table = tmp_1D['rho_factor','d_factor']   
+
+        if self.instrument == 'FORS2':
+            self.dcr_parameter_coefficients_table = tmp_1D['rho_factor','d_factor']
         else:
-            self.dcr_parameter_coefficients_table = tmp_1D[['rho_factor']]   
+            self.dcr_parameter_coefficients_table = tmp_1D[['rho_factor']]
 
         self.dcr_parameter_coefficients_array = np.array([self.dcr_parameter_coefficients_table[c].data for c in self.dcr_parameter_coefficients_table.colnames])
-            
-            
+
+
         self.linear_parameter_coefficients_table = tablehstack((self.five_parameter_coefficients_table,self.dcr_parameter_coefficients_table))
         self.linear_parameter_coefficients_array = np.array([self.linear_parameter_coefficients_table[c].data for c in self.linear_parameter_coefficients_table.colnames])
 #     tmp['d'][xi]   = xfactor * tmp['fx[2]'][xi]
 #     tmp['rho'][yi] = yfactor * tmp['fy[1]'][yi]
 #     tmp['d'][yi]   = yfactor * tmp['fy[2]'][yi]
-                            
-    
-    
+
+
+
     def set_data_1D(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None):
         tmp_2D = self.data_2D[self.time_column_name,'RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame']
         tmp_1D = tablevstack( (tmp_2D,tmp_2D) )
@@ -4046,16 +4054,16 @@ class ImagingAstrometryData(object):
 
         if not hasattr(self, 'linear_parameter_coefficients'):
             self.set_linear_parameter_coefficients(earth_ephemeris_file_seed=earth_ephemeris_file_seed, verbose=verbose, reference_epoch_MJD=reference_epoch_MJD)
-        
+
         data_1D = tmp_1D[[self.time_column_name]]
         # astrometric measurement ('abscissa') and uncertainty
         data_1D.add_column(Column(name='da_mas',data=np.zeros(len(data_1D))))
         data_1D.add_column(Column(name='sigma_da_mas',data=np.zeros(len(data_1D))))
-        
+
         data_1D['da_mas'][self.observing_1D_xi] = tmp_1D['RA*_mas'][self.observing_1D_xi]
-        data_1D['da_mas'][self.observing_1D_yi] = tmp_1D['DE_mas'][self.observing_1D_yi] 
-        data_1D['sigma_da_mas'][self.observing_1D_xi] = tmp_1D['sRA*_mas'][self.observing_1D_xi] 
-        data_1D['sigma_da_mas'][self.observing_1D_yi] = tmp_1D['sDE_mas'][self.observing_1D_yi] 
+        data_1D['da_mas'][self.observing_1D_yi] = tmp_1D['DE_mas'][self.observing_1D_yi]
+        data_1D['sigma_da_mas'][self.observing_1D_xi] = tmp_1D['sRA*_mas'][self.observing_1D_xi]
+        data_1D['sigma_da_mas'][self.observing_1D_yi] = tmp_1D['sDE_mas'][self.observing_1D_yi]
 
         for col in ['OB','frame']:
             data_1D[col] = tmp_1D[col]
@@ -4137,6 +4145,6 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
             theta = parameters[i]
             for key,value in theta.items():
                 print('Planet %d: Adopted: %s \t %3.3f' % (i, key, value))
- 
+
     # return theta_best_genome
     return parameters
