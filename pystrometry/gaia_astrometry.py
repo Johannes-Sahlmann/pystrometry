@@ -51,8 +51,26 @@ class GaiaIad(object):
             print('Loaded IAD of {}'.format(self.source_id))
             print(self.epoch_data.info)
 
+        # identify focal plane transits
+        unique_transit_ids = np.unique(self.epoch_data['transitId'])
+        self.transit_id_name = 'OB'
+        self.epoch_data[self.transit_id_name] = np.ones(len(self.epoch_data)).astype(int)
+        for ob_number, transit_id in enumerate(unique_transit_ids):
+            t_index = np.where(self.epoch_data['transitId'] == transit_id)[0]
+            self.epoch_data[self.transit_id_name][t_index] = ob_number + 1
 
-        # self.header, self.epoch_data = load_hipparcos(self.hip_id, self.catalog_dir,
+
+    def set_epoch_median_subtraction(self):
+        """Subtract the median of an epoch from AL/AC measurements and add to table."""
+        self.epoch_data['da_mas_obs_epoch_median_subtracted'] = np.zeros(len(self.epoch_data))
+        for epoch_number in np.unique(self.epoch_data[self.transit_id_name]):
+            t_index = np.where(self.epoch_data[self.transit_id_name] == epoch_number)[0]
+            for direction_index in np.unique(self.epoch_data['direction_AL0_AC1'][t_index]):
+                d_index = t_index[np.where(self.epoch_data['direction_AL0_AC1'][t_index] == direction_index)[0]]
+                self.epoch_data['da_mas_obs_epoch_median_subtracted'][d_index] = self.epoch_data['da_mas_obs'][d_index] - np.median(self.epoch_data['da_mas_obs'][d_index])
+
+
+                # self.header, self.epoch_data = load_hipparcos(self.hip_id, self.catalog_dir,
         #                                               writeModCatPermission=write_modified_iad,
         #                                               verbose=verbose,
         #                                               use_modified_epoch_data=use_modified_epoch_data)
