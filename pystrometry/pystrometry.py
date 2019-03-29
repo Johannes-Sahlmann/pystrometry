@@ -33,7 +33,10 @@ from astropy.time import Time
 from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
 from astroquery.simbad import Simbad
-import pyslalib as sla
+try:
+    import pyslalib as sla
+except ImportError:
+    pass
 import sys
 if sys.version_info[0] == 3:
     # import urllib.request as urllib
@@ -352,7 +355,7 @@ class OrbitSystem(object):
 
         """
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
-        t_plot = Time(t_day, format='mjd').decimalyear
+        t_plot = Time(t_day, format='mjd').jyear
         if component=='primary':
             rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
             pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
@@ -668,7 +671,7 @@ class OrbitSystem(object):
                     delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
                     new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
                     show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
-                    timeformat='decimalyear', name_seed='', verbose=False):
+                    timeformat='jyear', name_seed='', verbose=False):
         """Plot barycentric, photocentric, and relative orbits in two panels.
 
         Parameters
@@ -834,9 +837,9 @@ class OrbitSystem(object):
 
             # plot individual epochs
             if timestamps_probe_2D is not None:
-                axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').decimalyear, phi0_probe_barycentre[xi_probe], 'bo',
+                axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').jyear, phi0_probe_barycentre[xi_probe], 'bo',
                              mfc='0.7', label=timestamps_probe_2D_label)
-                axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').decimalyear, phi0_probe_barycentre[yi_probe], 'bo',
+                axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').jyear, phi0_probe_barycentre[yi_probe], 'bo',
                              mfc='0.7', label=timestamps_probe_2D_label)
 
             pl.show()
@@ -850,7 +853,7 @@ class OrbitSystem(object):
                     delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
                     new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
                     show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
-                    show_difference_to=None, timeformat='decimalyear',
+                    show_difference_to=None, timeformat='jyear',
                     title=None, show_sky=False, name_seed='',
                     **kwargs):
         """Plot the parallax and proper motion of the instance.
@@ -1187,19 +1190,19 @@ class OrbitSystem(object):
         #                             facecolor='w', edgecolor='k', sharex=share_axes,
         #                             sharey=share_axes)
         #     # plot smooth orbit curve
-        #     axes[0].plot(Time(timestamps_curve_1D[xi_curve], format='mjd').decimalyear,
+        #     axes[0].plot(Time(timestamps_curve_1D[xi_curve], format='mjd').jyear,
         #                  phi0_curve_barycentre[xi_curve], 'k-',
         #                  lw=line_width, color=line_color, ls=line_style)
-        #     axes[1].plot(Time(timestamps_curve_1D[yi_curve], format='mjd').decimalyear,
+        #     axes[1].plot(Time(timestamps_curve_1D[yi_curve], format='mjd').jyear,
         #                  phi0_curve_barycentre[yi_curve], 'k-',
         #                  lw=line_width, color=line_color, ls=line_style)
         #
         #     # plot individual epochs
         #     if timestamps_probe_2D is not None:
-        #         axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').decimalyear,
+        #         axes[0].plot(Time(timestamps_probe_1D[xi_probe], format='mjd').jyear,
         #                      phi0_probe_barycentre[xi_probe], 'bo',
         #                      mfc='0.7', label=timestamps_probe_2D_label)
-        #         axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').decimalyear,
+        #         axes[1].plot(Time(timestamps_probe_1D[yi_probe], format='mjd').jyear,
         #                      phi0_probe_barycentre[yi_probe], 'bo',
         #                      mfc='0.7', label=timestamps_probe_2D_label)
         #
@@ -1439,6 +1442,8 @@ class PpmPlotter(object):
                 T = Table([self.T['MJD'][outlier_1D_index.astype(np.int)]], names=['MJD_1D'])
                 T.write(out_file, format='ascii.basic')
 
+            self.outlier_1D_index = outlier_1D_index
+
             self.chi2_naive = np.sum(
                 [self.meanResidualX ** 2 / self.errResidualX ** 2, self.meanResidualY ** 2 / self.errResidualY ** 2])
             self.chi2_laz = np.sum(
@@ -1574,7 +1579,7 @@ class PpmPlotter(object):
         epochOrdinateLabel = 'MJD - %3.1f' % self.tref_MJD
 
         pl.plot(epochTime, self.meanResidualX, 'ko', color='0.7', label='RA')
-        pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='0.7')
+        pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt='none', ecolor='0.7')
         plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
         pl.ylabel('O-C (mas)')
         if residual_y_axis_limit is not None:
@@ -1584,7 +1589,7 @@ class PpmPlotter(object):
                 pl.subplot(n_subplots, 1, 3)
 
             pl.plot(epochTime, self.meanResidualY, 'ko', label='Dec')
-            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt='none', ecolor='k')
             plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
             pl.ylabel('O-C (mas)')
             if residual_y_axis_limit is not None:
@@ -1642,7 +1647,7 @@ class PpmPlotter(object):
             pl.clf()
             pl.plot(self.meanResidualX, self.meanResidualY, 'ko')
             pl.errorbar(self.meanResidualX, self.meanResidualY, xerr=self.errResidualX, yerr=self.errResidualY,
-                        fmt=None, ecolor='k')
+                        fmt='none', ecolor='k')
             pl.axis('equal')
             ax = plt.gca()
             ax.invert_xaxis()
@@ -1671,9 +1676,9 @@ class PpmPlotter(object):
             pl.subplot(3, 1, 3)
             # epochOrdinateLabel = 'MJD - %3.1f' % self.tref_MJD
             pl.plot(epochTime, self.meanResidualX, 'ko', color='0.7')
-            pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None, ecolor='0.7')
+            pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt='none', ecolor='0.7')
             pl.plot(epochTime, self.meanResidualY, 'ko')
-            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt='none', ecolor='k')
             plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
             pl.ylabel('Epoch O-C (mas)')
@@ -1961,6 +1966,8 @@ class AstrometricOrbitPlotter(object):
                 print('{:.12f}'.format(T['MJD'][ii]), end=',')
             print()
 
+        self.outlier_1D_index = np.array(outlier_1D_index).astype(int)
+
         # compute chi squared values
         if self.data_type == '1d':
             self.chi2_naive = np.sum([self.meanResidualX ** 2 / self.errResidualX ** 2])
@@ -2076,6 +2083,9 @@ class AstrometricOrbitPlotter(object):
             argument_dict['frame_omc_description'] = '$N_f={}$, $\Sigma_\\mathrm{{O-C,frame}}$={:2.3f} mas\n' \
                                     '$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
                 len(self.data.epoch_data), np.std(self.residuals), np.mean(self.data.epoch_data['sigma_da_mas']))
+            if 'excess_noise' in argument_dict.keys():
+                argument_dict['frame_omc_description'] += '\nexN = {:2.2f}, mF = {:2.0f}'.format(
+            argument_dict['excess_noise'], argument_dict['merit_function'])
 
         for p in range(self.number_of_companions):
             if argument_dict['orbit_description'] == 'default':
@@ -2294,7 +2304,7 @@ class AstrometricOrbitPlotter(object):
         if direction=='x':
             ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, 'ko')
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, yerr=self.errResidualX,
-                                fmt=None, ecolor='k')
+                                fmt='none', ecolor='k')
             if argument_dict['orbit_description'] is not None:
                 pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',
                         verticalalignment='top', transform=ax.transAxes)
@@ -2311,7 +2321,7 @@ class AstrometricOrbitPlotter(object):
                 axes[0][1].plot(tmpt_day - orb.Tref_MJD, phi2_curve, 'k-')
                 axes[0][1].plot(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, 'ko')
                 axes[0][1].errorbar(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, yerr=self.errResidualY,
-                                    fmt=None, ecolor='k')
+                                    fmt='none', ecolor='k')
                 axes[0][1].set_ylabel('Offset in Dec (mas)')
 
 
@@ -2337,7 +2347,7 @@ class AstrometricOrbitPlotter(object):
         if direction=='x':
             ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX, 'ko')
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX,
-                                yerr=self.errResidualX, fmt=None, ecolor='k')
+                                yerr=self.errResidualX, fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             ax.set_ylabel('O-C (mas)')
             if argument_dict['epoch_omc_description'] is not None:
@@ -2347,7 +2357,7 @@ class AstrometricOrbitPlotter(object):
         elif direction=='y':
             ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
-                                yerr=self.errResidualY, fmt=None, ecolor='k')
+                                yerr=self.errResidualY, fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             ax.set_ylabel('O-C (mas)')
 
@@ -2371,7 +2381,7 @@ class AstrometricOrbitPlotter(object):
 
         # if self.data_type == '1d':
         #     axes[2][0].plot(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, 'ko', mfc='k', ms=4)
-        #     axes[2][0].errorbar(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt=None, ecolor='k')
+        #     axes[2][0].errorbar(self.data.epoch_data['MJD'] - offset_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt='none', ecolor='k')
         #     axes[2][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
         #
         # elif self.data_type == '2d':
@@ -2391,12 +2401,20 @@ class AstrometricOrbitPlotter(object):
 
         if self.data_type == '1d':
             ax.plot(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, 'ko', mfc='k', ms=4)
-            ax.errorbar(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt=None, ecolor='k')
+            ax.errorbar(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+            # 1/0
+            if len(self.outlier_1D_index) != 0:
+                ax.plot(self.data.epoch_data['MJD'][self.outlier_1D_index] - orb.Tref_MJD, self.residuals[self.outlier_1D_index], 'ko', mfc='b',
+                        ms=4)
+                # 1/0
+                ax.errorbar(np.array(self.data.epoch_data['MJD'])[self.outlier_1D_index] - orb.Tref_MJD, self.residuals[self.outlier_1D_index],
+                            yerr=np.array(self.data.epoch_data['sigma_da_mas'])[self.outlier_1D_index], fmt='none', ecolor='b')
 
             # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX, 'ko')
             # ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX,
-            #                     yerr=self.errResidualX, fmt=None, ecolor='k')
+            #                     yerr=self.errResidualX, fmt='none', ecolor='k')
             # ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
             if argument_dict['frame_omc_description'] is not None:
@@ -2416,7 +2434,7 @@ class AstrometricOrbitPlotter(object):
 
             # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
             # ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
-            #                     yerr=self.errResidualY, fmt=None, ecolor='k')
+            #                     yerr=self.errResidualY, fmt='none', ecolor='k')
             # ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
 
@@ -2443,11 +2461,11 @@ class AstrometricOrbitPlotter(object):
         else:
             x_residual_color = 'k'
         pl.plot(epochTime, self.meanResidualX, 'ko', color=x_residual_color)
-        pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt=None,
+        pl.errorbar(epochTime, self.meanResidualX, yerr=self.errResidualX, fmt='none',
                     ecolor=x_residual_color)
         if self.data_type == '2d':
             pl.plot(epochTime, self.meanResidualY, 'ko')
-            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt=None, ecolor='k')
+            pl.errorbar(epochTime, self.meanResidualY, yerr=self.errResidualY, fmt='none', ecolor='k')
         plt.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
         pl.ylabel('O-C (mas)')
@@ -2480,8 +2498,21 @@ class AstrometricOrbitPlotter(object):
         phi1_model_frame = orbit_frame[xi_frame]
         phi2_model_frame = orbit_frame[yi_frame]
 
+        # show periastron
+        if 1:
+
+            t_periastron_mjd, cpsi_periastron, spsi_periastron, xi_periastron, yi_periastron = get_spsi_cpsi_for_2Dastrometry(orb.Tp_day, scan_angle_definition=argument_dict['scan_angle_definition'])
+            orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
+            phi1_model_periastron = orbit_periastron[xi_periastron]
+            phi2_model_periastron = orbit_periastron[yi_periastron]
+            pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], 'k.-', lw=0.5, color='0.5')
+            pl.plot(phi1_model_periastron, phi2_model_periastron, 'ks', color='0.5', mfc='0.5')
+
+
+
         pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5, color='0.5')
         pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
+
 
         if self.data_type in ['1d', 'gaia_2d']:
             # if self.data_type == '1d':
@@ -2532,7 +2563,7 @@ class AstrometricOrbitPlotter(object):
         elif self.data_type == '2d':
             pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
             pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
-                        fmt=None, ecolor='0.6', zorder=-49)
+                        fmt='none', ecolor='0.6', zorder=-49)
             for j in range(len(phi1_model_epoch)):
                 pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]],
                         'k--', color='0.7', zorder=-50)
@@ -3543,9 +3574,9 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
     global ephemeris_dir
 
     if start_time is None:
-        start_time = Time(1950.0, format='decimalyear')
+        start_time = Time(1950.0, format='jyear')
     if stop_time is None:
-        stop_time = Time(2020.0, format='decimalyear')
+        stop_time = Time(2020.0, format='jyear')
 
     if out_dir is not None:
         ephemeris_dir = out_dir
@@ -3962,11 +3993,13 @@ class ImagingAstrometryData(object):
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
    
     def set_five_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None, overwrite=False):
-    
-        observing_times_2D_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
+
+        # TODO
+        # clarify use of tdb here!
+        observing_times_2D_TDB_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
         
         # compute parallax factors, this is a 2xN_obs array
-        observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_JD, horizons_file_seed=earth_ephemeris_file_seed,verbose=verbose, overwrite=overwrite)
+        observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_TDB_JD, horizons_file_seed=earth_ephemeris_file_seed, verbose=verbose, overwrite=overwrite)
           
         # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi   
         if reference_epoch_MJD is None:
