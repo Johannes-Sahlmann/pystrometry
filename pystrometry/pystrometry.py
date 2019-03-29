@@ -439,6 +439,36 @@ class OrbitSystem(object):
         return accel_a, accel_d, accel_mag
 
 
+    # 0J0: Added the following three functions to the class for ease of access
+    #### see about pjGet_DetectionLimits next? ####
+    def pjGet_a_barycentre(self):
+        M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
+             / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+        a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+        d_pc  = 1. / (self.plx_mas / 1000.)
+        a_rad = np.arctan2(a_m, d_pc*pc_m)
+        a_mas = a_rad * rad2mas # semimajor axis in mas
+        return a_mas
+
+
+    def pjGet_a_m_barycentre(self):
+        M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
+             / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+        a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+        return a_m
+
+
+    def pjGet_a_relative(self):
+        a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
+                    / 4. / (np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.))
+        #M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+        #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+        d_pc  = 1./ (self.plx_mas / 1000.)
+        a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
+        a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
+        return a_rel_mas
+
+
     # def pjGetRV(self,t_day):
     def compute_radial_velocity(self, t_day, component='primary'):
         """Compute radial velocity of primary or secondary component.
@@ -3401,27 +3431,30 @@ def pjGet_m2(m1_kg, a_m, P_day):
     return m2_kg
 
 
-def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas ):
-    M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-    a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-    d_pc  = 1./ (plx_mas/1000.)
-    a_rad = np.arctan2(a_m,d_pc*pc_m)
+def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
+    M = (Ggrav * (m2_MJ * MJ_kg)**3.
+         / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+    a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+    d_pc  = 1. / (plx_mas / 1000.)
+    a_rad = np.arctan2(a_m, d_pc*pc_m)
     a_mas = a_rad * rad2mas # semimajor axis in mas
     return a_mas
 
 
-def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day ):
-    M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-    a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
+    M = (Ggrav * (m2_MJ * MJ_kg)**3.
+         / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+    a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
     return a_m
 
 
-def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas ):
-    a_rel_m = (Ggrav*(m1_MS*MS_kg+m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(P_day*day2sec)**2.)**(1./3.)
-#     M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-#     a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-    d_pc  = 1./ (plx_mas/1000.)
-    a_rel_rad = np.arctan2(a_rel_m,d_pc*pc_m)
+def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
+    a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
+                / 4. / (np.pi**2.) * (P_day * day2sec)**2.)**(1./3.))
+    #M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+    #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+    d_pc  = 1./ (plx_mas / 1000.)
+    a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
     a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
     return a_rel_mas
 
