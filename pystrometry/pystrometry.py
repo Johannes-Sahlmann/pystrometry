@@ -362,7 +362,81 @@ class OrbitSystem(object):
             #M_rad = mean_anomaly(t_day,self.Tp_day,self.P_day)
             return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel, THETA_rad, TIC_rel]
 
-        return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
+        return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel]
+
+    # 0J0: Added a function to calculate apparennt proper motion given two times
+    def get_inter_epoch_accel(self, t0, t1):
+        """
+        Get the apparent proper motion of a source from one epoch to another.
+        Estimated by using the parameters of the current `OrbitSystem` class
+        instance to calculate the difference in proper motions of the source
+        from its position at each time, then subtracting one proper motion from
+        the other. (Proxy for acceleration.)
+
+        Parameters
+        ----------
+        t0 : `float`
+            The time (in MJD) of the initial astrometric observation.
+
+        t1 : `float`
+            The time (in MJD) of the final astrometric observation.
+
+        Returns
+        ----------
+        accel_a : `float`
+            The proper motion difference on the Delta alpha axis of motion.
+
+        accel_a : `float`
+            The proper motion difference on the Delta delta axis of motion.
+
+        accel_mag : `float`
+            The magnitude of the previous two proper motion differences.
+        """
+        # The amount of time over which to calculate the derivative of position
+        step = TimeDelta(60 * u.second)
+
+        # Make sure user-given times are interpreted in *JD units
+        assert (t0 + step).format.endswith('jd', -2), 't0/t1 not in *JD units'
+
+        # Get the values of the user-provided times plus the time step
+        t0_plus_step = (t0 + step).value
+        t1_plus_step = (t1 + step).value
+
+        # see about editing get_spsi with better indexing instead of xi/yi
+        t1D, cpsi, spsi, xi, yi = get_spsi_cpsi_for_2Dastrometry(
+            [t0, t0_plus_step, t1, t1_plus_step])
+
+        # Return coordinates of the source at the desired 4 times
+        phis = self.pjGetBarycentricAstrometricOrbitFast(t1D, spsi, cpsi)
+
+        # Separate the result into specific ra/dec arrays
+        del_alpha = phis[yi]; del_delta = phis[xi]
+        #del_alpha = phis[1::2]; del_delta = phis[::2]
+
+        # Calculate change in Delta alpha after the time step at both t0 and t1
+        shift_a0 = del_alpha[1] - del_alpha[0]
+        shift_a1 = del_alpha[3] - del_alpha[2]
+
+        # Differentiate over time to get proper motions in this coordinate
+        # (units of mas/yr)
+        pm_a0 = shift_a0 / ((t0_plus_step - t0) / year2day)
+        pm_a1 = shift_a1 / ((t1_plus_step - t1) / year2day)
+
+        # Do the same for Delta delta
+        shift_d0 = del_delta[1] - del_delta[0]
+        shift_d1 = del_delta[3] - del_delta[2]
+
+        pm_d0 = shift_d0 / ((t0_plus_step - t0) / year2day)
+        pm_d1 = shift_d1 / ((t1_plus_step - t1) / year2day)
+
+        # Estimate acceleration in each coord by subtracting PM @t0 from PM @t1
+        accel_a = pm_a1 - pm_a0
+        accel_d = pm_d1 - pm_d0
+
+        # Get the magnitude of acceleration by taking both coords into account
+        accel_mag = np.sqrt(accel_a**2 + accel_d**2)
+
+        return accel_a, accel_d, accel_mag
 
 
     # def pjGetRV(self,t_day):
