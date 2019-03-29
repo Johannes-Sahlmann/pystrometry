@@ -118,7 +118,8 @@ class OrbitSystem(object):
                         'plx_mas': 25., 'muRA_mas': 20., 'muDE_mas': 50.,
                         'gamma_ms': 0., 'rvLinearDrift_mspyr': None,
                         'rvQuadraticDrift_mspyr': None,
-                        'rvCubicDrift_mspyr': None, 'Tref_MJD': None
+                        'rvCubicDrift_mspyr': None, 'Tref_MJD': None,
+                        'scan_angle_definition': 'hipparcos'
                         }
 
         # Assign user values as attributes when present, use defaults if not
@@ -3221,10 +3222,10 @@ def get_spsi_cpsi_for_2Dastrometry( timestamps_2D , scan_angle_definition='hippa
 
     """
 
-    # every 2D timestamp is duplicated to obtain the 1D timestamps 
+    # every 2D timestamp is duplicated to obtain the 1D timestamps
     timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D)))
     n_1d = len(timestamps_1D)
-    
+
     # compute cos(psi) and sin(psi) factors assuming orthogonal axes
     if scan_angle_definition == 'hipparcos':
         spsi = (np.arange(1, n_1d+1)+1)%2# % first Ra then Dec
@@ -4168,11 +4169,11 @@ class ImagingAstrometryData(object):
         # TODO
         # clarify use of tdb here!
         observing_times_2D_TDB_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
-        
+
         # compute parallax factors, this is a 2xN_obs array
         observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_TDB_JD, horizons_file_seed=earth_ephemeris_file_seed, verbose=verbose, overwrite=overwrite)
-          
-        # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi   
+
+        # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi
         if reference_epoch_MJD is None:
             self.reference_epoch_MJD = np.mean(self.observing_times_2D_MJD)
         else:
