@@ -16,7 +16,6 @@ Notes
 
 
 from __future__ import print_function
-# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 import os
 import numpy as np
@@ -29,7 +28,7 @@ import astropy.units as u
 from scipy.interpolate import *
 import pdb
 from matplotlib.lines import Line2D
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
 from astroquery.simbad import Simbad
@@ -56,7 +55,7 @@ except ModuleNotFoundError:
 # from astrohelpers.functions_and_classes import *
 
 
-# #***********CONSTANTS*********************************************************
+#***********************************CONSTANTS***********************************
 global MS_kg, MJ_kg
 MS_kg = const.M_sun.value
 # MJ_kg = const.M_jup.value
@@ -110,20 +109,69 @@ def fractional_mass(m1, m2):
 
 class OrbitSystem(object):
     "2014-01-29  JSA ESAC"
-    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0., OMEGA_deg=0., i_deg=90., Tp_day=0., RA_deg=0., DE_deg=0., plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0., rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None, rvCubicDrift_mspyr=None, Tref_MJD=None,
-                 attribute_dict=None):
+    # 0J0: streamlined init
+    def __init__(self, attribute_dict={}):
+        # Store default attribute values
+        default_dict = {'P_day': 100, 'ecc': 0, 'm1_MS': 1, 'm2_MJ': 1,
+                        'omega_deg': 0., 'OMEGA_deg': 0., 'i_deg': 90.,
+                        'Tp_day': 0., 'RA_deg': 0., 'DE_deg': 0.,
+                        'plx_mas': 25., 'muRA_mas': 20., 'muDE_mas': 50.,
+                        'gamma_ms': 0., 'rvLinearDrift_mspyr': None,
+                        'rvQuadraticDrift_mspyr': None,
+                        'rvCubicDrift_mspyr': None, 'Tref_MJD': None
+                        }
+
+        # Assign user values as attributes when present, use defaults if not
+        ##### (Has side effect of ignoring keys in attribute_dict #####
+        ##### that aren't present in default_dict -- good or bad?) #####
+        attribute_keys = attribute_dict.keys()
+        for key, val in default_dict.items():
+            if key in attribute_keys:
+                if key == 'm2_MJ':
+                    setattr(self, '_' + key, attribute_dict[key])
+                else:
+                    setattr(self, key, attribute_dict[key])
+            else:
+                if key == 'm2_MJ':
+                    key = '_' + key
+                setattr(self, key, val)
+
+    # 0J0: Assign m2_MJ and m2_MS to properties so their values will be linked
+    @property
+    def m2_MJ(self):
+        return self._m2_MJ
+
+    @m2_MJ.setter
+    def m2_MJ(self, val):
+        self._m2_MJ = val
+
+    @property
+    def m2_MS(self):
+        return self._m2_MJ * MJ_kg / MS_kg
+
+    @m2_MS.setter
+    def m2_MS(self, val):
+        self._m2_MJ = val * MS_kg / MJ_kg
+    '''
+    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0.,
+                 OMEGA_deg=0., i_deg=90., Tp_day=0., RA_deg=0., DE_deg=0.,
+                 plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0.,
+                 rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None,
+                 rvCubicDrift_mspyr=None, Tref_MJD=None, attribute_dict=None):
+
         if attribute_dict is not None:
             for key, value in attribute_dict.items():
                 setattr(self, key, value)
                 print('Setting {} to {}'.format(key, value))
 
-                # set defaults
+            # set defaults
             default_dict = {'gamma_ms': 0.,
                             'rvLinearDrift_mspyr': 0.,
                             'rvQuadraticDrift_mspyr': 0,
                             'rvCubicDrift_mspyr': 0,
                             'scan_angle_definition': 'hipparcos'
                             }
+
             for key, value in default_dict.items():
                 if key not in attribute_dict.keys():
                     setattr(self, key, value)
@@ -149,7 +197,7 @@ class OrbitSystem(object):
             self.Tref_MJD = Tref_MJD
 
         self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
-
+    '''
 
 
 
