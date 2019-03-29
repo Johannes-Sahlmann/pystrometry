@@ -217,16 +217,19 @@ class OrbitSystem(object):
         :return:
         """
 
-        # #***********SYSTEM*PARAMETERS**************************************************
+        #**************************SYSTEM*PARAMETERS***************************
 
+        # Get companion mass in units of solar mass
+        m2_MS = self.m2_MS
+        #m2_MS = self.m2_MJ * MJ_kg/MS_kg # #companion mass in units of SOLAR mass
 
-        m2_MS = self.m2_MJ * MJ_kg/MS_kg # #companion mass in units of SOLAR mass
-        #         gamma_ms = 0. #systemic velocity / m s^-1
+        #gamma_ms = 0. #systemic velocity / m s^-1
         d_pc  = 1./ (self.plx_mas/1000.)
 
         if verbose:
             print("%s " % "++++++++++++++++++++")
-            print("Primary   mass = %1.3f Msol \t = %4.3f Mjup " % (self.m1_MS, self.m1_MS*MS_kg/MJ_kg))
+            print("Primary   mass = %1.3f Msol \t = %4.3f Mjup "
+                  % (self.m1_MS, self.m1_MS*MS_kg/MJ_kg))
             print("Secondary mass = %1.3f Msol \t = %4.3f Mjup \t = %4.3f MEarth " % ( m2_MS, self.m2_MJ, self.m2_MJ*MJ_kg/ME_kg))
             print("Inclination  %1.3f deg " % self.i_deg)
             print("Mass ratio q = %4.6f  " %( m2_MS/self.m1_MS))
@@ -238,7 +241,7 @@ class OrbitSystem(object):
         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
         i_rad =     np.deg2rad(self.i_deg)
 
-        #*************SIMULATION*PARAMATERS*********************************************
+        #*************************SIMULATION*PARAMATERS*************************
         if Norbit is not None:
             t_day = np.linspace(0, self.P_day*Norbit, N) + self.Tref_MJD
         elif t_MJD is not None:
@@ -253,95 +256,111 @@ class OrbitSystem(object):
         # s_aric = 0.1       # error bar on astromeric measurement in mas
         # t_day = span(0,P_day*Norbit,N) + Tp_day   # time vector
 
-        #**************RADIAL*VELOCITY**************************************************
+        #****************************RADIAL*VELOCITY****************************
 
         E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
-        M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+        M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
+             / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
-        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+        a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
         a_AU = a_m / AU_m #  in AU
 
         if 0==1:
-            THETA_rad = 2*np.arctan( np.sqrt( (1+self.ecc)/(1-self.ecc) ) * np.tan( E_rad/2 ) ) #position angle between radius vector and ref
-            THETA_rad = np.arctan2( np.cos(THETA_rad), np.sin(THETA_rad) )
+            THETA_rad = 2 * np.arctan(np.sqrt((1 + self.ecc) / (1 - self.ecc))
+                                      * np.tan(E_rad/2)) #position angle between radius vector and ref
+            THETA_rad = np.arctan2(np.cos(THETA_rad), np.sin(THETA_rad))
 
-            k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
-            rv_ms = k1 * ( np.cos( THETA_rad + omega_rad ) + self.ecc*np.cos(omega_rad) ) + self.gamma_ms #radial velocity in m/s.
+            k1 = (2. * np.pi * a_m * np.sin(i_rad)
+                  / (self.P_day * day2sec * (1. - self.ecc**2)**(1./2.))) #RV semiamplitude
+            rv_ms = k1 * (np.cos( THETA_rad + omega_rad ) +
+                          self.ecc * np.cos(omega_rad)) + self.gamma_ms #radial velocity in m/s.
 
         else: # damien's method
-            THETA_rad = TrueAnomaly(self.ecc,E_rad)
-            k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
-            a_mps = RadialVelocitiesConstants(k1,omega_rad,self.ecc)
-#             print(a_mps
-            rv_ms = RadialVelocitiesKepler(a_mps[0],a_mps[1],a_mps[2],THETA_rad) + self.gamma_ms
+            THETA_rad = TrueAnomaly(self.ecc, E_rad)
+            k1 = (2. * np.pi * a_m * np.sin(i_rad)
+                  / ( self.P_day * day2sec * (1. - self.ecc**2)**(1./2.))) #RV semiamplitude
+            a_mps = RadialVelocitiesConstants(k1, omega_rad, self.ecc)
+            #print(a_mps)
+            rv_ms = (RadialVelocitiesKepler(a_mps[0], a_mps[1],
+                                           a_mps[2], THETA_rad)
+                     + self.gamma_ms)
 
         if self.rvLinearDrift_mspyr is not None:
-            drift_ms = (t_day - self.Tref_MJD)/year2day * self.rvLinearDrift_mspyr
+            drift_ms = ((t_day - self.Tref_MJD)
+                        / year2day * self.rvLinearDrift_mspyr)
             rv_ms += drift_ms
 
         if self.rvQuadraticDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**2 * self.rvQuadraticDrift_mspyr
+            drift_ms = (((t_day - self.Tref_MJD) / year2day)**2
+                        * self.rvQuadraticDrift_mspyr)
             rv_ms += drift_ms
 
         if self.rvCubicDrift_mspyr is not None:
-            drift_ms = ((t_day - self.Tref_MJD)/year2day)**3 * self.rvCubicDrift_mspyr
+            drift_ms = (((t_day - self.Tref_MJD) / year2day)**3
+                        * self.rvCubicDrift_mspyr)
             rv_ms += drift_ms
 
-
-
-        a_rel_AU = (Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(self.P_day*day2sec)**2.)**(1./3.)/AU_m
+        a_rel_AU = (Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg) / 4.
+                    / (np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.) / AU_m
 
         # print('i_deg = %3.2f, om_deg = %3.2f, k1_mps = %3.2f, phi0 = %3.2f, t_day[0] = %3.2f, rv[0] = %3.2f, THETA_rad[0] = %3.2f, E_rad[0] = %2.2f' % (self.i_deg,self.omega_deg,k1, self.Tp_day/self.P_day, t_day[0],rv_ms[0], THETA_rad[0],E_rad[0])
 
         if verbose == 1:
-            print("Astrometric semimajor axis of Primary: a = %3.3f AU \t %6.3f muas " % (a_AU,a_AU/d_pc*1.e6))
-            print("Relative semimajor axis of Primary: a = %3.3f AU \t %6.2f mas " %(a_rel_AU,a_rel_AU/d_pc*1.e3))
+            print("Astrometric semimajor axis of Primary: a = %3.3f AU \t %6.3f muas " % (a_AU, a_AU / d_pc * 1.e6))
+            print("Relative semimajor axis of Primary: a = %3.3f AU \t %6.2f mas " %(a_rel_AU, a_rel_AU / d_pc * 1.e3))
             print("Radial velocity semi-amplitude: K1 =  %4.2f m/s  " % k1)
 
-        #**************ASTROMETRY********************************************************
+        #******************************ASTROMETRY*******************************
         # a_rad = a_m / (d_pc*pc_m) #for small angles
-        a_rad = np.arctan2(a_m,d_pc*pc_m)
+        a_rad = np.arctan2(a_m, d_pc * pc_m)
         # print a_rad, a_rad2
         # 1/0
         a_mas = a_rad * rad2mas # semimajor axis in mas
 
-        aRel_mas = np.arctan2(a_rel_AU*AU_m,d_pc*pc_m) * rad2mas # relative semimajor axis in mas
-#         print 'aRel_mas = %3.3f mas' % aRel_mas
-        TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        TIC_rel = pjGet_TIC( [ aRel_mas, self.omega_deg+180., self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-        # A = TIC[0] B = TIC[1] F = TIC[2] G = TIC[3]
+        aRel_mas = np.arctan2(a_rel_AU * AU_m, d_pc * pc_m) * rad2mas # relative semimajor axis in mas
+        #print 'aRel_mas = %3.3f mas' % aRel_mas
+        TIC = pjGet_TIC([a_mas, self.omega_deg, self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
+        TIC_rel = pjGet_TIC([aRel_mas, self.omega_deg + 180.,
+                             self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
+        #A = TIC[0] B = TIC[1] F = TIC[2] G = TIC[3]
 
         if psi_deg is not None:
             # psi_rad = np.deg2rad(psi_deg)
-            phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
-            phi1_rel = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC_rel)
+            phi1 = astrom_signal(t_day, psi_deg, self.ecc,
+                                 self.P_day, self.Tp_day, TIC)
+            phi1_rel = astrom_signal(t_day, psi_deg, self.ecc,
+                                     self.P_day, self.Tp_day, TIC_rel)
             phi2 = np.nan
             phi2_rel = np.nan
 
         else:
             #first baseline  second baseline
+            #bspread1 = 0.; bspread2 = 0. #baseline spread around offset in deg
             bstart1 = 0.
             bstart2 = 90.    #baseline offset in deg
-#             bspread1 = 0.    bspread2 = 0.    #baseline spread around offset in deg
 
             # for FORS aric + CRIRES RV simulation, the aric measurement gives both axis simultaneously
-            psi_deg1 = np.ones(N)*bstart1# array(bstart1,N)
+            psi_deg1 = np.ones(N) * bstart1 #array(bstart1,N)
             # psi_rad1 = psi_deg1*deg2rad
-            psi_deg2 = np.ones(N)*bstart2
+            psi_deg2 = np.ones(N) * bstart2
             # psi_rad2 = psi_deg2*deg2rad
 
-            phi1 = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC)
-            phi2 = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC)
-            phi1_rel = astrom_signal(t_day, psi_deg1, self.ecc, self.P_day, self.Tp_day, TIC_rel)
-            phi2_rel = astrom_signal(t_day, psi_deg2, self.ecc, self.P_day, self.Tp_day, TIC_rel)
+            phi1 = astrom_signal(t_day, psi_deg1, self.ecc,
+                                 self.P_day, self.Tp_day, TIC)
+            phi2 = astrom_signal(t_day, psi_deg2, self.ecc,
+                                 self.P_day, self.Tp_day, TIC)
+            phi1_rel = astrom_signal(t_day, psi_deg1, self.ecc,
+                                     self.P_day, self.Tp_day, TIC_rel)
+            phi2_rel = astrom_signal(t_day, psi_deg2, self.ecc,
+                                     self.P_day, self.Tp_day, TIC_rel)
 
         if returnMeanAnomaly:
             M_rad = mean_anomaly(t_day, self.Tp_day, self.P_day)
-            return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, M_rad]
+            return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel, M_rad]
 
         elif returnTrueAnomaly:
-#           M_rad = mean_anomaly(t_day,self.Tp_day,self.P_day)
-            return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel, THETA_rad, TIC_rel]
+            #M_rad = mean_anomaly(t_day,self.Tp_day,self.P_day)
+            return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel, THETA_rad, TIC_rel]
 
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
