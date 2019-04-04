@@ -137,6 +137,15 @@ class OrbitSystem(object):
                     key = '_' + key
                 setattr(self, key, val)
 
+        # Warn users if a key in attribute_dict isn't a default attribute
+        mismatch = [key for key in attribute_dict.keys()
+                    if key not in default_dict.keys()]
+        if mismatch:
+            raise KeyError('Key{0} {1} {2} absent in default OrbitClass'
+                           .format('s' if len(mismatch) > 1 else '',
+                                   mismatch,
+                                   'are' if len(mismatch) > 1 else 'is'))
+
     # 0J0: Assign m2_MJ and m2_MS to properties so their values will be linked
     @property
     def m2_MJ(self):
