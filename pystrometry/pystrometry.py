@@ -396,7 +396,7 @@ class OrbitSystem(object):
         accel_a : `float`
             The proper motion difference on the Delta alpha axis of motion.
 
-        accel_a : `float`
+        accel_d : `float`
             The proper motion difference on the Delta delta axis of motion.
 
         accel_mag : `float`
@@ -452,6 +452,16 @@ class OrbitSystem(object):
     # 0J0: Added the following three functions to the class for ease of access
     #### see about pjGet_DetectionLimits next? ####
     def pjGet_a_barycentre(self):
+        '''
+        Get the semi-major axis, in milliarcseconds, of the primary object's
+        orbit around the system barycenter. Relies on parameter values from the
+        current OrbitSystem instance.
+
+        Returns
+        ----------
+        a_barycentre : `float`
+            The apparent semi-major axis of the primary, in milliarcseconds.
+        '''
         M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
              / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -462,6 +472,16 @@ class OrbitSystem(object):
 
 
     def pjGet_a_m_barycentre(self):
+        '''
+        Get the semi-major axis, in meters, of the primary object's orbit
+        around the system barycenter. Relies on parameter values from the
+        current OrbitSystem instance.
+
+        Returns
+        ----------
+        a_m_barycentre : `float`
+            The physical semi-major axis of the primary, in meters.
+        '''
         M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
              / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -469,14 +489,42 @@ class OrbitSystem(object):
 
 
     def pjGet_a_relative(self):
+        '''
+        Get the semi-major axis, in milliarcseconds, of the secondary object's
+        orbit around the primary. Relies on parameter values from the current
+        OrbitSystem instance.
+
+        Returns
+        ----------
+        a_relative : `float`
+            The apparent semi-major axis of the secondary, in milliarcseconds.
+        '''
         a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
-                    / 4. / (np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.))
+                    / 4. / (np.pi**2.)
+                     * (self.P_day * day2sec)**2.)**(1./3.))
         #M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         d_pc  = 1./ (self.plx_mas / 1000.)
         a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
         a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
         return a_rel_mas
+
+
+    def pjGet_a_m_relative(self):
+        '''
+        Get the semi-major axis, in meters, of the secondary object's orbit
+        around the primary. Relies on parameter values from the current
+        OrbitSystem instance.
+
+        Returns
+        ----------
+        a_m_relative : `float`
+            The physical semi-major axis of the secondary, in meters.
+        '''
+        a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
+                    / 4. / (np.pi**2.)
+                    * (self.P_day * day2sec)**2.)**(1./3.))
+        return a_rel_m
 
 
     # def pjGetRV(self,t_day):
@@ -3442,6 +3490,29 @@ def pjGet_m2(m1_kg, a_m, P_day):
 
 
 def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
+    '''
+    Get the semi-major axis, in milliarcseconds, of a primary object's orbit
+    around the system barycenter.
+
+    Parameters
+    ----------
+    m1_MS : `float`
+        The mass of the primary, in solar masses.
+
+    m2_MJ : `float`
+        The mass of the secondary, in Jupiter masses.
+
+    P_day : `float`
+        The period of the secondary, in Earth days.
+
+    plx_mas : `float`
+        The parallax of the primary, in milliarcseconds.
+
+    Returns
+    ----------
+    a_barycentre : `float`
+        The apparent semi-major axis of the primary, in milliarcseconds.
+    '''
     M = (Ggrav * (m2_MJ * MJ_kg)**3.
          / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
     a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -3452,6 +3523,26 @@ def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
 
 
 def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
+    '''
+    Get the semi-major axis, in meters, of a primary object's orbit around the
+    system barycenter.
+
+    Parameters
+    ----------
+    m1_MS : `float`
+        The mass of the primary, in solar masses.
+
+    m2_MJ : `float`
+        The mass of the secondary, in Jupiter masses.
+
+    P_day : `float`
+        The period of the secondary, in Earth days.
+
+    Returns
+    ----------
+    a_m_relative : `float`
+        The physical semi-major axis of the primary, in meters.
+    '''
     M = (Ggrav * (m2_MJ * MJ_kg)**3.
          / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
     a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -3459,14 +3550,65 @@ def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
 
 
 def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
+    '''
+    Get the semi-major axis, in milliarcseconds, of a secondary object's orbit
+    around its primary.
+
+    Parameters
+    ----------
+    m1_MS : `float`
+        The mass of the primary, in solar masses.
+
+    m2_MJ : `float`
+        The mass of the secondary, in Jupiter masses.
+
+    P_day : `float`
+        The period of the secondary, in Earth days.
+
+    plx_mas : `float`
+        The parallax of the primary, in milliarcseconds.
+
+    Returns
+    ----------
+    a_relative : `float`
+        The apparent semi-major axis of the secondary, in milliarcseconds.
+    '''
     a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
-                / 4. / (np.pi**2.) * (P_day * day2sec)**2.)**(1./3.))
+                / 4. / (np.pi**2.)
+                * (P_day * day2sec)**2.)**(1./3.))
     #M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
     #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
     d_pc  = 1./ (plx_mas / 1000.)
     a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
     a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
     return a_rel_mas
+
+
+def pjGet_a_m_relative(m1_MS, m2_MJ, P_day):
+    '''
+    Get the semi-major axis, in meters, of a secondary object's orbit around
+    its primary.
+
+    Parameters
+    ----------
+    m1_MS : `float`
+        The mass of the primary, in solar masses.
+
+    m2_MJ : `float`
+        The mass of the secondary, in Jupiter masses.
+
+    P_day : `float`
+        The period of the secondary, in Earth days.
+
+    Returns
+    ----------
+    a_m_relative : `float`
+        The physical semi-major axis of the secondary, in meters.
+    '''
+    a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
+                / 4. / (np.pi**2.)
+                * (P_day * day2sec)**2.)**(1./3.))
+    return a_rel_m
 
 
 def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
