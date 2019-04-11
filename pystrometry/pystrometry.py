@@ -2490,7 +2490,7 @@ class AstrometricOrbitPlotter(object):
         phi1_model_epoch = orbit_epoch[xi_epoch]
         phi2_model_epoch = orbit_epoch[yi_epoch]
 
-        t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_spsi_cpsi_for_2Dastrometry(self.data.epoch_data['MJD'], scan_angle_definition=argument_dict['scan_angle_definition'])
+        t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_spsi_cpsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
         orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
         phi1_model_frame = orbit_frame[xi_frame]
         phi2_model_frame = orbit_frame[yi_frame]
@@ -3050,8 +3050,11 @@ def get_spsi_cpsi_for_2Dastrometry( timestamps_2D , scan_angle_definition='hippa
 
     """
 
-    # every 2D timestamp is duplicated to obtain the 1D timestamps 
-    timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D)))
+    # every 2D timestamp is duplicated to obtain the 1D timestamps
+    try:
+        timestamps_1D = np.sort(np.hstack((timestamps_2D, timestamps_2D)))
+    except AttributeError:
+        1/0
     n_1d = len(timestamps_1D)
     
     # compute cos(psi) and sin(psi) factors assuming orthogonal axes

@@ -29,7 +29,7 @@ class GaiaIad(object):
 
         # self.cat_entry = HipStar(hip_id, catalog_dir)
 
-    def load_data(self, verbose=0, write_modified_iad=0, use_modified_epoch_data=False):
+    def load_data(self, verbose=0, write_modified_iad=0, use_modified_epoch_data=False, remove_outliers=True):
 
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA.csv'.format(self.source_id))
         self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_DETAILED.csv'.format(self.source_id))
@@ -43,6 +43,17 @@ class GaiaIad(object):
             else:
                 remove_index = np.where(self.epoch_data['direction_AL0_AC1'] == 1)[0]
                 self.epoch_data.remove_rows(remove_index)
+
+        # remove focal plane transit averages used by GA code
+        if 'isOriginal' in self.epoch_data.colnames:
+            remove_index = np.where(self.epoch_data['isOriginal'] == 0)[0]
+            self.epoch_data.remove_rows(remove_index)
+
+
+        if remove_outliers:
+            # remove_index = np.where(self.epoch_data['filterIntFlag'] == 2)[0]
+            remove_index = np.where(self.epoch_data['filterIntFlag'] != 0)[0]
+            self.epoch_data.remove_rows(remove_index)
 
 
         # sort by time
