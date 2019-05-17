@@ -1863,8 +1863,8 @@ class AstrometricOrbitPlotter(object):
 
         for jj, epoch in enumerate(self.medi):
             tmpidx = np.where(T['OB'] == epoch)[0]
+
             if '2d' in self.data_type:
-                # if self.data_type == '2d':
                 tmpIndexX = np.intersect1d(self.xi, tmpidx)
                 tmpIndexY = np.intersect1d(self.yi, tmpidx)
             elif self.data_type == '1d':
@@ -1878,7 +1878,7 @@ class AstrometricOrbitPlotter(object):
                                             weights=1. / (np.array(T['sigma_da_mas'])[tmpIndexX] ** 2.))
             self.Xmean_orb[jj] = np.average(self.orb_meas[tmpIndexX],
                                             weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
-            # if self.data_type == '2d':
+
             if '2d' in self.data_type:
 
                 self.Ymean_ppm[jj] = np.average(self.ppm_meas[tmpIndexY],
@@ -1900,7 +1900,7 @@ class AstrometricOrbitPlotter(object):
             self.meanResidualX[jj] = np.average(residuals[tmpIndexX], weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
             self.parfXmean[jj] = np.average(T['ppfact'][tmpIndexX])
             self.stdResidualX[jj] = np.std(residuals[tmpIndexX])
-            # if self.data_type == '2d':
+
             if '2d' in self.data_type:
                 self.DCR_Ymean[jj] = np.average(self.DCR[tmpIndexY])
                 self.meanResidualY[jj] = np.average(residuals[tmpIndexY], weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
@@ -1912,7 +1912,7 @@ class AstrometricOrbitPlotter(object):
             outliers['x'] = {}
             outliers['x']['index'] = tmpIndexX
             outliers['x']['std_residual'] = self.stdResidualX[jj]
-            # if self.data_type == '2d':
+
             if '2d' in self.data_type:
                 outliers['y'] = {}
                 outliers['y']['index'] = tmpIndexY
@@ -1942,7 +1942,7 @@ class AstrometricOrbitPlotter(object):
 
 
             self.errResidualX[jj] = self.stdResidualX[jj] / np.sqrt(len(tmpIndexX))
-            # if self.data_type == '2d':
+
             if '2d' in self.data_type:
                 self.errResidualY[jj] = self.stdResidualY[jj] / np.sqrt(len(tmpIndexY))
 
@@ -1951,7 +1951,6 @@ class AstrometricOrbitPlotter(object):
                 1 / (T['sigma_da_mas'][tmpIndexX] ** 2.))
             self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (T['sigma_da_mas'][tmpIndexX] ** 2.)));
 
-            # if self.data_type == '2d':
             if '2d' in self.data_type:
                 self.y_e_laz[jj] = np.sum(residuals[tmpIndexY] / (T['sigma_da_mas'][tmpIndexY] ** 2.)) / np.sum(
                     1 / (T['sigma_da_mas'][tmpIndexY] ** 2.))
@@ -1970,7 +1969,6 @@ class AstrometricOrbitPlotter(object):
             self.chi2_naive = np.sum([self.meanResidualX ** 2 / self.errResidualX ** 2])
             self.chi2_laz = np.sum([self.x_e_laz ** 2 / self.errResidualX ** 2])
             self.chi2_star_laz = np.sum([self.x_e_laz ** 2 / self.sx_star_laz ** 2])
-        # elif self.data_type == '2d':
         elif '2d' in self.data_type:
             self.chi2_naive = np.sum(
                 [self.meanResidualX ** 2 / self.errResidualX ** 2, self.meanResidualY ** 2 / self.errResidualY ** 2])
@@ -1982,7 +1980,6 @@ class AstrometricOrbitPlotter(object):
         # fixed 2018-08-18 JSA
         if self.data_type == '1d':
             self.nFree_ep = len(medi) * 1 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
-        # elif self.data_type == '2d':
         elif '2d' in self.data_type:
                 self.nFree_ep = len(medi) * 2 - (linear_coefficient_matrix.shape[0] + number_of_companions*7)
 
@@ -1995,7 +1992,6 @@ class AstrometricOrbitPlotter(object):
             self.epoch_omc_std = self.epoch_omc_std_X
             self.epoch_precision_mean = np.mean([self.errResidualX])
         elif '2d' in self.data_type:
-        # elif self.data_type == '2d':
             self.epoch_omc_std_Y = np.std(self.meanResidualY)
             self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
             self.epoch_precision_mean = np.mean([self.errResidualX, self.errResidualY])
@@ -2003,6 +1999,8 @@ class AstrometricOrbitPlotter(object):
         self.residuals = residuals
 
     def print_residual_statistics(self):
+        """Print statistics to screen."""
+
         print('Epoch residual RMS X %3.3f mas' % (self.epoch_omc_std_X))
         if self.data_type == '2d':
             print('Epoch residual RMS Y %3.3f mas' % (self.epoch_omc_std_Y))
@@ -2030,24 +2028,7 @@ class AstrometricOrbitPlotter(object):
 
         Parameters
         ----------
-        save_plot
-        plot_dir
-        name_seed
-        ppm_description
-        omc2D
-        arrow_offset_x
-        arrow_offset_y
-        arrow_length_factor
-        m1_MS
-        horizons_file_seed
-        orbit_only_panel
-        frame_residual_panel
-        epoch_omc_description
-        orbit_description
-        omc_panel
-
-        Returns
-        -------
+        argument_dict : dict
 
         """
         # set defaults
@@ -2084,6 +2065,7 @@ class AstrometricOrbitPlotter(object):
                 argument_dict['frame_omc_description'] += '\nexN = {:2.2f}, mF = {:2.0f}'.format(
             argument_dict['excess_noise'], argument_dict['merit_function'])
 
+        #  loop over number of companions
         for p in range(self.number_of_companions):
             if argument_dict['orbit_description'] == 'default':
                 argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], self.model_parameters[p]['a_mas'], self.model_parameters[p]['i_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
@@ -2100,7 +2082,6 @@ class AstrometricOrbitPlotter(object):
                 theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
             orb = OrbitSystem(attribute_dict=theta_p)
-
 
             # 1D astrometry overview figure
             if argument_dict['make_1d_overview_figure']:
@@ -2148,7 +2129,6 @@ class AstrometricOrbitPlotter(object):
             ##################################################
             # TRIPLE PANEL FIGURE (PPM + ORBIT + EPOCH RESIDUALS)
             # plot PPM and residuals
-
             if argument_dict['make_condensed_summary_figure']:
                 if argument_dict['frame_residual_panel']:
                     pl.figure(figsize=(6, 9), facecolor='w', edgecolor='k')
@@ -2191,7 +2171,6 @@ class AstrometricOrbitPlotter(object):
                 ##################################################
 
 
-
             ##################################################
             #  ORBIT only
             if argument_dict['orbit_only_panel']:
@@ -2214,7 +2193,6 @@ class AstrometricOrbitPlotter(object):
 
             ##################################################
             # FIGURE SHOWING RA AND Dec OFFSETS AND RESIDUALS
-
             if argument_dict['make_xy_residual_figure']:
                 if self.data_type == '1d':
                     n_columns = 1
@@ -2265,15 +2243,19 @@ class AstrometricOrbitPlotter(object):
                     plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
     def insert_ppm_plot(self, orb, argument_dict):
+        """
+
+        Parameters
+        ----------
+        orb
+        argument_dict
+
+        Returns
+        -------
+
+        """
 
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
-        # tmp = np.arange(1., len(t_curve_mjd_2d) + 1)
-        # xi_curve = np.where(
-        #     np.remainder(tmp + 1, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        # yi_curve = np.where(
-        #     np.remainder(tmp, 2) == 0)  # index of X coordinates (cpsi = 1) psi =  0 deg
-        # cpsi_curve = tmp % 2
-        # spsi_curve = (tmp + 1) % 2
 
         ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
                             offsetDE_mas=orb.offset_delta_mas,
@@ -2311,15 +2293,22 @@ class AstrometricOrbitPlotter(object):
             # ax.set_title(self.title)
 
         elif self.data_type == '2d':
+            timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(
+                self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
+            orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve,
+                                                                   cpsi_curve)
+            phi1_curve = orbit_curve[xi_curve]
+            phi2_curve = orbit_curve[yi_curve]
+
             if direction=='x':
-                ax.plot(tmpt_day - orb.Tref_MJD, phi1_curve, 'k-')
+                ax.plot(self.t_curve_MJD - orb.Tref_MJD, phi1_curve, 'k-')
                 ax.set_ylabel('Offset in RA (mas)')
             elif direction=='y':
-                axes[0][1].plot(tmpt_day - orb.Tref_MJD, phi2_curve, 'k-')
-                axes[0][1].plot(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, 'ko')
-                axes[0][1].errorbar(self.t_MJD_epoch - orb.Tref_MJD, Ymean_orb, yerr=self.errResidualY,
-                                    fmt='none', ecolor='k')
-                axes[0][1].set_ylabel('Offset in Dec (mas)')
+                ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Ymean_orb, 'ko')
+                ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Ymean_orb, yerr=self.errResidualY,
+                            fmt='none', ecolor='k')
+                ax.plot(self.t_curve_MJD - orb.Tref_MJD, phi2_curve, 'k-')
+                ax.set_ylabel('Offset in Dec (mas)')
 
 
 
@@ -2421,12 +2410,12 @@ class AstrometricOrbitPlotter(object):
         elif self.data_type == '2d':
 
             if direction=='x':
-                ax.plot(self.T['MJD'][self.xi] - offset_MJD, self.residuals[self.xi], 'ko')
+                ax.plot(self.data.epoch_data['MJD'][self.xi] - orb.Tref_MJD, self.residuals[self.xi], 'ko')
                 ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
 
             elif direction=='y':
-                ax.plot(self.T['MJD'][self.yi] - offset_MJD, self.residuals[self.yi], 'ko')
+                ax.plot(self.data.epoch_data['MJD'][self.yi] - orb.Tref_MJD, self.residuals[self.yi], 'ko')
                 ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
             # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
@@ -2558,11 +2547,11 @@ class AstrometricOrbitPlotter(object):
                 # dy1_mas = spsi_obs *  myresidual;// *hd.SRES;
 
         elif self.data_type == '2d':
-            pl.plot(Xmean_orb, Ymean_orb, 'ko', ms=8)
-            pl.errorbar(Xmean_orb, Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
+            pl.plot(self.Xmean_orb, self.Ymean_orb, 'ko', ms=8)
+            pl.errorbar(self.Xmean_orb, self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
                         fmt='none', ecolor='0.6', zorder=-49)
             for j in range(len(phi1_model_epoch)):
-                pl.plot([Xmean_orb[j], phi1_model_epoch[j]], [Ymean_orb[j], phi2_model_epoch[j]],
+                pl.plot([self.Xmean_orb[j], phi1_model_epoch[j]], [self.Ymean_orb[j], phi2_model_epoch[j]],
                         'k--', color='0.7', zorder=-50)
 
         # show origin
