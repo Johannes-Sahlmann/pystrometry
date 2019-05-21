@@ -82,7 +82,7 @@ global ephemeris_dir
 ephemeris_dir = '/Users/jsahlmann/astro/palta/processing/data/earthEphemeris/'
 
 
-def fractional_luminosity( mag1 , mag2 ):
+def fractional_luminosity(mag1, mag2):
     """
     defining fraction luminosity of masses M1 and M2 as beta = L2/(L1+L2) and
     mag1-mag2=-2.5 log10(L1/L2), we find
@@ -123,8 +123,6 @@ class OrbitSystem(object):
                         }
 
         # Assign user values as attributes when present, use defaults if not
-        ##### (Has side effect of ignoring keys in attribute_dict #####
-        ##### that aren't present in default_dict -- good or bad?) #####
         attribute_keys = attribute_dict.keys()
         for key, val in default_dict.items():
             if key in attribute_keys:
@@ -162,56 +160,10 @@ class OrbitSystem(object):
     @m2_MS.setter
     def m2_MS(self, val):
         self._m2_MJ = val * MS_kg / MJ_kg
-    '''
-    def __init__(self, P_day=100, ecc=0, m1_MS=1, m2_MJ=1, omega_deg=0.,
-                 OMEGA_deg=0., i_deg=90., Tp_day=0., RA_deg=0., DE_deg=0.,
-                 plx_mas=25., muRA_mas=20., muDE_mas=50., gamma_ms=0.,
-                 rvLinearDrift_mspyr=None, rvQuadraticDrift_mspyr=None,
-                 rvCubicDrift_mspyr=None, Tref_MJD=None, attribute_dict=None):
-
-        if attribute_dict is not None:
-            for key, value in attribute_dict.items():
-                setattr(self, key, value)
-                print('Setting {} to {}'.format(key, value))
-
-            # set defaults
-            default_dict = {'gamma_ms': 0.,
-                            'rvLinearDrift_mspyr': 0.,
-                            'rvQuadraticDrift_mspyr': 0,
-                            'rvCubicDrift_mspyr': 0,
-                            'scan_angle_definition': 'hipparcos'
-                            }
-
-            for key, value in default_dict.items():
-                if key not in attribute_dict.keys():
-                    setattr(self, key, value)
-
-        else:
-            self.P_day = P_day
-            self.ecc = ecc
-            self.m1_MS= m1_MS
-            self.m2_MJ= m2_MJ
-            self.omega_deg = omega_deg
-            self.OMEGA_deg = OMEGA_deg
-            self.i_deg = i_deg
-            self.Tp_day = Tp_day
-            self.RA_deg = RA_deg
-            self.DE_deg = DE_deg
-            self.plx_mas = plx_mas
-            self.muRA_mas = muRA_mas
-            self.muDE_mas = muDE_mas
-            self.gamma_ms = gamma_ms
-            self.rvLinearDrift_mspyr = rvLinearDrift_mspyr
-            self.rvQuadraticDrift_mspyr = rvQuadraticDrift_mspyr
-            self.rvCubicDrift_mspyr = rvCubicDrift_mspyr
-            self.Tref_MJD = Tref_MJD
-
-        self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
-    '''
 
 
-
-    def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0 ):
+    def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None,
+                   verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0):
         """
         DOCUMENT ARV -- simulate simultaneous 2D-astrometric and RV observations
         written: J. Sahlmann   27.07.2009   ObsGe
@@ -452,7 +404,7 @@ class OrbitSystem(object):
     # 0J0: Added the following three functions to the class for ease of access
     #### see about pjGet_DetectionLimits next? ####
     def pjGet_a_barycentre(self):
-        '''
+        """
         Get the semi-major axis, in milliarcseconds, of the primary object's
         orbit around the system barycenter. Relies on parameter values from the
         current OrbitSystem instance.
@@ -461,7 +413,7 @@ class OrbitSystem(object):
         ----------
         a_barycentre : `float`
             The apparent semi-major axis of the primary, in milliarcseconds.
-        '''
+        """
         M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
              / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -472,7 +424,7 @@ class OrbitSystem(object):
 
 
     def pjGet_a_m_barycentre(self):
-        '''
+        """
         Get the semi-major axis, in meters, of the primary object's orbit
         around the system barycenter. Relies on parameter values from the
         current OrbitSystem instance.
@@ -481,7 +433,7 @@ class OrbitSystem(object):
         ----------
         a_m_barycentre : `float`
             The physical semi-major axis of the primary, in meters.
-        '''
+        """
         M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
              / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -489,7 +441,7 @@ class OrbitSystem(object):
 
 
     def pjGet_a_relative(self):
-        '''
+        """
         Get the semi-major axis, in milliarcseconds, of the secondary object's
         orbit around the primary. Relies on parameter values from the current
         OrbitSystem instance.
@@ -498,7 +450,7 @@ class OrbitSystem(object):
         ----------
         a_relative : `float`
             The apparent semi-major axis of the secondary, in milliarcseconds.
-        '''
+        """
         a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
                     / 4. / (np.pi**2.)
                      * (self.P_day * day2sec)**2.)**(1./3.))
@@ -511,7 +463,7 @@ class OrbitSystem(object):
 
 
     def pjGet_a_m_relative(self):
-        '''
+        """
         Get the semi-major axis, in meters, of the secondary object's orbit
         around the primary. Relies on parameter values from the current
         OrbitSystem instance.
@@ -520,7 +472,7 @@ class OrbitSystem(object):
         ----------
         a_m_relative : `float`
             The physical semi-major axis of the secondary, in meters.
-        '''
+        """
         a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
                     / 4. / (np.pi**2.)
                     * (self.P_day * day2sec)**2.)**(1./3.))
@@ -681,14 +633,14 @@ class OrbitSystem(object):
 
 
     def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True, coordinate_system='cartesian'):
-        '''
+        """
         Simulate fast 1D orbital astrometry
         written: J. Sahlmann   18 May 2015   ESAC
         updated: J. Sahlmann   25.01.2016   STScI/ESA
         updated: J. Sahlmann   27 February 2017   STScI/AURA
 
         returns relative orbit in linear or angular units
-        '''
+        """
 
         #mass term of relative orbit
         M_rel = Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg)
@@ -2957,14 +2909,14 @@ class pDetLim(object):
         self.meanResidualRMS = meanResidualRMS
 
     def run_simulation_parallel(self, simulation_run_number=1, log_P_day_grid=True, parallel=True):
-        '''
+        """
         parallelized running of simulations, looping through simulated pseudo-orbits
 
         :param simulation_run_number:
         :param log_P_day_grid:
         :param parallel:
         :return:
-        '''
+        """
 
         # directory to write to
         simulation_dir = os.path.join(self.dwDir, 'simulation/simulation_run_number%d/' % simulation_run_number)
@@ -3490,7 +3442,7 @@ def pjGet_m2(m1_kg, a_m, P_day):
 
 
 def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
-    '''
+    """
     Get the semi-major axis, in milliarcseconds, of a primary object's orbit
     around the system barycenter.
 
@@ -3512,7 +3464,7 @@ def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
     ----------
     a_barycentre : `float`
         The apparent semi-major axis of the primary, in milliarcseconds.
-    '''
+    """
     M = (Ggrav * (m2_MJ * MJ_kg)**3.
          / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
     a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -3523,7 +3475,7 @@ def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
 
 
 def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
-    '''
+    """
     Get the semi-major axis, in meters, of a primary object's orbit around the
     system barycenter.
 
@@ -3540,9 +3492,9 @@ def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
 
     Returns
     ----------
-    a_m_relative : `float`
+    a_m_barycentre : `float`
         The physical semi-major axis of the primary, in meters.
-    '''
+    """
     M = (Ggrav * (m2_MJ * MJ_kg)**3.
          / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
     a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
@@ -3550,7 +3502,7 @@ def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
 
 
 def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
-    '''
+    """
     Get the semi-major axis, in milliarcseconds, of a secondary object's orbit
     around its primary.
 
@@ -3572,7 +3524,7 @@ def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
     ----------
     a_relative : `float`
         The apparent semi-major axis of the secondary, in milliarcseconds.
-    '''
+    """
     a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
                 / 4. / (np.pi**2.)
                 * (P_day * day2sec)**2.)**(1./3.))
@@ -3585,7 +3537,7 @@ def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
 
 
 def pjGet_a_m_relative(m1_MS, m2_MJ, P_day):
-    '''
+    """
     Get the semi-major axis, in meters, of a secondary object's orbit around
     its primary.
 
@@ -3604,7 +3556,7 @@ def pjGet_a_m_relative(m1_MS, m2_MJ, P_day):
     ----------
     a_m_relative : `float`
         The physical semi-major axis of the secondary, in meters.
-    '''
+    """
     a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
                 / 4. / (np.pi**2.)
                 * (P_day * day2sec)**2.)**(1./3.))
@@ -3747,10 +3699,10 @@ def EllipticalRectangularCoordinates(ecc,E_rad):
 
 
 def get_geomElem(TIC):
-    '''
+    """
     compute geometrical elements a, omega, OMEGA, i
     from the input of A B F G
-    '''
+    """
 
     A = TIC[0]
     B = TIC[1]
