@@ -154,9 +154,10 @@ class OrbitSystem(object):
         self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
 
     def __repr__(self):
-        return (
-        "Visit  {}: {:>2} dithers, {:>2} groups, {:>3} observation statements. Uses {}".format(self.id, len(self.dithers),
-                                                                                               len(self.groups), self.number_of_statements, self.templates))
+        description = 'OrbitSystem: '
+        for key in 'P_day m1_MS m2_MJ'.split():
+            description += '{} = {:.3f}\n'.format(key, getattr(self, key))
+        return description
 
 
     def print_parameters(self):
