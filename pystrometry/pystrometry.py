@@ -40,6 +40,9 @@ if sys.version_info[0] == 3:
     from urllib.error import HTTPError
 import pickle
 
+import sympy as sp
+from scipy.optimize import fmin as scipyfmin
+
 #from linearfit import linearfit
 
 # 0J0: In case these packages are not installed, skip so we can continue
@@ -150,7 +153,27 @@ class OrbitSystem(object):
 
         self.m2_MS = self.m2_MJ * MJ_kg/MS_kg
 
+    def __repr__(self):
+        return (
+        "Visit  {}: {:>2} dithers, {:>2} groups, {:>3} observation statements. Uses {}".format(self.id, len(self.dithers),
+                                                                                               len(self.groups), self.number_of_statements, self.templates))
 
+
+    def print_parameters(self):
+
+        d_pc = 1. / (self.plx_mas / 1000.)
+
+        print("%s " % "++++++++++++++++++++")
+        print("Primary   mass = %1.3f Msol \t = %4.3f Mjup " % (
+        self.m1_MS, self.m1_MS * MS_kg / MJ_kg))
+        print("Secondary mass = %1.3f Msol \t = %4.3f Mjup \t = %4.3f MEarth " % (
+        self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg))
+        print("Inclination  %1.3f deg " % self.i_deg)
+        print("Mass ratio q = %4.6f  " % (self.m2_MS / self.m1_MS))
+        print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day, self.ecc))
+        print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
+        print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (
+        self.omega_deg, self.OMEGA_deg, self.Tp_day))
 
 
     def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None, verbose=0, returnMeanAnomaly=0, returnTrueAnomaly=0 ):
@@ -713,7 +736,7 @@ class OrbitSystem(object):
             # fractional luminosity
             beta = fractional_luminosity( 0. , 0.+delta_mag )
             #     fractional mass
-            f = getB(self.m1_MS, self.m2_MS)
+            f = fractional_mass(self.m1_MS, self.m2_MS)
 
             # photocentre orbit about the system's barycentre
             phi0_curve_photocentre = (f - beta) * self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve, shift_omega_by_pi = False)
@@ -741,7 +764,7 @@ class OrbitSystem(object):
             axes[0].plot(phi0_probe_barycentre[xi_probe],phi0_probe_barycentre[yi_probe],'bo',mfc='0.7', label=timestamps_probe_2D_label)
 
         if delta_mag is not None:
-            axes[0].plot(phi0_curve_photocentre[xi_curve],phi0_curve_photocentre[yi_curve],'k-',lw=1, label='Photocentre')
+            axes[0].plot(phi0_curve_photocentre[xi_curve],phi0_curve_photocentre[yi_curve],'k--',lw=1, label='Photocentre')
             if timestamps_probe_2D is not None:
                 axes[0].plot(phi0_probe_photocentre[xi_probe],phi0_probe_photocentre[yi_probe],'bo')
 
@@ -3120,6 +3143,7 @@ def convert_from_angular_to_linear(a_mas, absolute_parallax_mas):
     a_rad = a_mas/rad2mas
     d_pc = 1. / (absolute_parallax_mas / 1000.)
     a_m = np.tan(a_rad) * d_pc*pc_m
+    # a_m = a_rad * d_pc*pc_m
 
     return a_m
 
@@ -3138,60 +3162,64 @@ def convert_from_angular_to_linear(a_mas, absolute_parallax_mas):
 #     """
 
 
-# def keplerian_secondary_mass(m1_kg, a_m, P_day):
-#     """Return companion mass in kg.
-#
-#     Parameters
-#     ----------
-#     m1_kg : float
-#         primary mass in kg
-#     a_m : float
-#         barycentric semimajor axis in meter
-#     P_day : float
-#         orbital period in days
-#
-#     Returns
-#     -------
-#
-#     """
-#     if 0:
-#         import sympy as sp
-#         c = sp.Symbol('c')
-#         g = sp.Symbol('g')
-#         m1 = sp.Symbol('m1')
-#         m2 = sp.Symbol('m2')
-#         # zero_equation = m2 ** 3 / (m1 + m2) ** 2 - c  # == 0
-#         zero_equation = g * m2**3 / (m1 + m2)** 2 - c  # == 0
-#         res = sp.solvers.solve((zero_equation), (m2))
-#         print(res[0])
-#         1/0
-#
-#
-#     if 0:
-#
-#         m1 = m1_kg
-#         c = (4. * np.pi**2. * a_m**3. / ((P_day * day2sec)**2. * Ggrav))
-#
-#         print(m1)
-#         print(c)
-#         term_1 = (c**2. + 6.*c*m1)
-#         term_4 = np.sqrt(-4.*(c**2 + 6*c*m1)**3 + (-2*c**3 - 18. * c**2 * m1 - 27.*c * m1**2)**2)
-#         term_2 = (3.*(-c**3 - 9. * c**2 * m1 - 27. * c * m1**2 /2. + term_4/2.)**(1./3.))
-#         term_5 = np.sqrt(-4.*(c**2.+ 6*c*m1)**3 + (-2*c**3 - 18. * c**2 * m1 - 27.*c * m1**2)**2)
-#         term_3 =     (-c**3 - 9. * c**2 * m1 - 27. * c * m1**2 /2. + term_5/2.)**(1./3.)/3.
-#
-#         print(term_1, term_2, term_3, term_4, term_5)
-#         m2_kg = c/3. - term_1/term_2 - term_3
-#
-#     else:
-#         m1 = m1_kg
-#         c = np.abs(4. * np.pi**2. * a_m**3. / ((P_day * day2sec)**2.))
-#         g = Ggrav
-#         print(c)
-#
-#         m2_kg = c/(3*g) - (c**2/g**2 + 6*c*m1/g)/(3*(-c**3/g**3 - 9*c**2*m1/g**2 - 27*c*m1**2/(2*g) + np.sqrt(-4*(c**2/g**2 + 6*c*m1/g)**3 + (-2*c**3/g**3 - 18*c**2*m1/g**2 - 27*c*m1**2/g)**2)/2.)**(1./3.)) - (-c**3/g**3 - 9*c**2*m1/g**2 - 27*c*m1**2/(2*g) + np.sqrt(-4*(c**2/g**2 + 6*c*m1/g)**3 + (-2*c**3/g**3 - 18*c**2*m1/g**2 - 27*c*m1**2/g)**2)/2.)**(1./3.)/3.
-#
-#     return m2_kg
+
+def companion_mass_in_diluted_system(alpha_mas, absolute_parallax_mas, m1_kg, p_day, delta_mag,
+                                     numeric_solution=True):
+    """Return companion mass given photocenter orbit and delta_mag."""
+
+    g_value = Ggrav / (4 * np.pi**2) * (p_day * day2sec)**2
+    alpha_value = convert_from_angular_to_linear(alpha_mas, absolute_parallax_mas)
+    beta_value = fractional_luminosity(0, delta_mag)
+
+    if numeric_solution:
+        alpha = alpha_value
+        m1 = m1_kg
+        beta = beta_value
+        g = g_value
+
+        zero_equation = lambda m2: g * (m1 + m2) - (alpha / (m2 / (m1 + m2) - beta)) ** 3  # == 0
+
+        # scipyfmin minimizes the given function with a given starting value
+        m2_kg = scipyfmin(zero_equation, m1, disp=False)
+
+        return m2_kg
+
+    else:
+        # from sympy import I
+        alpha = alpha_value
+        m1 = m1_kg
+        beta = beta_value
+        g = g_value
+
+        m2_kg = np.array([-(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3, -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*((-1./2) - np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - ((-1./2) - np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3, -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*((-1./2) + np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - ((-1./2) + np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3])
+
+        # m2_kg = -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1/3.)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1/3.)/3
+
+    if 0:
+
+        # omega = sp.Symbol('omega')
+        alpha = sp.Symbol('alpha')
+        beta = sp.Symbol('beta')
+        g = sp.Symbol('g')
+        # P = sp.Symbol('P')
+        m1 = sp.Symbol('m1')
+        m2 = sp.Symbol('m2')
+        # zero_equation = g * (m1 + m2) * P**2 - (alpha / (omega * (m2/(m1 + m2) - beta)))**3 # == 0
+        zero_equation = g * (m1 + m2) - (alpha / (m2/(m1 + m2) - beta))**3 # == 0
+        res = sp.solvers.solve(zero_equation, m2, check=False)
+        print(sp.python(res))
+        for i, sol in enumerate(res):
+            print('Solution {}'.format(i))
+            if i == 1:
+                # print(sp.python(sol))
+            # sol = res[3]
+            # m2_kg = sol.evalf(subs={g: 3., m1: 15., beta: 0.4, alpha: 4.})
+                m2_kg = sol.evalf(subs={g: g_value, m1: m1_kg, beta: beta_value, alpha: alpha_value})
+                # print(m2_kg)
+
+                return m2_kg
+
+    return m2_kg
 
 
 def pjGet_m2(m1_kg, a_m, P_day):
