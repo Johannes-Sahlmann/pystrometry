@@ -97,6 +97,11 @@ def fractional_luminosity(mag1, mag2):
     """
     return 1./(1. + 10.**(0.4*(mag2-mag1)))
 
+def luminosity_ratio(fractional_lum):
+    """Return luminosity ratio S=L2/L1."""
+
+    return fractional_lum / (1 - fractional_lum)
+
 
 def fractional_mass(m1, m2):
     """
@@ -111,10 +116,38 @@ def fractional_mass(m1, m2):
 
 
 class OrbitSystem(object):
-    "2014-01-29  JSA ESAC"
-    # 0J0: streamlined init
+    """Representation of a binary system following Keplerian motion.
+
+    The primary (m1) is typically the brighter component, i.e.
+    delta_mag = mag2-mag1 is positive. For cases, where the
+    secondary is more massive, the mass ratio q=m2/m1 > 1.
+
+
+    Notes
+    -----
+        These features are supported:
+        - Differential chromatic refraction
+        - Hipparcos and Gaia scan angle definitions
+
+
+    References
+    ----------
+        - Started by JSA 2014-01-29
+        - Streamlined init by OJO
+
+
+    """
     def __init__(self, attribute_dict={}):
-        # Store default attribute values
+        """The default attribute values are stored in the hardcoded
+        dictionary below, which also defines the list of acceptable
+        attributes.
+
+        The content of attribute_dict is transferred to the instance.
+
+        Parameters
+        ----------
+        attribute_dict : dict
+        """
         default_dict = {'P_day': 100, 'ecc': 0, 'm1_MS': 1, 'm2_MJ': 1,
                         'omega_deg': 0., 'OMEGA_deg': 0., 'i_deg': 90.,
                         'Tp_day': 0., 'RA_deg': 0., 'DE_deg': 0.,
@@ -122,7 +155,13 @@ class OrbitSystem(object):
                         'gamma_ms': 0., 'rvLinearDrift_mspyr': None,
                         'rvQuadraticDrift_mspyr': None,
                         'rvCubicDrift_mspyr': None, 'Tref_MJD': None,
-                        'scan_angle_definition': 'hipparcos'
+                        'scan_angle_definition': 'hipparcos',
+                        'rho_mas': None,
+                        'a_mas': None,
+                        'offset_alphastar_mas': None,
+                        'offset_delta_mas': None,
+                        'alpha_mas': None,  # photocenter semimajor axis,
+                        'delta_mag': None,  # magnitude difference between components
                         }
 
         # Assign user values as attributes when present, use defaults if not
@@ -147,6 +186,26 @@ class OrbitSystem(object):
                                    mismatch,
                                    'are' if len(mismatch) > 1 else 'is'))
 
+        # treatment of diluted systems
+        # if ('alpha_mas' in attribute_keys) and ('delta_mag' in attribute_keys):
+        #     absolute_parallax_mas = self.plx_mas
+        #
+        #     # print(self.pjGet_a_barycentre())
+        #     self.m2_MS = companion_mass_in_diluted_system(self.alpha_mas, absolute_parallax_mas,
+        #                                                          self.m1_MS * MS_kg, self.P_day, self.delta_mag) / MS_kg
+        #     self.a_mas = self.pjGet_a_barycentre()
+
+
+        if ('delta_mag' in attribute_keys) and (self.delta_mag is not None):
+            # set photocenter orbit size
+            beta = fractional_luminosity(0., self.delta_mag)
+            f = fractional_mass(self.m1_MS, self.m2_MS)
+            a_rel_mas = self.pjGet_a_relative()
+            self.alpha_mas = (f - beta) * a_rel_mas
+
+
+
+
     # 0J0: Assign m2_MJ and m2_MS to properties so their values will be linked
     @property
     def m2_MJ(self):
@@ -164,28 +223,60 @@ class OrbitSystem(object):
     def m2_MS(self, val):
         self._m2_MJ = val * MS_kg / MJ_kg
 
+    # @property
+    # def delta_mag(self):
+    #     return self._delta_mag
+    #
+    # @delta_mag.setter
+    # def delta_mag(self, val):
+    #     self._delta_mag = val
+    #     if val is not None:
+    #         # set photocenter orbit size
+    #         beta = fractional_luminosity(0., self._delta_mag)
+    #         f = fractional_mass(self.m1_MS, getattr(self, 'm2_MS'))
+    #         a_rel_mas = self.pjGet_a_relative()
+    #         self.alpha_mas = (f - beta) * a_rel_mas
+
     def __repr__(self):
-        description = 'OrbitSystem: '
-        for key in 'P_day m1_MS m2_MJ'.split():
-            description += '{} = {:.3f}\n'.format(key, getattr(self, key))
-        return description
-
-
-    def print_parameters(self):
-
         d_pc = 1. / (self.plx_mas / 1000.)
 
-        print("%s " % "++++++++++++++++++++")
-        print("Primary   mass = %1.3f Msol \t = %4.3f Mjup " % (
-        self.m1_MS, self.m1_MS * MS_kg / MJ_kg))
-        print("Secondary mass = %1.3f Msol \t = %4.3f Mjup \t = %4.3f MEarth " % (
-        self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg))
-        print("Inclination  %1.3f deg " % self.i_deg)
-        print("Mass ratio q = %4.6f  " % (self.m2_MS / self.m1_MS))
-        print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day, self.ecc))
-        print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
-        print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (
-        self.omega_deg, self.OMEGA_deg, self.Tp_day))
+        description = '+'*30 + '\n'
+        description += 'System parameters:\n'
+        description += "Distance is {:2.1f} pc \t Parallax = {:2.1f} mas\n".format(d_pc, self.plx_mas)
+
+        description += "Primary   mass = {:4.3f} Msol \t = {:4.3f} Mjup\n".format(self.m1_MS, self.m1_MS * MS_kg / MJ_kg)
+        description += "Secondary mass = {:4.3f} Msol \t = {:4.3f} Mjup \t = {:4.3f} MEarth\n".format(self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg)
+        description += "Mass ratio q=m2/m1 = {:4.6f}\n".format(self.m2_MS / self.m1_MS)
+
+        description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}\n'.format(self.pjGet_a_barycentre(), self.pjGet_a_relative())
+        if self.delta_mag is not None:
+            description += 'alpha_mas = {:2.3f}, delta_mag = {:2.3f}\n'.format(self.alpha_mas, self.delta_mag)
+            description += 'fract.lum beta = {:2.3f}, lum.ratio=L2/L1 = {:2.3f}\n'.format(fractional_luminosity(0, self.delta_mag), luminosity_ratio(fractional_luminosity(0, self.delta_mag)))
+
+        description += "Inclination  {:2.1f} deg\n".format(self.i_deg)
+        description += "Period is   {:2.1f} day \t Eccentricity = {:2.3f}\n".format(self.P_day, self.ecc)
+        description += "omega = {:2.1f} deg, OMEGA = {:2.1f} deg, T0 = {:2.1f} day\n".format(self.omega_deg, self.OMEGA_deg, self.Tp_day)
+
+        # description = 'OrbitSystem: '
+        # for key in 'P_day m1_MS m2_MS m2_MJ alpha_mas delta_mag a_mas'.split():
+        #     value = str(getattr(self, key))
+        #     description += '{} = {}\n'.format(key, value)
+        return description
+
+    # semimajor axis of the photocenter orbit
+
+    # @property
+    # def alpha_mas(self):
+    #     return self._alpha_mas
+    #
+    # @alpha_mas.setter
+    # def alpha_mas(self, val):
+    #     self._alpha_mas = val
+
+
+
+    # def print_parameters(self):
+
 
         
     def pjGetOrbit(self, N, Norbit=None, t_MJD=None, psi_deg=None,
@@ -352,7 +443,7 @@ class OrbitSystem(object):
 
         return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel]
 
-    # 0J0: Added a function to calculate apparennt proper motion given two times
+    # 0J0: Added a function to calculate apparent proper motion given two times
     def get_inter_epoch_accel(self, t0, t1):
         """
         Get the apparent proper motion of a source from one epoch to another.
@@ -706,87 +797,6 @@ class OrbitSystem(object):
 
         return phi1
 
-
-
-
-
-
-#     def pjGetParameters(self, verbose = 0):
-#         m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-# #         gamma_ms = 0. #systemic velocity / m s^-1
-#         d_pc  = 1./ (self.plx_mas/1000.)
-#         if verbose:
-#             print("%s " % "++++++++++++++++++++")
-#             print("Primary   mass = %1.3f Msol \t = %4.3f Mjup " % (self.m1_MS, self.m1_MS*MS_kg/MJ_kg))
-#             print("Secondary mass = %1.3f Msol \t = %4.3f Mjup \t = %4.3f MEarth " % ( m2_MS, self.m2_MJ, self.m2_MJ*MJ_kg/ME_kg))
-#             print("Inclination  %1.3f deg " % self.i_deg)
-#             print("Mass ratio q = %4.6f  " %( m2_MS/self.m1_MS))
-#             print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day,self.ecc))
-#             print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
-#             print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.Tp_day))
-#
-#         omega_rad = np.deg2rad(self.omega_deg)
-#         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
-#         i_rad     = np.deg2rad(self.i_deg)
-#
-#         #*************SIMULATION*PARAMATERS*********************************************
-#         # Norbit = 2.   #number of orbits covered
-#         # t_day = np.linspace(0,self.P_day*Norbit,N) + self.Tp_day
-#
-#         # R_rv = 50   #number of RV observations
-#         # R_aric = 50   #number of astrometric observations
-#         # gnoise_rv = 0.5  # noise level on RV in m/s RMS
-#         # s_rv = 10.       # error bar on RV measurement in m/s
-#         # gnoise_aric = 0.05  # noise level on astrometry in mas RMS
-#         # s_aric = 0.1       # error bar on astromeric measurement in mas
-#         # t_day = span(0,P_day*Norbit,N) + Tp_day   # time vector
-#
-#
-#         #**************RADIAL*VELOCITY**************************************************
-#
-#         # E_rad = eccentric_anomaly(self.ecc,t_day,self.Tp_day,self.P_day) # eccentric anomaly
-#         # THETA_rad = 2*np.arctan( np.sqrt( (1+self.ecc)/(1-self.ecc) ) * np.tan( E_rad/2 ) ) #position angle between radius vector and ref
-#         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-#         #M = G * ( m1_MS*MS + m2_MJ*MJ ) #relative orbit
-#
-#         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-#         a_AU = a_m / AU_m #  in AU
-#
-#         k1 = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
-#         # rv_ms = k1 * ( np.cos( THETA_rad + omega_rad ) + self.ecc*np.cos(omega_rad) ) + gamma_ms #radial velocity in m/s.
-#
-#         a_rel_AU = (Ggrav*(self.m1_MS*MS_kg+self.m2_MJ*MJ_kg) / 4. /(np.pi**2.) *(self.P_day*day2sec)**2.)**(1./3.)/AU_m
-#         self.a_rel_AU = a_rel_AU
-#         self.a1_mas = a_AU/d_pc*1.e3
-#         if verbose:
-#             print("Astrometric semimajor axis of Primary: a = %3.3f AU \t %6.3f muas " % (a_AU,a_AU/d_pc*1.e6))
-#             print("Relative semimajor axis of Primary: a = %3.3f AU \t %6.2f mas " %(a_rel_AU,a_rel_AU/d_pc*1.e3))
-#             print("Radial velocity semi-amplitude: K1 =  %4.2f m/s  " % k1)
-#
-#         #**************ASTROMETRY********************************************************
-#         a_rad = a_m / (d_pc*pc_m) #for small angles
-#         a_mas = a_rad * rad2mas # semimajor axis in mas
-#
-#         TIC = pjGet_TIC( [ a_mas, self.omega_deg, self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
-#         A = TIC[0] B = TIC[1] F = TIC[2] G = TIC[3]
-#
-#
-#         #first baseline  second baseline
-#         # bstart1 = 0.     bstart2 = 90.    #baseline offset in deg
-#         # bspread1 = 0.    bspread2 = 0.    #baseline spread around offset in deg
-#
-#         # # for FORS aric + CRIRES RV simulation, the aric measurement gives both axis simultaneously
-#         # psi_deg1 = np.ones(N)*bstart1# array(bstart1,N)
-#         # psi_rad1 = psi_deg1*deg2rad
-#         # psi_deg2 = np.ones(N)*bstart2
-#         # psi_rad2 = psi_deg2*deg2rad
-#
-#         # phi1 = astrom_signal(t_day,psi_deg1,self.ecc,self.P_day,self.Tp_day,TIC)
-#         # phi2 = astrom_signal(t_day,psi_deg2,self.ecc,self.P_day,self.Tp_day,TIC)
-
-
-
-#     def getPpm(self,t_MJD,psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, tref_MJD=None, externalParallaxFactors=None, horizons_file_seed=None):
     def ppm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
         """Compute parallax and proper motion.
 
@@ -905,6 +915,9 @@ class OrbitSystem(object):
         -------
 
         """
+        if self.delta_mag is not None:
+            delta_mag = self.delta_mag
+
         if timestamps_curve_2D is None:
             timestamps_curve_2D = np.linspace(self.Tp_day - self.P_day, self.Tp_day + N_orbit + self.P_day, N_curve)
 
@@ -942,13 +955,13 @@ class OrbitSystem(object):
         else:
             axes = pl.gcf().axes
         # plot smooth orbit curve
-        axes[0].plot(phi0_curve_barycentre[xi_curve] ,phi0_curve_barycentre[yi_curve],'k--',lw=line_width, color=line_color, ls=line_style) #, label='Barycentre'
+        axes[0].plot(phi0_curve_barycentre[xi_curve], phi0_curve_barycentre[yi_curve],'k--',lw=line_width, color=line_color, ls=line_style) #, label='Barycentre'
         # plot individual epochs
         if timestamps_probe_2D is not None:
-            axes[0].plot(phi0_probe_barycentre[xi_probe],phi0_probe_barycentre[yi_probe],'bo',mfc='0.7', label=timestamps_probe_2D_label)
+            axes[0].plot(phi0_probe_barycentre[xi_probe], phi0_probe_barycentre[yi_probe],'bo',mfc='0.7', label=timestamps_probe_2D_label)
 
         if delta_mag is not None:
-            axes[0].plot(phi0_curve_photocentre[xi_curve],phi0_curve_photocentre[yi_curve],'k--',lw=1, label='Photocentre')
+            axes[0].plot(phi0_curve_photocentre[xi_curve], phi0_curve_photocentre[yi_curve],'k--',lw=1, label='Photocentre')
             if timestamps_probe_2D is not None:
                 axes[0].plot(phi0_probe_photocentre[xi_probe],phi0_probe_photocentre[yi_probe],'bo')
 
