@@ -162,6 +162,8 @@ class OrbitSystem(object):
                         'offset_delta_mas': None,
                         'alpha_mas': None,  # photocenter semimajor axis,
                         'delta_mag': None,  # magnitude difference between components
+                        'nuisance_x': None,  # nuisance parameters used when performing MCMC analyses 
+                        'nuisance_y': None,  # nuisance parameters used when performing MCMC analyses 
                         }
 
         # Assign user values as attributes when present, use defaults if not
@@ -202,7 +204,8 @@ class OrbitSystem(object):
             f = fractional_mass(self.m1_MS, self.m2_MS)
             a_rel_mas = self.pjGet_a_relative()
             self.alpha_mas = (f - beta) * a_rel_mas
-
+        else:
+            self.a_mas  = self.alpha_mas
 
 
 
@@ -251,7 +254,7 @@ class OrbitSystem(object):
         description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}\n'.format(self.pjGet_a_barycentre(), self.pjGet_a_relative())
         if self.delta_mag is not None:
             description += 'alpha_mas = {:2.3f}, delta_mag = {:2.3f}\n'.format(self.alpha_mas, self.delta_mag)
-            description += 'fract.lum beta = {:2.3f}, lum.ratio=L2/L1 = {:2.3f}\n'.format(fractional_luminosity(0, self.delta_mag), luminosity_ratio(fractional_luminosity(0, self.delta_mag)))
+            description += 'fract.lum beta = {:2.4f}, lum.ratio=L2/L1 = {:2.4f}\n'.format(fractional_luminosity(0, self.delta_mag), luminosity_ratio(fractional_luminosity(0, self.delta_mag)))
 
         description += "Inclination  {:2.1f} deg\n".format(self.i_deg)
         description += "Period is   {:2.1f} day \t Eccentricity = {:2.3f}\n".format(self.P_day, self.ecc)
@@ -649,20 +652,25 @@ class OrbitSystem(object):
         return rv_ms
 
 
-    def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k', line_style='-', line_width=1, rv_factor=1., time_offset_day=0.):
+    def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
+                      line_style='-', line_width=1, rv_unit='km/s', time_offset_day=0.,
+                      gamma_mps=0.):
         """Plot the radial velocity orbit of the primary
 
         Returns
         -------
 
         """
+
+        if rv_unit == 'km/s':
+            rv_factor = 1/1000.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = Time(t_day, format='mjd').jyear
         if component=='primary':
-            rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
+            rv_mps = (self.compute_radial_velocity(t_day, component=component) + gamma_mps) * rv_factor
             pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='secondary':
-            rv_mps = self.compute_radial_velocity(t_day, component=component) * rv_factor
+            rv_mps = (self.compute_radial_velocity(t_day, component=component) + gamma_mps) * rv_factor
             pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='both':
             rv_mps_1 = self.compute_radial_velocity(t_day, component='primary') * rv_factor
@@ -747,6 +755,29 @@ class OrbitSystem(object):
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC, scan_angle_definition=self.scan_angle_definition)
         # phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
         return phi1
+
+
+    def photocenter_orbit(self, t_MJD, spsi, cpsi):
+        """Return the photocenter displacement at the input times.
+
+        Parameters
+        ----------
+        t_MJD
+        spsi
+        cpsi
+
+        Returns
+        -------
+
+        """
+        if (self.delta_mag is None) or (self.delta_mag == 0):
+            return self.pjGetBarycentricAstrometricOrbitFast(t_MJD, spsi, cpsi)
+        else:
+            relative_orbit_mas = self.relative_orbit_fast(t_MJD, spsi, cpsi, shift_omega_by_pi=False)
+            beta = fractional_luminosity(0., self.delta_mag)
+            f = fractional_mass(self.m1_MS, self.m2_MS)
+            photocentric_orbit_mas = (f - beta) * relative_orbit_mas
+            return photocentric_orbit_mas
 
 
     def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True, coordinate_system='cartesian'):
@@ -2000,7 +2031,7 @@ class AstrometricOrbitPlotter(object):
         theta_names = theta_0.keys()
 
         if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
-            theta_0['plx_mas ']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
+            theta_0['plx_mas']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
 
         # compute positions at measurement dates according to best-fit model p (no dcr)
         ppm_parameters = np.array([theta_0['offset_alphastar_mas'], theta_0['offset_delta_mas'],
@@ -2288,7 +2319,7 @@ class AstrometricOrbitPlotter(object):
         #  loop over number of companions
         for p in range(self.number_of_companions):
             if argument_dict['orbit_description'] == 'default':
-                argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], self.model_parameters[p]['a_mas'], self.model_parameters[p]['i_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
+                argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], getattr(self, 'orbit_system_companion_{:d}'.format(p)).alpha_mas, self.model_parameters[p]['i_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
             else:
                 argument_dict['tmp_orbit_description'] = argument_dict['orbit_description']
 
@@ -2630,13 +2661,21 @@ class AstrometricOrbitPlotter(object):
         elif self.data_type == '2d':
 
             if direction=='x':
-                ax.plot(self.data.epoch_data['MJD'][self.xi] - orb.Tref_MJD, self.residuals[self.xi], 'ko')
-                ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
-
-
+                tmp_index =  self.xi
             elif direction=='y':
-                ax.plot(self.data.epoch_data['MJD'][self.yi] - orb.Tref_MJD, self.residuals[self.yi], 'ko')
-                ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+                tmp_index = self.yi
+
+            # mfc = 'none'
+            mec= '0.4'
+            mfc = mec
+            marker='.'
+            alpha = 0.5
+            ax.plot(self.data.epoch_data['MJD'][tmp_index] - orb.Tref_MJD, self.residuals[tmp_index], mec=mec, mfc=mfc, marker=marker, ls='none', alpha=alpha)
+            ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
+
+
+                # ax.plot(self.data.epoch_data['MJD'][self.yi] - orb.Tref_MJD, self.residuals[self.yi], 'ko', mfc=mfc)
+                # ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
             # ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
             # ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
