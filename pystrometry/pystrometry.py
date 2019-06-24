@@ -51,6 +51,8 @@ try:
 except ModuleNotFoundError:
     pass
 
+from .utils import mcmc_helpers
+
 # from modules.functionsAndClasses import *
 # from .functionsAndClasses import *
 # import sys
@@ -163,7 +165,11 @@ class OrbitSystem(object):
                         'alpha_mas': None,  # photocenter semimajor axis,
                         'delta_mag': None,  # magnitude difference between components
                         'nuisance_x': None,  # nuisance parameters used when performing MCMC analyses 
-                        'nuisance_y': None,  # nuisance parameters used when performing MCMC analyses 
+                        'nuisance_y': None,  # nuisance parameters used when performing MCMC analyses
+                        'esinw': None,  # sqrt(ecc) * sin(omega), alternative variable set for MCMC
+                        'ecosw': None,  # sqrt(ecc) * cos(omega)
+                        'm2sini': None,  # sqrt(m2_MJ) * sin(inclination), alternative variable set for MCMC
+                        'm2cosi': None,  # sqrt(m2_MJ) * cos(inclination)
                         }
 
         # Assign user values as attributes when present, use defaults if not
@@ -197,6 +203,12 @@ class OrbitSystem(object):
         #                                                          self.m1_MS * MS_kg, self.P_day, self.delta_mag) / MS_kg
         #     self.a_mas = self.pjGet_a_barycentre()
 
+        # decode alternative parameter sets
+        if ('esinw' in attribute_keys) and (self.esinw is not None):
+            self.ecc, self.omega_deg = mcmc_helpers.decode_eccentricity_omega(self.esinw, self.ecosw)
+        if ('m2sini' in attribute_keys) and (self.m2sini is not None):
+            self.m2_MJ, self.i_deg = mcmc_helpers.decode_eccentricity_omega(self.m2sini, self.m2cosi)
+            self._m2_MJ = self.m2_MJ
 
         if ('delta_mag' in attribute_keys) and (self.delta_mag is not None):
             # set photocenter orbit size
@@ -259,6 +271,7 @@ class OrbitSystem(object):
         description += "Inclination  {:2.1f} deg\n".format(self.i_deg)
         description += "Period is   {:2.1f} day \t Eccentricity = {:2.3f}\n".format(self.P_day, self.ecc)
         description += "omega = {:2.1f} deg, OMEGA = {:2.1f} deg, T0 = {:2.1f} day\n".format(self.omega_deg, self.OMEGA_deg, self.Tp_day)
+        description += "RV semi-amplitude of primary = {:2.3f} m/s\n".format(self.rv_semiamplitude_mps())
 
         # description = 'OrbitSystem: '
         # for key in 'P_day m1_MS m2_MS m2_MJ alpha_mas delta_mag a_mas'.split():
@@ -599,9 +612,24 @@ class OrbitSystem(object):
         return a_rel_m
 
 
+    def rv_semiamplitude_mps(self, component='primary'):
+        """Return semi-amplitude of radial velocity orbit."""
+
+        if component=='primary':
+            M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+        elif component == 'secondary':
+            M = Ggrav * (self.m1_MS * MS_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the secondary mass
+
+        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the component mass in m
+
+        k_mps = 2. * np.pi * a_m * np.sin(np.deg2rad(self.i_deg)) / (
+        self.P_day * day2sec * (1. - self.ecc ** 2) ** (1. / 2.))  # RV semiamplitude
+
+        return k_mps
+
     # def pjGetRV(self,t_day):
     def compute_radial_velocity(self, t_day, component='primary'):
-        """Compute radial velocity of primary or secondary component.
+        """Compute radial velocity of primary or secondary component in m/s.
 
          updated: J. Sahlmann   25.01.2016   STScI/ESA
          updated: J. Sahlmann   13.07.2018   STScI/AURA
@@ -613,27 +641,30 @@ class OrbitSystem(object):
 
         Returns
         -------
+        rv_ms : ndarray
+            RV in m/s
 
         """
 
         # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-        i_rad =     np.deg2rad(self.i_deg)
+        # i_rad =     np.deg2rad(self.i_deg)
 
         #**************RADIAL*VELOCITY**************************************************
         E_rad = eccentric_anomaly(self.ecc, t_day, self.Tp_day, self.P_day) # eccentric anomaly
         if component=='primary':
-            M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+            # M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
             omega_rad = np.deg2rad(self.omega_deg)
         elif component == 'secondary':
-            M = Ggrav * (self.m1_MS * MS_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the secondary mass
+            # M = Ggrav * (self.m1_MS * MS_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the secondary mass
             omega_rad = np.deg2rad(self.omega_deg + 180.)
 
-        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the component mass in m
+        # a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the component mass in m
         # a_AU = a_m / AU_m #  in AU
 
         # damien's method
-        THETA_rad = TrueAnomaly(self.ecc,E_rad)
-        k_m = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
+        THETA_rad = TrueAnomaly(self.ecc, E_rad)
+        # k_m = 2. * np.pi * a_m * np.sin(i_rad) / ( self.P_day*day2sec * (1.-self.ecc**2)**(1./2.) ) #RV semiamplitude
+        k_m = self.rv_semiamplitude_mps(component=component)
         a_mps = RadialVelocitiesConstants(k_m, omega_rad, self.ecc)
         rv_ms = RadialVelocitiesKepler(a_mps[0], a_mps[1], a_mps[2], THETA_rad) + self.gamma_ms
 
@@ -904,7 +935,7 @@ class OrbitSystem(object):
         inVec = np.array([offsetRA_mas, offsetDE_mas, self.plx_mas, self.muRA_mas, self.muDE_mas])
         print(inVec)
         ppm = np.dot(C.T, inVec)
-        self.ppm = ppm
+        # self.ppm = ppm
         if psi_deg is not None:
             return ppm
         else:
@@ -1733,9 +1764,14 @@ class PpmPlotter(object):
         """
 
         if self.noParallaxFit != 1:
-            orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., Tp_day=0,
-                              RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=self.p[2], muRA_mas=self.p[3],
-                              muDE_mas=self.p[4], Tref_MJD=self.tref_MJD)
+            # orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., Tp_day=0,
+            #                   RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=self.p[2], muRA_mas=self.p[3],
+            #                   muDE_mas=self.p[4], Tref_MJD=self.tref_MJD)
+            argument_dict = {'m2_MJ'   : 0, 'RA_deg': self.RA_deg, 'DE_deg': self.DE_deg,
+                             'plx_mas' : self.p[2], 'muRA_mas': self.p[3], 'muDE_mas': self.p[4],
+                             'Tref_MJD': self.tref_MJD, }
+            orb = OrbitSystem(argument_dict)
+
         else:
             orb = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0., Tp_day=0,
                               RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=0, muRA_mas=self.p[2],
@@ -1781,10 +1817,8 @@ class PpmPlotter(object):
 
         if instrument is None:
             if psi_deg is None:
-                ppm_curve = orb.ppm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                                    horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
-            ppm_meas = orb.ppm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1],
-                               horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+                ppm_curve = orb.ppm(self.tmodel_MJD, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1], horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
+            # ppm_meas = orb.ppm(self.t_MJD_epoch, offsetRA_mas=self.p[0], offsetDE_mas=self.p[1], horizons_file_seed=horizons_file_seed, psi_deg=psi_deg)
             if psi_deg is None:
                 pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
                 pl.plot(self.Xmean, self.Ymean, 'ko')
@@ -2038,6 +2072,17 @@ class AstrometricOrbitPlotter(object):
                           theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
 
         self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
+
+        if ('esinw' in theta_names):
+            # self.ecc, self.omega_deg = mcmc_helpers.decode_eccentricity_omega(theta_0['esinw'], theta_0['ecosw'])
+            for p in range(number_of_companions):
+                self.model_parameters[p]['ecc'], self.model_parameters[p]['omega_deg'] = \
+                    mcmc_helpers.decode_eccentricity_omega(self.model_parameters[p]['esinw'], self.model_parameters[p]['ecosw'])
+        if ('m2sini' in theta_names):
+            for p in range(number_of_companions):
+                self.model_parameters[p]['m2_MJ'], self.model_parameters[p]['i_deg'] = \
+                    mcmc_helpers.decode_eccentricity_omega(self.model_parameters[p]['m2sini'], self.model_parameters[p]['m2cosi'])
+
 
         if 'rho_mas' in theta_names:
             if 'd_mas' in theta_names:
