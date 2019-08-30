@@ -48,7 +48,8 @@ from scipy.optimize import fmin as scipyfmin
 try:
     import pyslalib as sla
     from linearfit import linearfit
-except ModuleNotFoundError:
+# except (ImportError, ModuleNotFoundError):
+except (ImportError):
     pass
 
 from .utils import mcmc_helpers
@@ -117,6 +118,67 @@ def fractional_mass(m1, m2):
     return m2/(m1+m2)
 
 
+def periastron_time(lambda_ref_deg, omega_deg, t_ref_mjd, p_day):
+    """Return time of periastron passage.
+
+
+    Parameters
+    ----------
+    lambda_ref_deg : float
+        mean_longitude_at_reference_time
+    omega_deg : float
+        argument of periastron
+    t_ref_mjd : float
+        reference time in MJD (e.g. mid-time of observations)
+    p_day : float
+        orbital period
+
+    Returns
+    -------
+
+    """
+    # mean anomaly at reference date
+    m_ref_deg = lambda_ref_deg - omega_deg
+
+    # phase at pericentre passage
+    # phi0_1 = - np.deg2rad(m_ref_deg)/2./np.pi
+
+    # Tp_day = phi0_1 * P_day + TRef_MJD
+    # time at periastron
+    t_periastron_mjd = t_ref_mjd - p_day * np.deg2rad(m_ref_deg) / (2*np.pi)
+
+    return t_periastron_mjd
+
+
+def mean_longitude(t_periastron_mjd, omega_deg, t_mjd, p_day):
+    """Return mean longitude at time t_mjd.
+
+    Parameters
+    ----------
+    t_periastron_mjd : float
+        time of periastron passage in MJD
+    omega_deg : float
+        argument of periastron
+    t_ref_mjd : float
+        reference time in MJD (e.g. mid-time of observations)
+    p_day : float
+        orbital period
+
+    Returns
+    -------
+    lambda_deg
+
+    """
+
+    # mean anomaly
+    m_deg = np.rad2deg((t_mjd - t_periastron_mjd) * (2 * np.pi)/p_day)
+
+    # mean longitude
+    lambda_deg = m_deg + omega_deg
+
+    return lambda_deg
+
+
 class OrbitSystem(object):
     """Representation of a binary system following Keplerian motion.
 
@@ -170,6 +232,7 @@ class OrbitSystem(object):
                         'ecosw': None,  # sqrt(ecc) * cos(omega)
                         'm2sini': None,  # sqrt(m2_MJ) * sin(inclination), alternative variable set for MCMC
                         'm2cosi': None,  # sqrt(m2_MJ) * cos(inclination)
+                        'lambda_ref': None  # mean longitude at reference time, substitute for time of periastron
                         }
 
         # Assign user values as attributes when present, use defaults if not
@@ -210,6 +273,9 @@ class OrbitSystem(object):
             self.m2_MJ, self.i_deg = mcmc_helpers.decode_eccentricity_omega(self.m2sini, self.m2cosi)
             self._m2_MJ = self.m2_MJ
 
+        if ('lambda_ref' in attribute_keys) and (self.lambda_ref is not None):
+            self.Tp_day = periastron_time(self.lambda_ref, self.omega_deg, self.Tref_MJD, self.P_day)
+
         if ('delta_mag' in attribute_keys) and (self.delta_mag is not None):
             # set photocenter orbit size
             beta = fractional_luminosity(0., self.delta_mag)
@@ -217,6 +283,7 @@ class OrbitSystem(object):
             a_rel_mas = self.pjGet_a_relative()
             self.alpha_mas = (f - beta) * a_rel_mas
         else:
+            self.alpha_mas = self.pjGet_a_barycentre()
             self.a_mas  = self.alpha_mas
 
 
@@ -685,7 +752,7 @@ class OrbitSystem(object):
 
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
                       line_style='-', line_width=1, rv_unit='km/s', time_offset_day=0.,
-                      gamma_mps=0.):
+                      gamma_mps=None):
         """Plot the radial velocity orbit of the primary
 
         Returns
@@ -693,19 +760,22 @@ class OrbitSystem(object):
 
         """
 
+        # if gamma_mps is None:
+        #     gamma_mps = self.gamma_ms
+
         if rv_unit == 'km/s':
             rv_factor = 1/1000.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = Time(t_day, format='mjd').jyear
         if component=='primary':
-            rv_mps = (self.compute_radial_velocity(t_day, component=component) + gamma_mps) * rv_factor
+            rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='secondary':
-            rv_mps = (self.compute_radial_velocity(t_day, component=component) + gamma_mps) * rv_factor
+            rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='both':
-            rv_mps_1 = self.compute_radial_velocity(t_day, component='primary') * rv_factor
-            rv_mps_2 = self.compute_radial_velocity(t_day, component='secondary') * rv_factor
+            rv_mps_1 = (self.compute_radial_velocity(t_day, component='primary')) * rv_factor
+            rv_mps_2 = (self.compute_radial_velocity(t_day, component='secondary')) * rv_factor
             pl.plot(t_plot, rv_mps_1, ls=line_style, color=line_color, lw=line_width+2, label='primary')
             pl.plot(t_plot, rv_mps_2, ls=line_style, color=line_color, lw=line_width, label='secondary')
         elif component=='difference':
