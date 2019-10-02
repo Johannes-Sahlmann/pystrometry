@@ -2114,7 +2114,8 @@ class AstrometricOrbitPlotter(object):
             default_dict = {'outlier_sigma_threshold': 3.,
                             'absolute_threshold': 10.,
                             'residuals': None,
-                            'scan_angle_definition': 'hipparcos'
+                            'scan_angle_definition': 'hipparcos',
+                            'include_ppm': True,
                             }
 
             for key, value in default_dict.items():
@@ -2141,7 +2142,11 @@ class AstrometricOrbitPlotter(object):
         ppm_parameters = np.array([theta_0['offset_alphastar_mas'], theta_0['offset_delta_mas'],
                           theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
 
-        self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
+        if self.include_ppm:
+            self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
+        else:
+            self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:2, :].T, ppm_parameters[0:2])).flatten()
+            # self.ppm_model = np.zeros(linear_coefficient_matrix.shape[1])
 
         if ('esinw' in theta_names):
             # self.ecc, self.omega_deg = mcmc_helpers.decode_eccentricity_omega(theta_0['esinw'], theta_0['ecosw'])
@@ -2165,6 +2170,8 @@ class AstrometricOrbitPlotter(object):
                 dcr = np.dot(linear_coefficient_matrix[5:7, :].T, dcr_parameters)
             elif linear_coefficient_matrix.shape[0] == 6:
                 dcr = linear_coefficient_matrix[5, :] * dcr_parameters
+            elif linear_coefficient_matrix.shape[0] <= 5:
+                dcr = np.zeros(linear_coefficient_matrix.shape[1])
         else:
             dcr = np.zeros(linear_coefficient_matrix.shape[1])
         self.DCR = dcr
@@ -2265,13 +2272,14 @@ class AstrometricOrbitPlotter(object):
             self.DCR_Xmean[jj] = np.average(self.DCR[tmpIndexX])
             self.meanResidualX[jj] = np.average(residuals[tmpIndexX], weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
             self.parfXmean[jj] = np.average(T['ppfact'][tmpIndexX])
-            self.stdResidualX[jj] = np.std(residuals[tmpIndexX])
+            self.stdResidualX[jj] = np.std(residuals[tmpIndexX]) if len(tmpIndexX)>1 else T['sigma_da_mas'][tmpIndexX]
+
 
             if '2d' in self.data_type:
                 self.DCR_Ymean[jj] = np.average(self.DCR[tmpIndexY])
                 self.meanResidualY[jj] = np.average(residuals[tmpIndexY], weights=1. / (T['sigma_da_mas'][tmpIndexY] ** 2.))
                 self.parfYmean[jj] = np.average(T['ppfact'][tmpIndexY])
-                self.stdResidualY[jj] = np.std(residuals[tmpIndexY])
+                self.stdResidualY[jj] = np.std(residuals[tmpIndexY]) if len(tmpIndexY)>1 else T['sigma_da_mas'][tmpIndexY]
 
             # on the fly inter-epoch outlier detection
             outliers = {}

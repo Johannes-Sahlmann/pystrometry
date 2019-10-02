@@ -133,7 +133,8 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
         discrepancy_table[mapped_name] = table[mapped_name]
         discrepancy_table['{}_discrepancy'.format(miks_field)] = table[mapped_name] - table[miks_field]
         # discrepancy in percent
-        discrepancy_table['{}_discr_rel'.format(miks_field)] = 100.*np.abs(table[mapped_name] - table[miks_field])/np.abs(table[miks_field])
+        # discrepancy_table['{}_discr_rel'.format(miks_field)] = 100.*np.abs(table[mapped_name] - table[miks_field])/np.abs(table[miks_field])
+        discrepancy_table['{}_discr_rel'.format(miks_field)] = 100.*np.abs(table[mapped_name] - table[miks_field])/np.abs(table[mapped_name])
 
         if highlight_index is not None:
             pl.plot(table[mapped_name][highlight_index],
