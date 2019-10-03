@@ -75,7 +75,11 @@ ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
 'Earth': 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
 
 global ephemeris_dir
-ephemeris_dir = os.environ['EPHEMERIS_DIRECTORY']
+try:
+    ephemeris_dir = os.environ['EPHEMERIS_DIRECTORY']
+except KeyError:
+    ephemeris_dir = None
+
 
 
 def fractional_luminosity(mag1, mag2):
