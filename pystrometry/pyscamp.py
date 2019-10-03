@@ -4,7 +4,6 @@ Functions to read and interpret results obtained with astromatic's scamp
 """
 import copy
 import os
-# import sys
 from astropy.io.votable import parse
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -19,13 +18,9 @@ import numpy as np
 import aplpy
 
 import pickle
-# import sympy
-# from sympy.abc import x as sympy_x
-# from sympy.abc import y as sympy_y
 
-home_dir = os.environ['HOME']
-# sys.path.append(os.path.join(home_dir, 'astro/palta/processing/src/'))
 import pystortion
+import uhelpers as helpers
 
 
 
@@ -84,8 +79,6 @@ class ScampXml(object):
         catalog_index = self.get_catalog_index(catalog_number=catalog_number)
         file_name = (self.table['Catalog_Name'][catalog_index]).decode().replace('.cat', '.fits')
         return file_name
-
-
 
 
 class ScampFullCatalog(object):
@@ -182,12 +175,6 @@ class ScampFullCatalog(object):
         if verbose:
             print('Number of rows before {} after {}'.format(len(self.table), len(complemented_table)))
 
-        # index = np.where((complemented_table['SOURCE_NUMBER'] == 1971) & (
-        #     complemented_table['CATALOG_NUMBER'] == 2))[0]
-        #
-        # if len(index) > 1:
-        #     1/0
-
         self.table = complemented_table
 
     def select_sources(self, catalog_number=None, chip_extension=None, source_number=None, ):
@@ -208,10 +195,6 @@ class ScampFullCatalog(object):
             table_index = np.intersect1d(table_index, np.where((self.table['SOURCE_NUMBER'] == source_number))[0])
 
         return self.table[table_index]
-
-        # star_dict = [{"source_number": str(self.table['SOURCE_NUMBER'][i]), "x": self.table['X_IMAGE'][i], "y": self.table['Y_IMAGE'][i], "RA_deg": self.table['ALPHA_J2000'][i], "DE_deg": self.table['DELTA_J2000'][i]} for i in range(len(self.table)) if ((self.table['EXTENSION'][i] == chip_extension) & (self.table['ASTR_INSTRUM'][i] == 1) & (
-        #         self.table['CATALOG_NUMBER'][i] == catalog_number))]
-        # return Table(star_dict)
 
     def remove_source(self, source_number):
         """
@@ -563,28 +546,6 @@ class ScampMergedCatalog(object):
         index = np.where(SkyCoord(ra=RA_deg*u.deg, dec=DE_deg*u.deg).separation(cat) < radius)[0]
         return good_source_numbers[index]
 
-    # def xfEliminatePoorRefStars(s, pixelscale, seeingthreshold_as):
-    #     saturatedRefStarsIndex = uniq(where(s[:, :, 0] == -1)[1]);  # remove refstars with at least one saturated epoch
-    #     blurredRefStars0Index = uniq(
-    #         where(s[:, :, 4] * pixelscale * 2 > seeingthreshold_as)[1]);  # remove refstars with too large FWHM
-    #     blurredRefStars1Index = uniq(
-    #         where(s[:, :, 5] * pixelscale * 2 > seeingthreshold_as)[1]);  # remove refstars with too large FWHM
-    #     blurredRefStarsIndex = np.concatenate((blurredRefStars0Index, blurredRefStars1Index));
-    #
-    #     goodRefStarsIndex = [i for i in np.arange(s.shape[1]) if
-    #                          not (i in np.concatenate((saturatedRefStarsIndex, blurredRefStarsIndex)))];
-    #     s = s[:, goodRefStarsIndex, :];
-    #     # print "xfastrom: Eliminated %d saturated and %d blurred RefStars: Using %d good ref. stars." % (np.size(saturatedRefStarsIndex),np.size(blurredRefStarsIndex),np.size(s,axis=1))
-    #
-    #     #     select on refStar position scatter
-    #     if 0 == 1:
-    #         scatteredRefStarsIndex = np.where(numpy.std(s[:, :, 3], axis=0) > 1)[0];
-    #         goodRefStarsIndex = [i for i in np.arange(s.shape[1]) if not (i in scatteredRefStarsIndex)];
-    #         s = s[:, goodRefStarsIndex, :];
-    #         # print "xfastrom: Eliminated %d scattered RefStars: Using %d good ref. stars." % (np.size(scatteredRefStarsIndex),np.size(s,axis=1) );
-    #
-    #     return s
-
 
 def getScampXml(targetDir, target_file=None):
     if target_file:
@@ -622,37 +583,6 @@ def getScampMergedCat(targetDir, target_file=None):
     data = fits.getdata(os.path.join(targetDir, target_file), 2);
     tm = Table(data);
     return tm
-
-
-def xfMakePngForFrameInScampXml(tf, xmatchTable, dirlist, chipExtension, outDir, frameIdx=0):
-    # frameIdx = 0;
-    scampCatLen = len(tf);
-    # frameName = xmatchTable['Catalog_Name'][frameIdx].split('.')[0] + '.fits';
-    frameName = xmatchTable['Catalog_Name'][frameIdx].replace('.cat', '.fits');
-    CatalogueNumber = xmatchTable['Catalog_Number'][frameIdx];
-    # starDict =  [{"name":astar.name, "x":astar.x, "y":astar.y} for astar in stars]
-    starDict = [{"name": str(tf['SOURCE_NUMBER'][i]), "x": tf['X_IMAGE'][i], "y": tf['Y_IMAGE'][i]} for i in
-                range(scampCatLen) if ((tf['EXTENSION'][i] == chipExtension) & (tf['ASTR_INSTRUM'][i] == 1) & (
-        tf['CATALOG_NUMBER'][i] == CatalogueNumber))];
-
-    # find the frame image
-    # print dataDir
-    # print frameName
-    # dirlist1=glob.glob('%s/%s' % (dataDir,frameName) );
-    # if not dirlist1:
-    #     dirlist1=glob.glob('%s**/**/%s' % (dataDir,frameName) );
-    idx = [i for i, s in enumerate(dirlist) if frameName in s]
-    # pdb.set_trace()
-
-    # print dirlist1
-    # f2nimage = f2n.fromfits(dirlist1[0], verbose=True)
-    # f2nimage = f2n.fromfits(dirlist[idx][0], hdu=chipExtension, verbose=True)
-    f2nimage = f2n.fromfits(dirlist[idx[0]], hdu=chipExtension, verbose=True)
-    f2nimage.setzscale("auto", "auto")
-    f2nimage.makepilimage(scale="log", negative=False)
-    f2nimage.drawstarslist(starDict, r=20)
-    pngfilepath = os.path.join(outDir, xmatchTable.field('Catalog_Name')[frameIdx].replace('.cat', '_SexStars.png'));
-    f2nimage.tonet(pngfilepath)
 
 
 def xfMakeAplpyPngForFrameInScampXml(tf, xmatchTable, dirlist, chip_extension, outDir, frameIdx=0, RA_deg=None,
@@ -965,5 +895,3 @@ def xfGetInitialAstrometricData(xmatchTable, tf, dirlist, goodSourceNumbers, tar
             #         p[i,target_index,:] = [flx, bck , params[1] , params[2] , params[3] , params[4] , IDN , chip];
 
     return p, aux
-
-

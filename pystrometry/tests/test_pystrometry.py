@@ -2,7 +2,6 @@ import copy
 from astropy import constants as const
 from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2 # keplerian_secondary_mass,
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
-import astropy.units as u
 
 import numpy as np
 
