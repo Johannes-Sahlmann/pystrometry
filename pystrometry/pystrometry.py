@@ -74,11 +74,13 @@ ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
 'L2': 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
 'Earth': 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
 
+local_dir = os.path.dirname(os.path.abspath(__file__))
+
 global ephemeris_dir
 try:
     ephemeris_dir = os.environ['EPHEMERIS_DIRECTORY']
 except KeyError:
-    ephemeris_dir = None
+    ephemeris_dir = os.path.join(local_dir, 'data')
 
 
 
