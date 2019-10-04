@@ -20,14 +20,12 @@ from __future__ import print_function
 import os
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib import animation
 import pylab as pl
 from astropy import constants as const
 from astropy.table import Table, Column
 import astropy.units as u
 from scipy.interpolate import *
 import pdb
-from matplotlib.lines import Line2D
 from astropy.time import Time, TimeDelta
 from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
