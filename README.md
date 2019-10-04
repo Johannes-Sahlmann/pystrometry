@@ -1,7 +1,7 @@
-[![Build Status](https://travis-ci.org/spacetelescope/pystrometry.svg?branch=master)](https://travis-ci.org/spacetelescope/pystrometry)
+[![Build Status](https://travis-ci.org/Johannes-Sahlmann/pystrometry.svg?branch=master)](https://travis-ci.org/spacetelescope/pystrometry)
 [![Documentation Status](https://readthedocs.org/projects/pystrometry/badge/?version=latest)](https://pystrometry.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://badge.fury.io/py/pystrometry.svg)](https://badge.fury.io/py/pystrometry)
-[![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/spacetelescope/pystrometry/blob/master/LICENSE.md)
+[![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/Johannes-Sahlmann/pystrometry/blob/master/LICENSE.md)
 
 # pystrometry  -  Support for high-precision astrometry timeseries analysis
 
