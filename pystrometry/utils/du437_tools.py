@@ -152,7 +152,7 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
             figure_name = os.path.join(plot_dir, '{}_comparison_to_{}.pdf'.format(miks_field, table.meta['comparison_to']))
             pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
 
-    if save_plot:
+    if 1:
         formats = {}
 
         for key in discrepancy_table.colnames:#['angular_distance', 'phot_g_mean_mag', 'parallax', 'pmra', 'pmdec']:
@@ -168,6 +168,15 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
         discrepancy_table.write(discrepancy_table_file, format='ascii.fixed_width', delimiter=',',
                                 bookend=False, overwrite=True, formats=formats)
 
+    pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+    pl.plot(table['p1_a1'], np.abs(table['p1_period'] - table[parameter_mapping['period']]), 'bo')
+    pl.xlabel('Fitted semimajor axis (mas)')
+    pl.ylabel('Period error (day)')
+    pl.show()
+    if save_plot:
+        figure_name = os.path.join(plot_dir, 'period_error_vs_a1.pdf')
+        pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
+
     return discrepancy_table
 
 
@@ -176,8 +185,8 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     source_id = selected_systems['SourceId'][index]
     t_ref_jd = selected_systems['T0'][index]
-    # t_ref_jd = selected_systems['T0_1'][index]
     t_ref_mjd = Time(t_ref_jd, format='jd').mjd
+
     iad = gaia_astrometry.GaiaIad(source_id, epoch_data_dir)
     iad.load_data()
 
@@ -189,9 +198,6 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     iad.epoch_data['MJD'] = iad_mjd
 
     iad.epoch_data_for_prototype = Table()
-    # iad.epoch_data_for_prototype['t-t_ref'] = iad.epoch_data['MJD'] - np.mean(iad.epoch_data['MJD'])
-    # iad.t_ref = np.mean(iad.epoch_data[iad.time_column])
-    # iad.epoch_data_for_prototype['t-t_ref'] = iad.epoch_data[iad.time_column] - iad.t_ref
     iad.epoch_data_for_prototype['t-t_ref'] = iad.epoch_data[iad.time_column]
 
     for key in ['spsi_obs', 'cpsi_obs', 'ppfact_obs', 'da_mas_obs', 'errda_mas_obs', 'transitId',
@@ -218,8 +224,10 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     attribute_dict = {
         'offset_alphastar_mas': selected_systems['alphaStarOffset'][index],
         'offset_delta_mas': selected_systems['deltaOffset'][index],
-        'RA_deg': 0.,
-        'DE_deg': 0.,
+        # 'RA_deg': 0.,
+        # 'DE_deg': 0.,
+        'RA_deg': selected_systems['alpha0'][index],
+        'DE_deg': selected_systems['delta0'][index],
         'plx_mas': selected_systems['plx'][index],
         'muRA_mas': selected_systems['muAlphaStar'][index],
         'muDE_mas': selected_systems['muDelta'][index],
@@ -236,13 +244,22 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
         'scan_angle_definition': scan_angle_definition,
 
     }
-    orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
 
+    print(attribute_dict)
+    print(pystrometry.get_geomElem(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
+    print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
+    # 1/0
+
+    orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
+    print(orbit)
+
+    # 1/0
     # set coeffMatrix in orbit object
     ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
                                offsetRA_mas=selected_systems['alphaStarOffset'][index], offsetDE_mas=selected_systems['deltaOffset'][index],
                                externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
+
 
     plot_dict = {}
     plot_dict['model_parameters'] = {0: attribute_dict}
@@ -290,7 +307,6 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     argument_dict['merit_function'] = selected_systems['meritFunction'][index]
 
     axp.plot(argument_dict=argument_dict)
-
 
 
 def show_best_solution(file, out_dir):

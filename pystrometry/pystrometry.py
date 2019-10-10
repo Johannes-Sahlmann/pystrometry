@@ -165,7 +165,8 @@ def mean_longitude(t_periastron_mjd, omega_deg, t_mjd, p_day):
     """
 
     # mean anomaly
-    m_deg = np.rad2deg((t_mjd - t_periastron_mjd) * (2 * np.pi)/p_day)
+    # m_deg = np.rad2deg((t_mjd - t_periastron_mjd) * (2 * np.pi)/p_day)
+    m_deg = mean_anomaly(t_mjd, t_periastron_mjd, p_day)
 
     # mean longitude
     lambda_deg = m_deg + omega_deg
@@ -309,7 +310,7 @@ class OrbitSystem(object):
 
         description += "Inclination  {:2.1f} deg\n".format(self.i_deg)
         description += "Period is   {:2.1f} day \t Eccentricity = {:2.3f}\n".format(self.P_day, self.ecc)
-        description += "omega = {:2.1f} deg, OMEGA = {:2.1f} deg, T0 = {:2.1f} day\n".format(self.omega_deg, self.OMEGA_deg, self.Tp_day)
+        description += "omega = {:2.1f} deg, OMEGA = {:2.1f} deg, T_periastron = {:2.1f} day\n".format(self.omega_deg, self.OMEGA_deg, self.Tp_day)
         description += "RV semi-amplitude of primary = {:2.3f} m/s\n".format(self.rv_semiamplitude_mps())
 
         return description
@@ -457,7 +458,8 @@ class OrbitSystem(object):
                                      self.P_day, self.Tp_day, TIC_rel)
 
         if returnMeanAnomaly:
-            M_rad = mean_anomaly(t_day, self.Tp_day, self.P_day)
+            m_deg = mean_anomaly(t_day, self.Tp_day, self.P_day)
+            M_rad = np.deg2rad(m_deg)
             return [phi1, phi2, t_day, rv_ms, phi1_rel, phi2_rel, M_rad]
 
         elif returnTrueAnomaly:
@@ -790,7 +792,7 @@ class OrbitSystem(object):
 
         M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        a_rad = np.arctan2(a_m,d_pc*pc_m)
+        a_rad = np.arctan2(a_m, d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas
         TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC, scan_angle_definition=self.scan_angle_definition)
@@ -3373,15 +3375,51 @@ def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
     return m2_MJ
 
 
-def mean_anomaly(t_day, T0_day, P_day):
-    return 2*np.pi*(t_day-T0_day)/P_day
+# def mean_anomaly(t_day, T0_day, P_day):
+#     return 2*np.pi*(t_day-T0_day)/P_day
     # M_rad= 2*pi*(nu_daym1*t_day - phi0)
 
 
-def eccentric_anomaly(ecc,t_day, T0_day, P_day):
-    # following MIKS-GA4FORS_v0.4/genetic/kepler-genetic.i
+def mean_anomaly(t_mjd, t_periastron_mjd, p_day):
+    """Return mean anomaly at time t_mjd.
 
-    M_rad = mean_anomaly(t_day, T0_day, P_day)
+    Parameters
+    ----------
+    t_mjd : float
+        time in MJD
+    t_periastron_mjd : float
+        Time of periastron passage in MJD
+    p_day : float
+        Orbital period in days
+
+    Returns
+    -------
+    m_deg : float
+        Mean anomaly
+
+    """
+    m_deg = np.rad2deg((t_mjd - t_periastron_mjd) * (2 * np.pi)/p_day)
+    return m_deg
+
+
+def eccentric_anomaly(ecc, t_mjd, t_periastron_mjd, p_day):
+    """
+
+    following MIKS-GA4FORS_v0.4/genetic/kepler-genetic.i
+
+    Parameters
+    ----------
+    ecc
+    t_mjd
+    t_periastron_mjd
+    p_day
+
+    Returns
+    -------
+
+    """
+    m_deg = mean_anomaly(t_mjd, t_periastron_mjd, p_day)
+    M_rad = np.deg2rad(m_deg)
     if np.all(ecc) == 0.0:
         return M_rad
     else:
@@ -3391,16 +3429,16 @@ def eccentric_anomaly(ecc,t_day, T0_day, P_day):
         Enew_rad=E0_rad # initialissation a l'anomalie moyenne
         cnt=0  #compteur d'iterations
         E_rad_tmp = 1000.
-        while ( (np.max(np.abs(Enew_rad-E_rad_tmp)) >1.e-8) & (cnt<200) ):
+        while (np.max(np.abs(Enew_rad-E_rad_tmp)) >1.e-8) & (cnt<200):
             E_rad_tmp = Enew_rad
             f   =  E_rad_tmp - ecc*np.sin(E_rad_tmp) - M_rad
             fp  =  1-ecc*np.cos(E_rad_tmp)#derivee de f par rapport a E
             fpp =  ecc*np.sin(E_rad_tmp)
             # //Enew_rad = E_rad_tmp - f/fp //
             # //Enew_rad = E_rad_tmp -2*fp/fpp - sqrt( (fp/fpp)^2 +f) bof
-            Enew_rad = E_rad_tmp - 2*fp*f/(2*fp**2-f*fpp) #np.marche tres bien
-            cnt+=1
-        E_rad=E_rad_tmp
+            Enew_rad = E_rad_tmp - 2*fp*f/(2*fp**2-f*fpp) #marche tres bien
+            cnt += 1
+        E_rad = E_rad_tmp
         return E_rad
 
 
@@ -3413,7 +3451,7 @@ def RadialVelocitiesConstants(k1_mps,om_rad,ecc):
     return np.array([alpha_mps,beta_mps,delta_mps])
 
 
-def TrueAnomaly(ecc,E_rad):
+def TrueAnomaly(ecc, E_rad):
     # BUG FOUND 2016-02-08, NOT SURE WHERE THIS CAME FROM
     #     theta_rad_tmp = 2.*np.arctan( np.sqrt((1.+ecc)/(1.-ecc))*np.tan(E_rad/2.) )
     #     theta_rad = np.arctan2( np.cos(theta_rad_tmp), np.sin(theta_rad_tmp) )
@@ -3570,7 +3608,7 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC, scan_angle_def
         X = np.cos(E_rad)-ecc
         Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
 
-    # see Equation 8 is Sahlmann+2011
+    # see Equation 8 in Sahlmann+2011
     if scan_angle_definition == 'hipparcos':
         phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
     elif scan_angle_definition == 'gaia':
