@@ -210,7 +210,9 @@ class OrbitSystem(object):
         default_dict = {'P_day': 100, 'ecc': 0, 'm1_MS': 1, 'm2_MJ': 1,
                         'omega_deg': 0., 'OMEGA_deg': 0., 'i_deg': 90.,
                         'Tp_day': 0., 'RA_deg': 0., 'DE_deg': 0.,
-                        'plx_mas': 25., 'muRA_mas': 20., 'muDE_mas': 50.,
+                        'absolute_plx_mas': 25.,
+                        'parallax_correction_mas': 0.,
+                        'muRA_mas': 20., 'muDE_mas': 50.,
                         'gamma_ms': 0., 'rvLinearDrift_mspyr': None,
                         'rvQuadraticDrift_mspyr': None,
                         'rvCubicDrift_mspyr': None, 'Tref_MJD': None,
@@ -293,11 +295,11 @@ class OrbitSystem(object):
         self._m2_MJ = val * MS_kg / MJ_kg
 
     def __repr__(self):
-        d_pc = 1. / (self.plx_mas / 1000.)
+        d_pc = 1. / (self.absolute_plx_mas / 1000.)
 
         description = '+'*30 + '\n'
         description += 'System parameters:\n'
-        description += "Distance is {:2.1f} pc \t Parallax = {:2.1f} mas\n".format(d_pc, self.plx_mas)
+        description += "Distance is {:2.1f} pc \t Parallax = {:2.1f} mas\n".format(d_pc, self.absolute_plx_mas)
 
         description += "Primary   mass = {:4.3f} Msol \t = {:4.3f} Mjup\n".format(self.m1_MS, self.m1_MS * MS_kg / MJ_kg)
         description += "Secondary mass = {:4.3f} Msol \t = {:4.3f} Mjup \t = {:4.3f} MEarth\n".format(self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg)
@@ -341,7 +343,7 @@ class OrbitSystem(object):
         #m2_MS = self.m2_MJ * MJ_kg/MS_kg # #companion mass in units of SOLAR mass
 
         #gamma_ms = 0. #systemic velocity / m s^-1
-        d_pc  = 1./ (self.plx_mas/1000.)
+        d_pc  = 1./ (self.absolute_plx_mas/1000.)
 
         if verbose:
             print("%s " % "++++++++++++++++++++")
@@ -351,7 +353,7 @@ class OrbitSystem(object):
             print("Inclination  %1.3f deg " % self.i_deg)
             print("Mass ratio q = %4.6f  " %( m2_MS/self.m1_MS))
             print("Period is   %3.1f day \t Eccentricity = %2.1f " % (self.P_day,self.ecc))
-            print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.plx_mas))
+            print("Distance is %3.1f pc \t Parallax = %3.1f mas " % (d_pc, self.absolute_plx_mas))
             print("omega = %2.1f deg, OMEGA = %2.1f deg, T0 = %2.1f day " % (self.omega_deg, self.OMEGA_deg,self.Tp_day))
 
         omega_rad = np.deg2rad(self.omega_deg)
@@ -422,9 +424,9 @@ class OrbitSystem(object):
         a_mas = a_rad * rad2mas # semimajor axis in mas
 
         aRel_mas = np.arctan2(a_rel_AU * AU_m, d_pc * pc_m) * rad2mas # relative semimajor axis in mas
-        TIC = pjGet_TIC([a_mas, self.omega_deg, self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
-        TIC_rel = pjGet_TIC([aRel_mas, self.omega_deg + 180.,
-                             self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
+        TIC = thiele_innes_constants([a_mas, self.omega_deg, self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
+        TIC_rel = thiele_innes_constants([aRel_mas, self.omega_deg + 180.,
+                                          self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
         #A = TIC[0] B = TIC[1] F = TIC[2] G = TIC[3]
 
         if psi_deg is not None:
@@ -559,7 +561,7 @@ class OrbitSystem(object):
         M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
              / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
         a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
-        d_pc  = 1. / (self.plx_mas / 1000.)
+        d_pc  = 1. / (self.absolute_plx_mas / 1000.)
         a_rad = np.arctan2(a_m, d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas
         return a_mas
@@ -598,7 +600,7 @@ class OrbitSystem(object):
                      * (self.P_day * day2sec)**2.)**(1./3.))
         #M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
         #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        d_pc  = 1./ (self.plx_mas / 1000.)
+        d_pc  = 1./ (self.absolute_plx_mas / 1000.)
         a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
         a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
         return a_rel_mas
@@ -734,7 +736,7 @@ class OrbitSystem(object):
 
 
         m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-        d_pc  = 1./ (self.plx_mas/1000.)
+        d_pc  = 1./ (self.absolute_plx_mas/1000.)
 
         omega_rad = np.deg2rad(self.omega_deg)
         OMEGA_rad = np.deg2rad(self.OMEGA_deg)
@@ -754,7 +756,7 @@ class OrbitSystem(object):
         a_mas = a_rad * rad2mas # semimajor axis in mas
         aRel_mas = np.arctan2(a_rel_AU*AU_m,d_pc*pc_m) * rad2mas # relative semimajor axis in mas
 
-        TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
+        TIC     = thiele_innes_constants([a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
 
         phi1 = astrom_signal(t_day, psi_deg, self.ecc, self.P_day, self.Tp_day, TIC)
         phi1_rel = np.nan #astrom_signal(t_day,psi_deg,self.ecc,self.P_day,self.Tp_day,TIC_rel)
@@ -775,14 +777,14 @@ class OrbitSystem(object):
         #       a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         #       a_rad = np.arctan2(a_m,d_pc*pc_m)
         #       a_mas = a_rad * rad2mas # semimajor axis in mas
-        #       TIC     = pjGet_TIC( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
+        #       TIC     = thiele_innes_constants( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
         #       phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,Tp_day,TIC)
         #       return phi1
 
 #         t_MJD = self.MjdUsedInTcspsi
 
         # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-        d_pc  = 1./ (self.plx_mas/1000.)
+        d_pc  = 1./ (self.absolute_plx_mas/1000.)
 
         # omega_rad = np.deg2rad(self.omega_deg)
         # OMEGA_rad = np.deg2rad(self.OMEGA_deg)
@@ -794,7 +796,7 @@ class OrbitSystem(object):
         a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
         a_rad = np.arctan2(a_m, d_pc*pc_m)
         a_mas = a_rad * rad2mas # semimajor axis in mas
-        TIC     = pjGet_TIC( [ a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg ] ) #Thiele-Innes constants
+        TIC     = thiele_innes_constants([a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC, scan_angle_definition=self.scan_angle_definition)
         # phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
         return phi1
@@ -846,7 +848,7 @@ class OrbitSystem(object):
             omega_rel_deg = self.omega_deg
 
         if unit == 'mas':
-            d_pc  = 1./ (self.plx_mas/1000.)
+            d_pc  = 1./ (self.absolute_plx_mas/1000.)
             a_rad = np.arctan2(a_rel_m,d_pc*pc_m)
             # semimajor axis in mas
             a_rel_mas = a_rad * rad2mas
@@ -855,7 +857,7 @@ class OrbitSystem(object):
             a_rel = a_rel_m
 
         #Thiele-Innes constants
-        TIC = pjGet_TIC([a_rel, omega_rel_deg, self.OMEGA_deg, self.i_deg])
+        TIC = thiele_innes_constants([a_rel, omega_rel_deg, self.OMEGA_deg, self.i_deg])
 
         # by default these are cartesian coordinates
         phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
@@ -903,13 +905,15 @@ class OrbitSystem(object):
             parf = getParallaxFactors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
 
         self.parf = parf
-        if self.Tref_MJD is not None:
-            t0_MJD = self.Tref_MJD
-        else:
-            t0_MJD = np.mean(t_MJD)
-        trel_year = (t_MJD - t0_MJD)/year2day
+        if self.Tref_MJD is None:
+            self.Tref_MJD = np.mean(t_MJD)
 
-        self.t0_MJD = t0_MJD
+        #     t0_MJD = self.Tref_MJD
+        # else:
+        #     t0_MJD = np.mean(t_MJD)
+        trel_year = (t_MJD - self.Tref_MJD)/year2day
+
+        # self.t0_MJD = t0_MJD
         # % sin(psi) and cos(psi)
         if psi_deg is not None:
             psi_rad = np.deg2rad(psi_deg)
@@ -944,7 +948,7 @@ class OrbitSystem(object):
         else:
             self.MjdUsedInTcspsi = np.array(np.sort(np.tile(t_MJD, 2)))
 
-        inVec = np.array([offsetRA_mas, offsetDE_mas, self.plx_mas, self.muRA_mas, self.muDE_mas])
+        inVec = np.array([offsetRA_mas, offsetDE_mas, self.absolute_plx_mas, self.muRA_mas, self.muDE_mas])
         print(inVec)
         ppm = np.dot(C.T, inVec)
         # self.ppm = ppm
@@ -1837,7 +1841,7 @@ class AstrometricOrbitPlotter(object):
 
         # compute positions at measurement dates according to best-fit model p (no dcr)
         ppm_parameters = np.array([theta_0['offset_alphastar_mas'], theta_0['offset_delta_mas'],
-                          theta_0['plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
+                          theta_0['absolute_plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
 
         if self.include_ppm:
             self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
@@ -2118,7 +2122,7 @@ class AstrometricOrbitPlotter(object):
         if argument_dict['ppm_description'] == 'default':
             argument_dict['ppm_description'] = '$\\varpi={:2.3f}$ mas\n$\mu_\\mathrm{{ra^\\star}}={' \
                         ':2.3f}$ mas/yr\n$\mu_\\mathrm{{dec}}={:2.3f}$ mas/yr'.format(
-                self.model_parameters[0]['plx_mas'], self.model_parameters[0]['muRA_mas'],
+                self.model_parameters[0]['absolute_plx_mas'], self.model_parameters[0]['muRA_mas'],
                 self.model_parameters[0]['muDE_mas'])
 
         if argument_dict['epoch_omc_description'] == 'default':
@@ -2277,7 +2281,7 @@ class AstrometricOrbitPlotter(object):
                 else:
                     n_rows = 2
 
-                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(9, 9), facecolor='w',
+                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows*4, n_columns*2), facecolor='w',
                                         edgecolor='k', squeeze=False)
 
                 self.insert_orbit_timeseries_plot(orb, argument_dict, ax=axes[0][0])
@@ -2303,7 +2307,8 @@ class AstrometricOrbitPlotter(object):
                     labels = axes[-1][1].get_xticklabels()
                     plt.setp(labels, rotation=30)
 
-                fig.tight_layout(h_pad=0.0)
+                # fig.tight_layout(pad=0.0)
+                # plt.tight_layout()
                 pl.show()
                 if argument_dict['save_plot']:
                     if argument_dict['frame_residual_panel']:
@@ -3465,7 +3470,7 @@ def RadialVelocitiesKepler(alpha_mps,beta_mps,delta_mps,theta_rad):
     return Vrad_mps
 
 
-def EllipticalRectangularCoordinates(ecc,E_rad):
+def EllipticalRectangularCoordinates(ecc, E_rad):
 # /*
 #  * DOCUMENT
 #  *   EllipticalRectangularCoordinates(ecc,E_rad)
@@ -3492,18 +3497,27 @@ def EllipticalRectangularCoordinates(ecc,E_rad):
   return np.array([X,Y])
 
 
-def get_geomElem(TIC):
-    """
-    compute geometrical elements a, omega, OMEGA, i
-    from the input of A B F G
-    """
+def geometric_elements(thiele_innes_parameters):
+    """Return geometrical orbit elements a, omega, OMEGA, i.
 
-    A = TIC[0]
-    B = TIC[1]
-    F = TIC[2]
-    G = TIC[3]
-    p = (A ** 2 + B ** 2 + G ** 2 + F ** 2) / 2;
-    q = A * G - B * F;
+    Parameters
+    ----------
+    thiele_innes_constants : array or array of arrays
+        Array of Thiele Innes constants [A,B,F,G] in milli-arcsecond
+
+    Returns
+    -------
+    geometric_parameters : array
+        Orbital elements [a_mas, omega_deg, OMEGA_deg, i_deg]
+
+    """
+    A = thiele_innes_parameters[0]
+    B = thiele_innes_parameters[1]
+    F = thiele_innes_parameters[2]
+    G = thiele_innes_parameters[3]
+
+    p = (A ** 2 + B ** 2 + G ** 2 + F ** 2) / 2.
+    q = A * G - B * F
 
     a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2))
     # i_rad = math.acos(q/(a_mas**2.))
@@ -3511,36 +3525,56 @@ def get_geomElem(TIC):
     # OMEGA_rad = (math.atan2(B-F,A+G)-math.atan2(-B-F,A-G))/2.;
 
     i_rad = np.arccos(q / (a_mas ** 2.))
-    omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.;
-    OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.;
+    omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.
+    OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.
 
-    i_deg = i_rad * 360 / 2. / np.pi;
-    omega_deg = omega_rad * 360. / (2. * np.pi)
-    OMEGA_deg = OMEGA_rad * 360. / (2. * np.    pi)
+    i_deg = np.rad2deg(i_rad)
+    omega_deg = np.rad2deg(omega_rad)
+    OMEGA_deg = np.rad2deg(OMEGA_rad)
+    # OMEGA_deg = np.rad2deg(np.unwrap(OMEGA_rad))
 
-    GE = [a_mas, omega_deg, OMEGA_deg, i_deg];
-    return GE;
+    if np.any(np.isnan(a_mas)):
+        index = np.where(np.isnan(a_mas))[0]
+        raise RuntimeError('nan detected: {} occurrences'.format(len(index)))
+
+    # if isinstance(omega_deg, (list, tuple, np.ndarray)):
+    #     index = np.where(omega_deg < 0.)[0]
+    #     omega_deg[index] += 180.
+    #
+    # if isinstance(OMEGA_deg, (list, tuple, np.ndarray)):
+    #     index = np.where(OMEGA_deg < 0.)[0]
+    #     OMEGA_deg[index] += 180.
+
+    geometric_parameters = np.array([a_mas, omega_deg, OMEGA_deg, i_deg])
+    return geometric_parameters
 
 
-def pjGet_TIC(GE):
-    # /*  DOCUMENT  xjGet_TIC(GE)
-    #     compute A B F G from the input of the geometrical elements a, omega, OMEGA, i
-    #     GE = [a_mas, omega_deg, OMEGA_deg, i_deg]
-    # extern deg2rad
-    # local a_mas, omega_rad, OMEGA_rad, i_rad, A, B, F, G
+def thiele_innes_constants(geometric_parameters):
+    """Return A B F G in mas from the input of the geometrical elements
 
-    a_mas     = GE[0]
-    omega_rad = np.deg2rad(GE[1])
-    OMEGA_rad = np.deg2rad(GE[2])
-    i_rad     = np.deg2rad(GE[3])
+    Parameters
+    ----------
+    geometric_parameters : array
+        [a_mas, omega_deg, OMEGA_deg, i_deg]
+
+    Returns
+    -------
+    thiele_innes_parameters : array
+        [A, B, F, G] in mas
+
+    """
+    a_mas     = geometric_parameters[0]
+    omega_rad = np.deg2rad(geometric_parameters[1])
+    OMEGA_rad = np.deg2rad(geometric_parameters[2])
+    i_rad     = np.deg2rad(geometric_parameters[3])
 
     A = a_mas * (np.cos(OMEGA_rad)*np.cos(omega_rad)  - np.sin(OMEGA_rad)*np.sin(omega_rad)*np.cos(i_rad))
     B = a_mas * (np.sin(OMEGA_rad)*np.cos(omega_rad)  + np.cos(OMEGA_rad)*np.sin(omega_rad)*np.cos(i_rad))
     F = a_mas * (-np.cos(OMEGA_rad)*np.sin(omega_rad) - np.sin(OMEGA_rad)*np.cos(omega_rad)*np.cos(i_rad))
     G = a_mas * (-np.sin(OMEGA_rad)*np.sin(omega_rad) + np.cos(OMEGA_rad)*np.cos(omega_rad)*np.cos(i_rad))
 
-    TIC = np.array([A,B,F,G])
-    return TIC
+    thiele_innes_parameters = np.array([A, B, F, G])
+    return thiele_innes_parameters
 
 
 def astrom_signal(t_day, psi_deg, ecc, P_day, Tp_day, TIC):
@@ -3838,7 +3872,7 @@ def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=
     a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
     a_rad = np.arctan2(a_m,d_pc*pc_m)
     a_mas = a_rad * rad2mas # semimajor axis in mas
-    TIC     = pjGet_TIC( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
+    TIC     = thiele_innes_constants([a_mas   , omega_deg     , OMEGA_deg, i_deg]) #Thiele-Innes constants
     phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC)
     return phi1
 
@@ -4058,7 +4092,8 @@ class ImagingAstrometryData(object):
         self.observing_times_1D_MJD = self.data_1D[self.time_column_name].data #np.array(data_table[self.time_column_name])
 
 
-def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_MS, instrument=None, verbose=False):
+def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_MS, instrument=None,
+                          verbose=False):
     """
 
     :param best_genome_file:
@@ -4084,7 +4119,7 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
 
     thiele_innes_constants = np.array([best_genome[c] for c in ['A','B','F','G']])
 
-    a_mas, omega_deg, OMEGA_deg, i_deg = get_geomElem(thiele_innes_constants)
+    a_mas, omega_deg, OMEGA_deg, i_deg = geometric_elements(thiele_innes_constants)
     d_pc  = 1./ (best_genome['plx_mas'].data.data /1000.)
     P_day = best_genome['P_day'].data.data
     a_m = a_mas / 1.e3 * d_pc * AU_m

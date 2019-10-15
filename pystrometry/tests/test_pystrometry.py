@@ -1,9 +1,14 @@
 import copy
+
 from astropy import constants as const
+import numpy as np
+from numpy.testing import assert_allclose
+
+
 from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2 # keplerian_secondary_mass,
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
+from ..pystrometry import thiele_innes_constants, geometric_elements
 
-import numpy as np
 
 def test_angular_to_linear():
     a_mas = 3.
@@ -34,3 +39,30 @@ def test_keplerian_equations():
     print(m2_kg/m2_kg_recovered - 1 )
     assert m2_kg/m2_kg_recovered - 1 < 1e-14
 
+
+def test_thiele_innes():
+    """Test conversion between Thiele Innes constants and geometric elements."""
+
+    n_grid = 20
+    a_mas = np.linspace(0.1, 100, n_grid)
+    omega_deg = np.linspace(0.1, 90, n_grid, endpoint=False)
+    OMEGA_deg = np.linspace(0.1, 90, n_grid, endpoint=False)
+    i_deg = np.linspace(0.5, 180, n_grid, endpoint=False)
+
+    a_mesh, omega_mesh, OMEGA_mesh, i_mesh = np.meshgrid(a_mas, omega_deg, OMEGA_deg, i_deg)
+    a = a_mesh.flatten()
+    omega = omega_mesh.flatten()
+    OMEGA = OMEGA_mesh.flatten()
+    i = i_mesh.flatten()
+
+    # input_array = np.array([a_mas, omega_deg, OMEGA_deg, i_deg])
+    input_array = np.array([a, omega, OMEGA, i])
+
+    thiele_innes_parameters = thiele_innes_constants(input_array)
+    geometric_parameters = geometric_elements(thiele_innes_parameters)
+
+    absolute_tolerance = 1e-6
+    assert_allclose(a, geometric_parameters[0], atol=absolute_tolerance)
+    assert_allclose(omega, geometric_parameters[1], atol=absolute_tolerance)
+    assert_allclose(OMEGA, geometric_parameters[2], atol=absolute_tolerance)
+    assert_allclose(i, geometric_parameters[3], atol=absolute_tolerance)

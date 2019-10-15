@@ -246,7 +246,7 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     }
 
     print(attribute_dict)
-    print(pystrometry.get_geomElem(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
+    print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
     print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
     # 1/0
 
