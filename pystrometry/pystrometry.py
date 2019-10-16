@@ -696,7 +696,7 @@ class OrbitSystem(object):
 
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
                       line_style='-', line_width=1, rv_unit='km/s', time_offset_day=0.,
-                      gamma_mps=None):
+                      gamma_mps=None, axis=None):
         """Plot the radial velocity orbit of the primary
 
         Returns
@@ -707,25 +707,28 @@ class OrbitSystem(object):
         # if gamma_mps is None:
         #     gamma_mps = self.gamma_ms
 
+        if axis is None:
+            axis = pl.gca()
+
         if rv_unit == 'km/s':
             rv_factor = 1/1000.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = Time(t_day, format='mjd').jyear
         if component=='primary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
-            pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
+            axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='secondary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
-            pl.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
+            axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
         elif component=='both':
             rv_mps_1 = (self.compute_radial_velocity(t_day, component='primary')) * rv_factor
             rv_mps_2 = (self.compute_radial_velocity(t_day, component='secondary')) * rv_factor
-            pl.plot(t_plot, rv_mps_1, ls=line_style, color=line_color, lw=line_width+2, label='primary')
-            pl.plot(t_plot, rv_mps_2, ls=line_style, color=line_color, lw=line_width, label='secondary')
+            axis.plot(t_plot, rv_mps_1, ls=line_style, color=line_color, lw=line_width+2, label='primary')
+            axis.plot(t_plot, rv_mps_2, ls=line_style, color=line_color, lw=line_width, label='secondary')
         elif component=='difference':
             rv_mps_1 = self.compute_radial_velocity(t_day, component='primary') * rv_factor
             rv_mps_2 = self.compute_radial_velocity(t_day, component='secondary') * rv_factor
-            pl.plot(t_plot, rv_mps_1-rv_mps_2, ls=line_style, color=line_color, lw=line_width+2, label='difference')
+            axis.plot(t_plot, rv_mps_1-rv_mps_2, ls=line_style, color=line_color, lw=line_width+2, label='difference')
 
 
 
@@ -948,10 +951,12 @@ class OrbitSystem(object):
         else:
             self.MjdUsedInTcspsi = np.array(np.sort(np.tile(t_MJD, 2)))
 
-        inVec = np.array([offsetRA_mas, offsetDE_mas, self.absolute_plx_mas, self.muRA_mas, self.muDE_mas])
-        print(inVec)
+        parallax_for_ppm_mas = self.absolute_plx_mas - self.parallax_correction_mas
+
+        inVec = np.array([offsetRA_mas, offsetDE_mas, parallax_for_ppm_mas, self.muRA_mas, self.muDE_mas])
+
         ppm = np.dot(C.T, inVec)
-        # self.ppm = ppm
+
         if psi_deg is not None:
             return ppm
         else:
@@ -1836,12 +1841,17 @@ class AstrometricOrbitPlotter(object):
         theta_0 = self.model_parameters[0]
         theta_names = theta_0.keys()
 
-        if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
-            theta_0['plx_mas']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
+        # if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
+        #     theta_0['plx_mas']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
+
+        if 'parallax_correction_mas' in theta_names:
+            parallax_for_ppm_mas = theta_0['absolute_plx_mas'] - theta_0['parallax_correction_mas']
+        else:
+            parallax_for_ppm_mas = theta_0['absolute_plx_mas']
 
         # compute positions at measurement dates according to best-fit model p (no dcr)
         ppm_parameters = np.array([theta_0['offset_alphastar_mas'], theta_0['offset_delta_mas'],
-                          theta_0['absolute_plx_mas'], theta_0['muRA_mas'], theta_0['muDE_mas']])
+                                   parallax_for_ppm_mas, theta_0['muRA_mas'], theta_0['muDE_mas']])
 
         if self.include_ppm:
             self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
@@ -3152,7 +3162,6 @@ def companion_mass_in_diluted_system(alpha_mas, absolute_parallax_mas, m1_kg, p_
         return m2_kg
 
     else:
-        # from sympy import I
         alpha = alpha_value
         m1 = m1_kg
         beta = beta_value
