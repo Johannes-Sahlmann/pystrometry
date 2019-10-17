@@ -226,7 +226,7 @@ class OrbitSystem(object):
                         'nuisance_x': None,  # nuisance parameters used when performing MCMC analyses 
                         'nuisance_y': None,  # nuisance parameters used when performing MCMC analyses
                         'esinw': None,  # sqrt(ecc) * sin(omega), alternative variable set for MCMC
-                        'ecosw': None,  # sqrt(ecc) * cos(omega)
+                        'ecosw': None,  # sqrt(ecc) * 'plx_macos(omega)
                         'm2sini': None,  # sqrt(m2_MJ) * sin(inclination), alternative variable set for MCMC
                         'm2cosi': None,  # sqrt(m2_MJ) * cos(inclination)
                         'lambda_ref': None  # mean longitude at reference time, substitute for time of periastron
@@ -1544,7 +1544,7 @@ class PpmPlotter(object):
             #                   RA_deg=self.RA_deg, DE_deg=self.DE_deg, plx_mas=self.p[2], muRA_mas=self.p[3],
             #                   muDE_mas=self.p[4], Tref_MJD=self.tref_MJD)
             argument_dict = {'m2_MJ'   : 0, 'RA_deg': self.RA_deg, 'DE_deg': self.DE_deg,
-                             'plx_mas' : self.p[2], 'muRA_mas': self.p[3], 'muDE_mas': self.p[4],
+                             'absolute_plx_mas' : self.p[2], 'muRA_mas': self.p[3], 'muDE_mas': self.p[4],
                              'Tref_MJD': self.tref_MJD, }
             orb = OrbitSystem(argument_dict)
 
@@ -2163,8 +2163,8 @@ class AstrometricOrbitPlotter(object):
 
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
-            if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
-                theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
+            # if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
+            #     theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
             orb = OrbitSystem(attribute_dict=theta_p)
 
