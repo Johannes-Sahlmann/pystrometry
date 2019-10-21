@@ -169,8 +169,10 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
                                 bookend=False, overwrite=True, formats=formats)
 
     pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
-    pl.plot(table['p1_a1'], np.abs(table['p1_period'] - table[parameter_mapping['period']]), 'bo')
-    pl.xlabel('Fitted semimajor axis (mas)')
+    # pl.plot(table['p1_a1'], np.abs(table['p1_period'] - table[parameter_mapping['period']]), 'bo')
+    # pl.xlabel('Fitted semimajor axis (mas)')
+    pl.plot(table['a1_mas_minimum'], np.abs(table['p1_period'] - table[parameter_mapping['period']]), 'bo')
+    pl.xlabel('Expected semimajor axis (mas)')
     pl.ylabel('Period error (day)')
     pl.show()
     if save_plot:
@@ -180,8 +182,9 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
     return discrepancy_table
 
 
-def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_starname, plot_dir,
-                      m1_MS=1.):
+def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_starname=None,
+                      plot_dir=os.path.expanduser('~'),
+                      m1_MS=1., rv=None, show_plot=True):
 
     source_id = selected_systems['SourceId'][index]
     t_ref_jd = selected_systems['T0'][index]
@@ -228,7 +231,8 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
         # 'DE_deg': 0.,
         'RA_deg': selected_systems['alpha0'][index],
         'DE_deg': selected_systems['delta0'][index],
-        'plx_mas': selected_systems['plx'][index],
+        # 'plx_mas': selected_systems['plx'][index],
+        'absolute_plx_mas': selected_systems['plx'][index],
         'muRA_mas': selected_systems['muAlphaStar'][index],
         'muDE_mas': selected_systems['muDelta'][index],
         'P_day': selected_systems['p1_period'][index],
@@ -245,9 +249,9 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     }
 
-    print(attribute_dict)
-    print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
-    print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
+    # print(attribute_dict)
+    # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
+    # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
     # 1/0
 
     orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
@@ -282,18 +286,24 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     plot_dict['data'] = iad
 
+    iad.epoch_data.pprint()
+
     axp = pystrometry.AstrometricOrbitPlotter(plot_dict)
     axp.print_residual_statistics()
 
     n_curve = 1500
     timestamps_curve_2d = np.linspace(np.min(iad.epoch_data['MJD']), np.max(iad.epoch_data['MJD']), n_curve)
     axp.t_curve_MJD = timestamps_curve_2d
-    axp.title = 'Gaia DR3 {} ({})'.format(source_id, mapping_dr3id_to_starname[source_id])
+    if mapping_dr3id_to_starname is not None:
+        axp.title = 'Gaia DR3 {} ({})'.format(source_id, mapping_dr3id_to_starname[source_id])
+        name_seed = 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id])
+    else:
+        name_seed = 'DR3_{}'.format(source_id)
+
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
              'orbit_only_panel': True, 'ppm_description': 'default', 'epoch_omc_description': 'default',
              'orbit_description': 'default', 'arrow_offset_x': +100, 'arrow_offset_y': +100,
-             'name_seed': 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id]), 'scan_angle_definition': scan_angle_definition,
-                     }
+             'name_seed': name_seed, 'scan_angle_definition': scan_angle_definition}
 
     argument_dict['save_plot'] = True
     argument_dict['omc_panel'] = True
@@ -306,7 +316,18 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     argument_dict['excess_noise'] = selected_systems['excessNoise'][index]
     argument_dict['merit_function'] = selected_systems['meritFunction'][index]
 
-    axp.plot(argument_dict=argument_dict)
+    if show_plot:
+        axp.plot(argument_dict=argument_dict)
+
+        if rv is not None:
+            from ..pystrometry import plot_rv_data
+
+            my_orbit = copy.deepcopy(orbit)
+            # my_orbit.m2_MJ = orbit.m2_MJ/10.
+            plot_rv_data(rv, orbit_system=my_orbit, n_orbit=np.ceil(np.ptp(rv['MJD'])/orbit.P_day)+1)
+            pl.show()
+
+    return axp
 
 
 def show_best_solution(file, out_dir):

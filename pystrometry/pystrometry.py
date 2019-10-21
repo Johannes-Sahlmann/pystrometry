@@ -265,12 +265,14 @@ class OrbitSystem(object):
             self.Tp_day = periastron_time(self.lambda_ref, self.omega_deg, self.Tref_MJD, self.P_day)
 
         # treatment of diluted systems
-        if ('delta_mag' in attribute_keys) and (self.delta_mag is not None):
+        if ('delta_mag' in attribute_keys) and (self.delta_mag is not None) and (self.delta_mag != 0.):
             # set photocenter orbit size
             beta = fractional_luminosity(0., self.delta_mag)
             f = fractional_mass(self.m1_MS, self.m2_MS)
             a_rel_mas = self.pjGet_a_relative()
             self.alpha_mas = (f - beta) * a_rel_mas
+            if self.alpha_mas < 0:
+                self.alpha_mas = 0.
         else:
             self.alpha_mas = self.pjGet_a_barycentre()
             self.a_mas  = self.alpha_mas
@@ -695,7 +697,7 @@ class OrbitSystem(object):
 
 
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
-                      line_style='-', line_width=1, rv_unit='km/s', time_offset_day=0.,
+                      line_style='-', line_width=1, rv_unit='kmps', time_offset_day=0.,
                       gamma_mps=None, axis=None):
         """Plot the radial velocity orbit of the primary
 
@@ -710,8 +712,10 @@ class OrbitSystem(object):
         if axis is None:
             axis = pl.gca()
 
-        if rv_unit == 'km/s':
+        if rv_unit == 'kmps':
             rv_factor = 1/1000.
+        else:
+            rv_factor = 1.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = Time(t_day, format='mjd').jyear
         if component=='primary':
@@ -1822,12 +1826,14 @@ class AstrometricOrbitPlotter(object):
                             'residuals': None,
                             'scan_angle_definition': 'hipparcos',
                             'include_ppm': True,
+                            'title': ''
                             }
 
             for key, value in default_dict.items():
                 if key not in attribute_dict.keys():
                     setattr(self, key, value)
 
+        self.attribute_dict = attribute_dict
         linear_coefficient_matrix = self.linear_coefficients['matrix']
 
         number_of_companions = len(self.model_parameters)
@@ -2982,6 +2988,101 @@ class pDetLim(object):
                 pl.show()
 
         self.detLimit = detLimit
+
+
+def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
+                 data_colour='k'):
+    """
+
+    Parameters
+    ----------
+    rv
+    orbit_system
+    verbose
+    n_orbit
+    estimate_systemic_velocity
+
+    Returns
+    -------
+
+    """
+    rv['jyear'] = [Time(rv['MJD'][i], format='mjd').jyear for i in range(len(rv))]
+
+    n_rows = 2
+    n_columns = 1
+    fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows * 3, n_columns * 6),
+                            facecolor='w', edgecolor='k', squeeze=False)
+
+    if 'rv_mps' in rv.colnames:
+        basic_unit = 'mps'
+        conversion_factor = 1
+    elif 'rv_kmps' in rv.colnames:
+        basic_unit = 'kmps'
+        conversion_factor = 1e3
+
+    unit_string = {'mps': 'm/s', 'kmps': 'km/s'}
+
+    # fig.suptitle(self.title)
+
+    # pl.subplot(2,1,1)
+    axes[0][0].plot(rv['jyear'], rv['rv_{}'.format(basic_unit)], 'ko', label='_', mfc=data_colour)
+    axes[0][0].errorbar(rv['jyear'], rv['rv_{}'.format(basic_unit)], yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+
+
+    n_rv = len(rv)
+
+    if orbit_system is not None:
+
+        # fit systemic velocity
+        if estimate_systemic_velocity:
+            rv_mps = orbit_system.compute_radial_velocity(np.array(rv['MJD']))
+            rv_kmps = rv_mps / 1000.
+            onesvec = np.ones(n_rv)
+            C = np.mat([onesvec])
+            weight = 1. / np.power(np.array(rv['sigma_rv_kmps']), 2)
+            LHS = np.mat(np.array(rv['rv_kmps']) - rv_kmps)
+            res = linearfit.LinearFit(LHS, np.diag(weight), C)
+            res.fit()
+            gamma_kmps = np.float(res.p)
+            gamma_mps = gamma_kmps*1e3
+            print('Systemic velocity {:2.3f} +/- {:2.3f} km/s'.format(gamma_kmps,
+                                                                      res.p_normalised_uncertainty[0]))
+            rv['rv_model_kmps'] = rv_kmps + gamma_kmps
+            orbit_system.gamma_ms = gamma_mps
+        else:
+            rv['rv_model_{}'.format(basic_unit)] = orbit_system.compute_radial_velocity(np.array(rv['MJD']))/conversion_factor
+            gamma_mps = None
+        # plot RV orbit of primary
+        orbit_system.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day, n_orbit=n_orbit,
+                                   n_curve=1000, axis=axes[0][0], rv_unit=basic_unit)
+
+        residuals = rv['rv_{}'.format(basic_unit)] - rv['rv_model_{}'.format(basic_unit)]
+        rv_description = '$\\gamma={:2.3f}$ km/s\n$N_\\mathrm{{RV}}={}$\n' \
+                         '$\Sigma_\\mathrm{{O-C}}$={:2.3f} km/s'.format(orbit_system.gamma_ms/1e3, len(rv), np.std(residuals))
+
+        # plot systemic velocity
+        axes[0][0].axhline(y=orbit_system.gamma_ms / conversion_factor, color='0.5', ls=':', zorder=-50)
+
+        axes[1][0].plot(rv['jyear'], residuals, 'ko', label='_', mfc=data_colour)
+        axes[1][0].errorbar(rv['jyear'], residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+
+        axes[1][0].text(0.01, 0.99, rv_description, horizontalalignment='left',
+                verticalalignment='top', transform=axes[1][0].transAxes)
+
+    axes[-1][0].set_xlabel('Time (Julian year)')
+    # pl.legend()
+    axes[0][0].set_ylabel('RV ({})'.format(unit_string[basic_unit]))
+    axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
+    axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
+    axes[1][0].set_xlabel('Time (Julian year)')
+
+    fig.tight_layout(h_pad=0.0)
+
+    if verbose:
+        rv.pprint()
+
+
+
 
 
 def xfGetMeanParMatrix(xfP):
