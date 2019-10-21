@@ -17,6 +17,7 @@ Notes
 
 from __future__ import print_function
 
+import copy
 import os
 import numpy as np
 from matplotlib import pyplot as plt
@@ -2991,7 +2992,7 @@ class pDetLim(object):
 
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
-                 data_colour='k'):
+                 data_colour='k', include_degenerate_orbit=False):
     """
 
     Parameters
@@ -3055,6 +3056,13 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
         # plot RV orbit of primary
         orbit_system.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day, n_orbit=n_orbit,
                                    n_curve=1000, axis=axes[0][0], rv_unit=basic_unit)
+        if include_degenerate_orbit:
+            orbit_system_degenerate = copy.deepcopy(orbit_system)
+            orbit_system_degenerate.omega_deg += 180.
+            orbit_system_degenerate.OMEGA_deg += 180.
+            orbit_system_degenerate.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day,
+                                       n_orbit=n_orbit, n_curve=1000, axis=axes[0][0],
+                                       rv_unit=basic_unit, line_style='--')
 
         residuals = rv['rv_{}'.format(basic_unit)] - rv['rv_model_{}'.format(basic_unit)]
         rv_description = '$\\gamma={:2.3f}$ km/s\n$N_\\mathrm{{RV}}={}$\n' \
