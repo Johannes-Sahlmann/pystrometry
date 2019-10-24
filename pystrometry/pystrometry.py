@@ -833,7 +833,8 @@ class OrbitSystem(object):
             return photocentric_orbit_mas
 
 
-    def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True, coordinate_system='cartesian'):
+    def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True,
+                            coordinate_system='cartesian'):
         """
         Simulate fast 1D orbital astrometry
         written: J. Sahlmann   18 May 2015   ESAC
@@ -1779,6 +1780,8 @@ class PpmPlotter(object):
 class AstrometricOrbitPlotter(object):
     """Class to plot results of astrometric fitting of parallax + proper motion + orbit.
 
+    That is, this class supports primarly plotting of barycentric and photocentric orbits.
+
     Attributes
     ----------
     p : array
@@ -1827,7 +1830,8 @@ class AstrometricOrbitPlotter(object):
                             'residuals': None,
                             'scan_angle_definition': 'hipparcos',
                             'include_ppm': True,
-                            'title': ''
+                            'title': '',
+                            'relative_orbit': False,
                             }
 
             for key, value in default_dict.items():
@@ -1841,6 +1845,11 @@ class AstrometricOrbitPlotter(object):
 
         self.number_of_companions = number_of_companions
         model_name = 'k{:d}'.format(number_of_companions)
+
+
+        if self.relative_orbit:
+            # assert hasattr(self, 'relative_astrometry')
+            assert self.relative_coordinate_system is not None
 
         T = self.data.epoch_data
 
@@ -1862,6 +1871,8 @@ class AstrometricOrbitPlotter(object):
 
         if self.include_ppm:
             self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:len(ppm_parameters), :].T, ppm_parameters)).flatten()
+        elif self.relative_orbit:
+            self.ppm_model = np.zeros(len(T))
         else:
             self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:2, :].T, ppm_parameters[0:2])).flatten()
             # self.ppm_model = np.zeros(linear_coefficient_matrix.shape[1])
@@ -1900,9 +1911,17 @@ class AstrometricOrbitPlotter(object):
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
 
             tmporb = OrbitSystem(attribute_dict=theta_p)
-            orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
-                                                                      np.array(T['spsi']),
-                                                                      np.array(T['cpsi']))
+            if self.relative_orbit:
+                orbit_model = tmporb.relative_orbit_fast(np.array(T['MJD']), np.array(T['spsi']),
+                                                         np.array(T['cpsi']),
+                                                         shift_omega_by_pi=True,
+                                                         coordinate_system=self.relative_coordinate_system)
+
+            else:
+                orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
+                                                                          np.array(T['spsi']),
+                                                                          np.array(T['cpsi']))
+
             setattr(self, 'orbit_system_companion_{:d}'.format(p), tmporb)
             setattr(self, 'orbit_model_%d' % (p), orbit_model)
 
@@ -2335,6 +2354,11 @@ class AstrometricOrbitPlotter(object):
                                                'orbit_time_{}.pdf'.format(name_seed_2.replace('.', 'p')))
                     plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
+
+            # if argument_dict['make_relative_orbit_figure']:
+
+
+
     def insert_ppm_plot(self, orb, argument_dict):
         """
 
@@ -2536,25 +2560,41 @@ class AstrometricOrbitPlotter(object):
         """
 
         timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
-        orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve, cpsi_curve)
+        if self.relative_orbit:
+            orbit_curve = orb.relative_orbit_fast(timestamps_1D, spsi_curve, cpsi_curve, shift_omega_by_pi=True,
+                                                     coordinate_system=self.relative_coordinate_system)
+        else:
+            orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve, cpsi_curve)
         phi1_curve = orbit_curve[xi_curve]
         phi2_curve = orbit_curve[yi_curve]
 
         t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch = get_spsi_cpsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
-        orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
+        if self.relative_orbit:
+            orbit_epoch = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch, shift_omega_by_pi=True,
+                                                     coordinate_system=self.relative_coordinate_system)
+        else:
+            orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
         phi1_model_epoch = orbit_epoch[xi_epoch]
         phi2_model_epoch = orbit_epoch[yi_epoch]
 
         t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_spsi_cpsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
-        orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
+        if self.relative_orbit:
+            orbit_frame = orb.relative_orbit_fast(t_frame_mjd, spsi_frame, cpsi_frame, shift_omega_by_pi=True,
+                                                     coordinate_system=self.relative_coordinate_system)
+        else:
+            orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
         phi1_model_frame = orbit_frame[xi_frame]
         phi2_model_frame = orbit_frame[yi_frame]
 
         # show periastron
         if 1:
-
             t_periastron_mjd, cpsi_periastron, spsi_periastron, xi_periastron, yi_periastron = get_spsi_cpsi_for_2Dastrometry(orb.Tp_day, scan_angle_definition=argument_dict['scan_angle_definition'])
-            orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
+            if self.relative_orbit:
+                orbit_periastron = orb.relative_orbit_fast(t_periastron_mjd, spsi_periastron, cpsi_periastron,
+                                                      shift_omega_by_pi=True,
+                                                      coordinate_system=self.relative_coordinate_system)
+            else:
+                orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
             phi1_model_periastron = orbit_periastron[xi_periastron]
             phi2_model_periastron = orbit_periastron[yi_periastron]
             pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], 'k.-', lw=0.5, color='0.5')
@@ -4042,7 +4082,7 @@ class ImagingAstrometryData(object):
     structure class for 2D imaging astrometry
     """
 
-    def __init__(self, data_table, out_dir=None):
+    def __init__(self, data_table, out_dir=None, data_type='2d'):
 
         # sort data table by increasing time
         self.time_column_name = 'MJD'
@@ -4053,11 +4093,15 @@ class ImagingAstrometryData(object):
         self.number_of_observing_blocks = len(np.unique(self.data_table['OB']))
         self.observing_time_span_day = np.ptp(data_table[self.time_column_name])
 
-        # unique Julian dates of observations, i.e. of 2D astrometry
-        self.observing_times_2D_MJD, unique_index = np.unique(np.array(data_table[self.time_column_name]), return_index=True)
-        self.data_2D = self.data_table[unique_index]
+        if data_type=='2d':
+            # unique Julian dates of observations, i.e. of 2D astrometry
+            self.observing_times_2D_MJD, unique_index = np.unique(np.array(data_table[self.time_column_name]), return_index=True)
+            self.data_2D = self.data_table[unique_index]
+            self.number_of_1D_measurements = 2 * len(self.data_2D)
+        else:
+            self.data_1D = self.data_table
+            self.number_of_1D_measurements = len(self.data_1D)
 
-        self.number_of_1D_measurements = 2 * len(self.data_2D)
 
         self.simbad_object_name = None
         if out_dir is not None:
