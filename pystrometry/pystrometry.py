@@ -208,6 +208,7 @@ class OrbitSystem(object):
         ----------
         attribute_dict : dict
         """
+        self.attribute_dict = attribute_dict
         default_dict = {'P_day': 100, 'ecc': 0, 'm1_MS': 1, 'm2_MJ': 1,
                         'omega_deg': 0., 'OMEGA_deg': 0., 'i_deg': 90.,
                         'Tp_day': 0., 'RA_deg': 0., 'DE_deg': 0.,
@@ -1821,10 +1822,8 @@ class AstrometricOrbitPlotter(object):
         if attribute_dict is not None:
             for key, value in attribute_dict.items():
                 setattr(self, key, value)
-                # print('Setting {} to {}'.format(key, value))
-                print('Setting {}'.format(key))
 
-                # set defaults
+            # set defaults
             default_dict = {'outlier_sigma_threshold': 3.,
                             'absolute_threshold': 10.,
                             'residuals': None,
@@ -1832,6 +1831,7 @@ class AstrometricOrbitPlotter(object):
                             'include_ppm': True,
                             'title': '',
                             'relative_orbit': False,
+                            'verbose': False,
                             }
 
             for key, value in default_dict.items():
@@ -1951,7 +1951,8 @@ class AstrometricOrbitPlotter(object):
         # compute epoch averages
         medi = np.unique(T['OB'])
         self.medi = medi
-        self.t_MJD_epoch = np.zeros(len(medi))
+        self.n_epoch = len(self.medi)
+        self.t_MJD_epoch = np.zeros(self.n_epoch)
 
         average_quantities_1d = 'stdResidualX errResidualX Xmean_ppm Xmean_orb parfXmean ' \
                                 'DCR_Xmean ACC_Xmean meanResidualX x_e_laz sx_star_laz mean_cpsi mean_spsi'.split()
@@ -2110,8 +2111,8 @@ class AstrometricOrbitPlotter(object):
         self.residuals = residuals
 
     def print_residual_statistics(self):
-        """Print statistics to screen."""
-
+        """Print statistics to stdout."""
+        print('='*100)
         print('Epoch residual RMS X %3.3f mas' % (self.epoch_omc_std_X))
         if self.data_type == '2d':
             print('Epoch residual RMS Y %3.3f mas' % (self.epoch_omc_std_Y))
@@ -2127,12 +2128,19 @@ class AstrometricOrbitPlotter(object):
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
         elif '2d' in self.data_type:
-        # elif self.data_type == '2d':
-            # print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
             print('Epoch   precision (x_e_laz)'),
             print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
+        print('='*100)
+
+
+    def astrometric_signal_to_noise_epoch(self, amplitude_mas):
+        """Return astrometric SNR for epochs (FOV transists not CCD transits)"""
+        if self.data_type == '1d':
+            median_uncertainty_mas = np.median([self.errResidualX])
+        astrometric_snr = amplitude_mas * np.sqrt(self.n_epoch)/median_uncertainty_mas
+        return astrometric_snr
 
     def plot(self, argument_dict=None):
         """Make the astrometric orbit plots.
@@ -2149,6 +2157,7 @@ class AstrometricOrbitPlotter(object):
                             'frame_omc_description': 'default',
                             'orbit_description': 'default',
                             'scan_angle_definition': 'gaia',
+                            'orbit_signal_description': 'default',
                             }
 
             for key, value in default_argument_dict.items():
@@ -2176,12 +2185,18 @@ class AstrometricOrbitPlotter(object):
                 argument_dict['frame_omc_description'] += '\nexN = {:2.2f}, mF = {:2.0f}'.format(
             argument_dict['excess_noise'], argument_dict['merit_function'])
 
+        if argument_dict['orbit_signal_description'] == 'default':
+            argument_dict[
+                'orbit_signal_description'] = '$\Sigma_\\mathrm{{Signal,epoch}}$={:2.3f} mas'.format(
+                np.std(self.Xmean_orb))
+
         #  loop over number of companions
         for p in range(self.number_of_companions):
             if argument_dict['orbit_description'] == 'default':
-                argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], getattr(self, 'orbit_system_companion_{:d}'.format(p)).alpha_mas, self.model_parameters[p]['i_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
+                argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$\\omega={:2.3f}$ deg\n$\\Omega={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], getattr(self, 'orbit_system_companion_{:d}'.format(p)).alpha_mas, self.model_parameters[p]['i_deg'], self.model_parameters[p]['omega_deg'], self.model_parameters[p]['OMEGA_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
             else:
                 argument_dict['tmp_orbit_description'] = argument_dict['orbit_description']
+
 
             theta_p = self.model_parameters[p]
             theta_names = theta_p.keys()
@@ -2393,6 +2408,7 @@ class AstrometricOrbitPlotter(object):
 
 
     def insert_orbit_timeseries_plot(self, orb, argument_dict, direction='x', ax=None):
+        """Plot the residual signal after removal of parallax, proper motion, linear terms."""
 
         if ax is None:
             ax = pl.gca()
@@ -2401,8 +2417,8 @@ class AstrometricOrbitPlotter(object):
             ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, 'ko')
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, yerr=self.errResidualX,
                                 fmt='none', ecolor='k')
-            if argument_dict['orbit_description'] is not None:
-                pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',
+            if argument_dict['orbit_signal_description'] is not None:
+                pl.text(0.01, 0.99, argument_dict['orbit_signal_description'], horizontalalignment='left',
                         verticalalignment='top', transform=ax.transAxes)
 
         if self.data_type == '1d':
@@ -3095,7 +3111,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             gamma_mps = None
         # plot RV orbit of primary
         orbit_system.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day, n_orbit=n_orbit,
-                                   n_curve=1000, axis=axes[0][0], rv_unit=basic_unit)
+                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit)
         if include_degenerate_orbit:
             orbit_system_degenerate = copy.deepcopy(orbit_system)
             orbit_system_degenerate.omega_deg += 180.
@@ -3106,7 +3122,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
 
         residuals = rv['rv_{}'.format(basic_unit)] - rv['rv_model_{}'.format(basic_unit)]
         rv_description = '$\\gamma={:2.3f}$ km/s\n$N_\\mathrm{{RV}}={}$\n' \
-                         '$\Sigma_\\mathrm{{O-C}}$={:2.3f} km/s'.format(orbit_system.gamma_ms/1e3, len(rv), np.std(residuals))
+                         '$\Sigma_\\mathrm{{O-C}}$={:2.3f} {}'.format(orbit_system.gamma_ms/1e3, len(rv), np.std(residuals), unit_string[basic_unit])
 
         # plot systemic velocity
         axes[0][0].axhline(y=orbit_system.gamma_ms / conversion_factor, color='0.5', ls=':', zorder=-50)

@@ -59,3 +59,4 @@ distribute-*.tar.gz
 # Mac OSX
 .DS_Store
 v/cache
+pystrometry/data

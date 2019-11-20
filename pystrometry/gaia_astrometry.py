@@ -56,6 +56,7 @@ class GaiaIad(object):
 
         # identify focal plane transits
         unique_transit_ids = np.unique(self.epoch_data['transitId'])
+        self.n_fov_transit = len(unique_transit_ids)
         self.transit_id_name = 'OB'
         self.epoch_data[self.transit_id_name] = np.ones(len(self.epoch_data)).astype(int)
         for ob_number, transit_id in enumerate(unique_transit_ids):
@@ -73,3 +74,20 @@ class GaiaIad(object):
                 d_index = t_index[np.where(self.epoch_data['direction_AL0_AC1'][t_index] == direction_index)[0]]
                 self.epoch_data['da_mas_obs_epoch_median_subtracted'][d_index] = self.epoch_data['da_mas_obs'][d_index] \
                                                                                  - np.median(self.epoch_data['da_mas_obs'][d_index])
+
+    def astrometric_signal_to_noise(self, amplitude_mas):
+        """Return astrometric signal to noise as defined in Sahlmann et al. 2011
+
+        Parameters
+        ----------
+        amplitude_mas
+
+        Returns
+        -------
+
+        """
+        median_uncertainty_mas = np.median(self.epoch_data['errda_mas_obs'])
+        n_ccd_transits = len(self.epoch_data)
+        astrometric_snr = amplitude_mas * np.sqrt(n_ccd_transits)/median_uncertainty_mas
+
+        return astrometric_snr
