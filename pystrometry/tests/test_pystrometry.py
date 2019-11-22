@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import copy
 
 from astropy import constants as const
@@ -7,7 +8,7 @@ from numpy.testing import assert_allclose
 
 from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2 # keplerian_secondary_mass,
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
-from ..pystrometry import thiele_innes_constants, geometric_elements
+from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_spsi_cpsi_for_2Dastrometry
 
 
 def test_angular_to_linear():
@@ -66,3 +67,105 @@ def test_thiele_innes():
     assert_allclose(omega, geometric_parameters[1], atol=absolute_tolerance)
     assert_allclose(OMEGA, geometric_parameters[2], atol=absolute_tolerance)
     assert_allclose(i, geometric_parameters[3], atol=absolute_tolerance)
+
+
+def test_orbit_computation(verbose=False):
+    """Perform basic checks on single Keplerian systems.
+
+    The first check is to verify that two orbits that defer by +180deg in omega_deg
+    and OMEGA_deg are equivalent in terms of astrometry.
+
+    The effect of that change on the radial velocity alone is the same as replacing i
+    by 180deg - i (but the astrometry changes in that case).
+
+    """
+
+    # example orbit system
+    attribute_dict = OrderedDict([('RA_deg', 164.9642810928918), ('DE_deg', -21.2190511382063),
+                 ('offset_alphastar_mas', 154.35507953), ('offset_delta_mas', -206.09777548),
+                 ('absolute_plx_mas', 27.0817358), ('muRA_mas', 105.77971602),
+                 ('muDE_mas', -162.05280475), ('rho_mas', -27.13228264),
+                 ('Tp_day', 57678.474567094345), ('omega_deg', -23.772188428200618),
+                 ('P_day', 687.96689982), ('ecc', 0.0807917), ('OMEGA_deg', 114.45626491875018),
+                 ('i_deg', 31.976978902085566), ('delta_mag', 5.74), ('m1_MS', 0.08),
+                 ('m2_MJ', 69.38476024572319), ('Tref_MJD', 57622.37084552435),
+                 ('scan_angle_definition', 'hipparcos'),
+                 ('parallax_correction_mas', 0.8182385292016127)])
+
+
+    n_grid = 5
+    omega_deg = np.linspace(0.1, 180, n_grid, endpoint=False)
+    OMEGA_deg = np.linspace(0.1, 180, n_grid, endpoint=False)
+    i_deg = np.linspace(0.5, 180, n_grid, endpoint=False)
+
+    omega_mesh, OMEGA_mesh, i_mesh = np.meshgrid(omega_deg, OMEGA_deg, i_deg)
+    omega_array = omega_mesh.flatten()
+    OMEGA_array = OMEGA_mesh.flatten()
+    i_array = i_mesh.flatten()
+
+    for k in range(len(omega_array)):
+        attribute_dict['omega_deg'] = omega_array[k]
+        attribute_dict['OMEGA_deg'] = OMEGA_array[k]
+        attribute_dict['i_deg'] = i_array[k]
+
+        systems = OrderedDict()
+
+        # first orbit
+        orbit = OrbitSystem(attribute_dict=attribute_dict)
+        if verbose:
+            print(orbit)
+
+        # seconf modified orbit
+        attribute_dict2 = copy.deepcopy(attribute_dict)
+        attribute_dict3 = copy.deepcopy(attribute_dict)
+        attribute_dict2['OMEGA_deg'] += 180.
+        attribute_dict2['omega_deg'] += 180.
+        orbit2 = OrbitSystem(attribute_dict=attribute_dict2)
+        if verbose:
+            print(orbit2)
+
+        attribute_dict3['i_deg'] = 180. - attribute_dict3['i_deg']
+        orbit3 = OrbitSystem(attribute_dict=attribute_dict3)
+        if verbose:
+            print(orbit3)
+
+        systems[0] = {'orbit_system': orbit}
+        systems[1] = {'orbit_system': orbit2}
+        systems[2] = {'orbit_system': orbit3}
+
+        n_orbit = 2
+        n_curve = 100
+
+        # compute timeseries for both systems
+        for i, system in systems.items():
+            orbit_system = system['orbit_system']
+
+            timestamps_curve_2D = np.linspace(orbit_system.Tp_day - orbit_system.P_day,
+                                              orbit_system.Tp_day + n_orbit + orbit_system.P_day,
+                                              n_curve)
+
+
+            timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(timestamps_curve_2D)
+
+            # relative orbit
+            phi0_curve_relative = orbit_system.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve,
+                                                           shift_omega_by_pi=True)
+
+            systems[i]['relative_orbit'] = phi0_curve_relative
+            systems[i]['rv_orbit'] = orbit_system.compute_radial_velocity(timestamps_curve_2D)
+            systems[i]['barycentric_orbit'] =  orbit_system.pjGetBarycentricAstrometricOrbitFast(timestamps_curve_1D,
+                                                                          spsi_curve, cpsi_curve)
+
+
+        absolute_tolerance = 1e-6
+
+        # check that relative orbits are the same
+        assert_allclose(systems[0]['relative_orbit'], systems[1]['relative_orbit'], atol=absolute_tolerance)
+
+        # check that barycentric orbits are the same
+        assert_allclose(systems[0]['barycentric_orbit'], systems[1]['barycentric_orbit'], atol=absolute_tolerance)
+
+        # check that RV orbits are the same except for the sign
+        if (systems[0]['orbit_system'].gamma_ms ==0) and (systems[1]['orbit_system'].gamma_ms ==0):
+            assert_allclose(systems[0]['rv_orbit'], -1*systems[1]['rv_orbit'], atol=absolute_tolerance)
+            assert_allclose(systems[0]['rv_orbit'], systems[2]['rv_orbit'], atol=absolute_tolerance)

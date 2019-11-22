@@ -2,6 +2,7 @@
 [![Documentation Status](https://readthedocs.org/projects/pystrometry/badge/?version=latest)](https://pystrometry.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://badge.fury.io/py/pystrometry.svg)](https://badge.fury.io/py/pystrometry)
 [![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/Johannes-Sahlmann/pystrometry/blob/master/LICENSE.md)
+[![DOI](https://zenodo.org/badge/172252669.svg)](https://zenodo.org/badge/latestdoi/172252669)
 
 # pystrometry  -  Support for high-precision astrometry timeseries analysis
 
