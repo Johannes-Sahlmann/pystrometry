@@ -27,7 +27,8 @@ class GaiaIad(object):
 
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA.csv'.format(self.source_id))
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_DETAILED.csv'.format(self.source_id))
-        self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_ALL_DETAILED_outsideAlgo.csv'.format(self.source_id))
+        # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_ALL_DETAILED_outsideAlgo.csv'.format(self.source_id))
+        self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_ALL.csv'.format(self.source_id))
         self.epoch_data = Table.read(self.epoch_data_file)
 
         if 'direction_AL0_AC1' in self.epoch_data.colnames:
