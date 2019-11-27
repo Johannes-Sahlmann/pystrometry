@@ -445,13 +445,17 @@ def make_orbit_figures(selected_systems, index, epoch_data_dir, mapping_dr3id_to
 
 def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_starname=None,
                       plot_dir=os.path.expanduser('~'),
-                      m1_MS=1., rv=None, show_plot=True, degenerate_orbit=False):
+                      m1_MS=1., rv=None, show_plot=True, degenerate_orbit=False, epoch_data_suffix=None):
 
     source_id = selected_systems['SourceId'][index]
     t_ref_jd = selected_systems['T0'][index]
     t_ref_mjd = Time(t_ref_jd, format='jd').mjd
 
-    iad = gaia_astrometry.GaiaIad(source_id, epoch_data_dir)
+    if epoch_data_suffix is None:
+        iad = gaia_astrometry.GaiaIad(source_id, epoch_data_dir)
+    else:
+        iad = gaia_astrometry.GaiaIad(source_id, epoch_data_dir, epoch_data_suffix=epoch_data_suffix)
+
     iad.load_data()
 
 

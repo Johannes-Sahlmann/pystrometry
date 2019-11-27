@@ -8,6 +8,33 @@
 
 
 ### Example usage
+- Plotting the orbital motion with default parameters 
+
+
+    from pystrometry.pystrometry import OrbitSystem 
+    orb = OrbitSystem()  # default parameters
+    orb.plot_orbits() 
+
+- Define the orbital parameters
+
+
+        attribute_dict = OrderedDict([  ('RA_deg', 164.), 
+                                        ('DE_deg', -21.),
+                                        ('absolute_plx_mas', 27.), 
+                                        ('Tp_day', 57678.4), 
+                                        ('omega_deg', -23.),
+                                        ('P_day', 687.), 
+                                        ('ecc', 0.08), 
+                                        ('OMEGA_deg', 114.),
+                                        ('i_deg', 31.), 
+                                        ('m1_MS', 0.9),
+                                        ('m2_MJ', 3.)])
+                                        
+        orb = OrbitSystem(attribute_dict)
+        orb.plot_orbits() 
+
+
+
 
 ### Documentation
 
