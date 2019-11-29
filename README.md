@@ -34,6 +34,10 @@
         orb.plot_orbits() 
 
 
+Get the proper motion in RA, Dec:
+    
+    t_mjd = np.linspace(50000, 52000)
+    delta_ra_star_mas, delta_dec_mas = orb.ppm(t_mjd)
 
 
 ### Documentation
