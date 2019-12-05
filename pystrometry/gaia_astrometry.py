@@ -18,17 +18,18 @@ import numpy as np
 class GaiaIad(object):
     """Class for Gaia Epoch Astrometric Data."""
 
-    def __init__(self, source_id, data_dir):
+    def __init__(self, source_id, data_dir, epoch_data_suffix='_OBSERVATION_DATA_ALL.csv'):
         self.source_id = source_id
         self.data_dir = data_dir
         self.time_column = 'T-T0_yr'
+        self.epoch_data_suffix = epoch_data_suffix
 
     def load_data(self, verbose=0, write_modified_iad=0, use_modified_epoch_data=False, remove_outliers=True):
 
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA.csv'.format(self.source_id))
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_DETAILED.csv'.format(self.source_id))
         # self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_ALL_DETAILED_outsideAlgo.csv'.format(self.source_id))
-        self.epoch_data_file = os.path.join(self.data_dir, '{}_OBSERVATION_DATA_ALL.csv'.format(self.source_id))
+        self.epoch_data_file = os.path.join(self.data_dir, '{}{}'.format(self.source_id, self.epoch_data_suffix))
         self.epoch_data = Table.read(self.epoch_data_file)
 
         if 'direction_AL0_AC1' in self.epoch_data.colnames:

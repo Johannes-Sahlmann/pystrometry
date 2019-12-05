@@ -837,12 +837,25 @@ class OrbitSystem(object):
     def relative_orbit_fast(self, t_MJD, spsi, cpsi, unit='mas', shift_omega_by_pi=True,
                             coordinate_system='cartesian'):
         """
-        Simulate fast 1D orbital astrometry
+                Simulate fast 1D orbital astrometry
         written: J. Sahlmann   18 May 2015   ESAC
         updated: J. Sahlmann   25.01.2016   STScI/ESA
         updated: J. Sahlmann   27 February 2017   STScI/AURA
 
         returns relative orbit in linear or angular units
+
+        Parameters
+        ----------
+        t_MJD
+        spsi
+        cpsi
+        unit
+        shift_omega_by_pi
+        coordinate_system
+
+        Returns
+        -------
+
         """
 
         #mass term of relative orbit
