@@ -1,8 +1,18 @@
-See http://journals.aas.org/authors/references.html#Software on how to
-cite software.
+If you use `pystrometry` for work/research presented in a publication (whether directly,
+or as a dependency to another package), we recommend and encourage the following acknowledgment:
 
-GitHub has Zenodo DOI integration:
-https://guides.github.com/activities/citable-code/
+  This research made use of pystrometry, an open source Python package for
+  astrometry timeseries analysis (Sahlmann 2019).
 
-Also see https://swcarpentry.github.io/git-novice/12-citation/
-for further reading.
+where (Sahlmann 2019) is a citation of the Zenodo record, e.g.:
+
+@software{johannes_sahlmann_2019_3515526,
+  author       = {Johannes Sahlmann},
+  title        = {Johannes-Sahlmann/pystrometry: Release for Zenodo},
+  month        = oct,
+  year         = 2019,
+  publisher    = {Zenodo},
+  version      = {v0.0dev59},
+  doi          = {10.5281/zenodo.3515526},
+  url          = {https://doi.org/10.5281/zenodo.3515526}
+}
