@@ -12,6 +12,8 @@
 
 
         from pystrometry.pystrometry import OrbitSystem 
+        from collections import OrderedDict
+                
         orb = OrbitSystem()  # default parameters
         orb.plot_orbits() 
 
