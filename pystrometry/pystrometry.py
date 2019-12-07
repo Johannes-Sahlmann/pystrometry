@@ -264,6 +264,8 @@ class OrbitSystem(object):
             self._m2_MJ = self.m2_MJ
 
         if ('lambda_ref' in attribute_keys) and (self.lambda_ref is not None):
+            if self.Tref_MJD is None:
+                raise AttributeError('When lambda_ref si used, the reference time Tref_MJD needs to be set!')
             self.Tp_day = periastron_time(self.lambda_ref, self.omega_deg, self.Tref_MJD, self.P_day)
 
         # treatment of diluted systems
