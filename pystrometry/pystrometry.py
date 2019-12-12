@@ -3867,10 +3867,11 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
 
     Returns
     -------
+    xyzdata : astropy table
+
 
     References
     ----------
-
     See Horizons_doc.pdf available at https://ssd.jpl.nasa.gov/?horizons#email
     Documentation can also be obtained by sending en email with subject "BATCH-LONG" to
     horizons@ssd.jpl.nasa.gov
@@ -3914,7 +3915,8 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
         url += "&VEC_TABLE='{}'".format(vector_table_output_type)
         url += "&REF_PLANE='{}'".format(reference_plane)
 
-        print(url)
+        if verbose:
+            print(url)
         try:
             url_stream = urlopen(url)
         except HTTPError as e:

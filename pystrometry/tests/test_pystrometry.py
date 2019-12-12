@@ -2,25 +2,42 @@ from collections import OrderedDict
 import copy
 
 from astropy import constants as const
+from astropy.time import Time
 import numpy as np
 from numpy.testing import assert_allclose
 
 
-from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2 # keplerian_secondary_mass,
+from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2, get_ephemeris
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
 from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_spsi_cpsi_for_2Dastrometry
 
 
 def test_angular_to_linear():
+    """Test conversion between milliarcsecond and meter."""
+
     a_mas = 3.
     absolute_parallax_mas = 100.
 
     a_recovered_mas = convert_from_linear_to_angular(convert_from_angular_to_linear(a_mas, absolute_parallax_mas), absolute_parallax_mas)
-    print(np.abs(a_mas - a_recovered_mas))
+    # print(np.abs(a_mas - a_recovered_mas))
     assert np.abs(a_mas - a_recovered_mas) < 1e-14
 
 
-def test_keplerian_equations():
+def test_get_ephemeris():
+    """Test retrieval of ephemeris information from JPL Horizons."""
+
+    start_time = Time(2018., format='jyear')
+    stop_time = Time(2019., format='jyear')
+
+    xyzdata = get_ephemeris(start_time=start_time, stop_time=stop_time, step_size='5d',
+                  verbose=False, overwrite=True)
+
+    assert len(xyzdata) == 74
+
+
+def test_keplerian_equations(verbose=False):
+    """Test semimajor axis and mass consistency when applying Kepler's equations."""
+
     MS_kg = const.M_sun.value
     MJ_kg = const.M_jup.value  # jupiter mass in kg
 
@@ -29,15 +46,16 @@ def test_keplerian_equations():
     P_day = 400.
 
     a_m = pjGet_a_m_barycentre(m1_kg/MS_kg, m2_kg/MJ_kg, P_day)
-    print('')
 
     # m2_kg_recovered = keplerian_secondary_mass(m1_kg, a_m, P_day)
     m2_kg_recovered = pjGet_m2(m1_kg, a_m, P_day)
 
-    print(m2_kg/MJ_kg)
-    print(m2_kg_recovered/MJ_kg)
+    if verbose:
+        print('')
+        print(m2_kg/MJ_kg)
+        print(m2_kg_recovered/MJ_kg)
+        print(m2_kg/m2_kg_recovered - 1 )
 
-    print(m2_kg/m2_kg_recovered - 1 )
     assert m2_kg/m2_kg_recovered - 1 < 1e-14
 
 
