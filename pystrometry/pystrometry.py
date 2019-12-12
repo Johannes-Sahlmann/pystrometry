@@ -66,12 +66,12 @@ deg2as = u.deg.to(u.arcsec)
 year2day = u.year.to(u.day)
 MJ2MS = MJ_kg/MS_kg
 
-ephDict = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
-'HST': 'horizons_XYZ_1990-2016_EQUATORIAL_HST_1day_csv',
-'WISE': 'horizons_XYZ_2009-2016_EQUATORIAL_WISE_1day_csv',
-'JWST': 'horizons_XYZ_2012-2023_EQUATORIAL_JWST_1day_csv',
-'L2': 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
-'Earth': 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
+DEFAULT_EPHEMERIS_DICTIONARY = {'Spitzer': 'horizons_XYZ_2003-2020_EQUATORIAL_Spitzer_1day_csv',
+'HST'                                    : 'horizons_XYZ_1990-2016_EQUATORIAL_HST_1day_csv',
+'WISE'                                   : 'horizons_XYZ_2009-2016_EQUATORIAL_WISE_1day_csv',
+'JWST'                                   : 'horizons_XYZ_2012-2023_EQUATORIAL_JWST_1day_csv',
+'L2'                                     : 'horizons_XYZ_1990-2035_EQUATORIAL_L2_1day_csv',
+'Earth'                                  : 'horizons_XYZ_1990-2035_EQUATORIAL_Eart1day_csv'}
 
 local_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -927,7 +927,7 @@ class OrbitSystem(object):
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:
-            parf = getParallaxFactors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
+            parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
 
         self.parf = parf
         if self.Tref_MJD is None:
@@ -3841,33 +3841,47 @@ def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC, scan_angle_def
     return phi
 
 
-def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, step_size='5d', verbose=True, out_dir=None, vector_table_output_type=1, output_units='AU-D', overwrite=False, reference_plane='FRAME'):
-    """
-    Query the JPL Horizons web interface to return the X,Y,Z position of the target body relative to the center body
+def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, step_size='5d',
+                  verbose=True, out_dir=None, vector_table_output_type=1, output_units='AU-D',
+                  overwrite=False, reference_plane='FRAME'):
+    """Query the JPL Horizons web interface to return the X,Y,Z position of the target body
+    relative to the center body.
 
+
+    Parameters
+    ----------
+    center : str
+        Horizons object identifier, default is Earth Center 'g@399'
+    target : str
+        Horizons object identifier, default is Solar System Barycenter '0'
+    start_time : astropy time instance
+    stop_time : astropy time instance
+    step_size : string, default is '1d' for 1 day steps
+    verbose : bool
+    out_dir : str
+    vector_table_output_type
+    output_units
+    overwrite
+    reference_plane : str
+        reference_plane = 'FRAME' is for Earth mean equator and equinox
+
+    Returns
+    -------
+
+    References
+    ----------
 
     See Horizons_doc.pdf available at https://ssd.jpl.nasa.gov/?horizons#email
-    Documentation can also be obtained by sending en email with subject "BATCH-LONG" to horizons@ssd.jpl.nasa.gov
+    Documentation can also be obtained by sending en email with subject "BATCH-LONG" to
+    horizons@ssd.jpl.nasa.gov
 
-
-    :param center: string
-        Horizons object identifier, default is Earth Center 'g@399'
-    :param target: string
-        Horizons object identifier, default is Solar System Barycenter '0'
-    :param start_time: astropy time instance
-    :param stop_time: astropy time instance
-    :param step_size: string, default is '1d' for 1 day steps
-    :return:
-
-
-    reference_plane = 'FRAME' is for Earth mean equator and equinox
     """
     global ephemeris_dir
 
     if start_time is None:
         start_time = Time(1950.0, format='jyear')
     if stop_time is None:
-        stop_time = Time(2020.0, format='jyear')
+        stop_time = Time(2025.0, format='jyear')
 
     if out_dir is not None:
         ephemeris_dir = out_dir
@@ -3880,7 +3894,6 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
 
     if vector_table_output_type not in np.arange(6)+1:
         raise NotImplementedError()
-
 
     horizons_file_seed = '{}_{}_{}_{}_{}'.format(center, target, start_time, stop_time, step_size)
     out_file = os.path.join(ephemeris_dir, horizons_file_seed + '.txt')
@@ -3911,8 +3924,6 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
         content = url_stream.read()
         url_stream.close()
 
-
-        # print(content.decode())
         with open(out_file, 'wb') as ephemeris:
             ephemeris.write(content)
 
@@ -3983,11 +3994,36 @@ def read_ephemeris(horizons_file_seed, overwrite=False, ephemeris_path=None, ver
     return xyzdata
 
 
-def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=False, instrument=None, overwrite=False):
+def get_parallax_factors(ra_deg, dec_deg, time_jd, horizons_file_seed=None, verbose=False,
+                         instrument=None, overwrite=False):
+    """
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right Ascension in degrees
+    dec_deg : float
+        Declination in degrees
+    time_jd : ndarray
+        Array of times in Julian Day format
+    horizons_file_seed : str
+        Optional input of pre-existing ephemeris file from JPL Horizons
+    verbose : bool
+        verbosity
+    instrument : str
+        Optional argument when using pre-existing ephemeris file
+    overwrite : bool
+        Whether to overwrite existing products
+
+    Returns
+    -------
+        [parallax_factor_ra, parallax_factor_dec] : ndarray
+        Arrays holding the parallax factors
+    """
 
     ephFactor = -1
-    RA_rad = np.deg2rad(RA_deg)
-    DE_rad = np.deg2rad(DE_deg)
+    ra_rad = np.deg2rad(ra_deg)
+    de_rad = np.deg2rad(dec_deg)
 
     if instrument is not None:
         instr = np.unique(instrument)
@@ -3999,27 +4035,23 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
         for ins in instr:
             idx = np.where( instrument == ins )[0]
             if verbose:
-                print('Getting Parallax factors for %s using Seed: \t%s' % (ins,ephDict[ins]))
-            xyzdata = read_ephemeris(ephDict[ins])
+                print('Getting Parallax factors for %s using Seed: \t%s' % (ins, DEFAULT_EPHEMERIS_DICTIONARY[ins]))
+            xyzdata = read_ephemeris(DEFAULT_EPHEMERIS_DICTIONARY[ins])
             Xip = interp1d(xyzdata['JD'],xyzdata['X'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
             Yip = interp1d(xyzdata['JD'],xyzdata['Y'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
             Zip = interp1d(xyzdata['JD'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
-#             if ins=='JWST':
-#                 pdb.set_trace()
             try:
-                Xip_val[idx] = Xip(t_JD[idx])
-                Yip_val[idx] = Yip(t_JD[idx])
-                Zip_val[idx] = Zip(t_JD[idx])
+                Xip_val[idx] = Xip(time_jd[idx])
+                Yip_val[idx] = Yip(time_jd[idx])
+                Zip_val[idx] = Zip(time_jd[idx])
             except ValueError:
-                print('Error in time interpolation for parallax factors: range %3.1f--%3.2f (%s--%s)\n' % (np.min(t_JD[idx]),np.max(t_JD[idx]), Time(np.min(t_JD[idx]),format='jd',scale='utc').iso, Time(np.max(t_JD[idx]),format='jd',scale='utc').iso )),
+                print('Error in time interpolation for parallax factors: range %3.1f--%3.2f (%s--%s)\n' % (np.min(time_jd[idx]), np.max(time_jd[idx]), Time(np.min(time_jd[idx]), format='jd', scale='utc').iso, Time(np.max(time_jd[idx]), format='jd', scale='utc').iso)),
                 print('Ephemeris file contains data from %s to %s' % (Time(np.min(xyzdata['JD']),format='jd').iso, Time(np.max(xyzdata['JD']),format='jd').iso))
                 pdb.set_trace()
                 1/0
 
-            parfRA  = ephFactor* ( Xip_val*np.sin(RA_rad) - Yip_val*np.cos(RA_rad) )
-            parfDE =  ephFactor*(( Xip_val*np.cos(RA_rad) + Yip_val*np.sin(RA_rad) )*np.sin(DE_rad) - Zip_val*np.cos(DE_rad))
-
-    #     horizons_file_seed = 'horizons_XYZ_2009-2019_EQUATORIAL_Paranal_1h'
+            parallax_factor_ra  = ephFactor* ( Xip_val*np.sin(ra_rad) - Yip_val*np.cos(ra_rad) )
+            parallax_factor_dec =  ephFactor*(( Xip_val*np.cos(ra_rad) + Yip_val*np.sin(ra_rad) )*np.sin(de_rad) - Zip_val*np.cos(de_rad))
 
     else:
         if horizons_file_seed is None:
@@ -4034,17 +4066,14 @@ def getParallaxFactors(RA_deg, DE_deg, t_JD, horizons_file_seed=None, verbose=Fa
         Zip = interp1d(xyzdata['JDTDB'],xyzdata['Z'], kind='linear', copy=True, bounds_error=True,fill_value=np.nan)
 
         try:
-            parfRA  = ephFactor* ( Xip(t_JD)*np.sin(RA_rad) - Yip(t_JD)*np.cos(RA_rad) )
-            parfDE =  ephFactor*(( Xip(t_JD)*np.cos(RA_rad) + Yip(t_JD)*np.sin(RA_rad) )*np.sin(DE_rad) - Zip(t_JD)*np.cos(DE_rad))
+            parallax_factor_ra  = ephFactor* (Xip(time_jd) * np.sin(ra_rad) - Yip(time_jd) * np.cos(ra_rad))
+            parallax_factor_dec =  ephFactor*((Xip(time_jd) * np.cos(ra_rad) + Yip(time_jd) * np.sin(ra_rad)) * np.sin(de_rad) - Zip(time_jd) * np.cos(de_rad))
         except ValueError:
             raise ValueError('Error in time interpolation for parallax factors: \n'
                              'requested range {:3.1f}--{:3.1f} ({}--{})\n'
-                             'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(t_JD),np.max(t_JD), Time(np.min(t_JD),format='jd',scale='utc').iso, Time(np.max(t_JD),format='jd',scale='utc').iso, np.min(xyzdata['JDTDB']),np.max(xyzdata['JDTDB']), Time(np.min(xyzdata['JDTDB']),format='jd',scale='utc').iso, Time(np.max(xyzdata['JDTDB']),format='jd',scale='utc').iso
+                             'available range {:3.1f}--{:3.1f} ({}--{})'.format(np.min(time_jd), np.max(time_jd), Time(np.min(time_jd), format='jd', scale='utc').iso, Time(np.max(time_jd), format='jd', scale='utc').iso, np.min(xyzdata['JDTDB']), np.max(xyzdata['JDTDB']), Time(np.min(xyzdata['JDTDB']), format='jd', scale='utc').iso, Time(np.max(xyzdata['JDTDB']), format='jd', scale='utc').iso
                                                                                 ) )
-
-
-
-    return [parfRA,parfDE]
+    return [parallax_factor_ra, parallax_factor_dec]
 
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -4067,32 +4096,32 @@ def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=
 
 
 def dcr_coefficients(aux):
+    """Return DCR parameters following Sahlmann+13.
+
+    Parameters
+    ----------
+    aux : astropy table
+        Table containing columns with predefined names.
+
+    Returns
+    -------
+
     """
-    DCR parameter computations (following Sahlmann+13)
+    temp = aux['temperature'].data  # Celsius
+    pres = aux['pressure'].data  # mbar
 
-    :param aux: astropy table, has to contain columns named
-
-    :return:
-    """
-
-    # Nmes1D = aux.shape[0] * 2
-
-    temp = aux['temperature'].data # Celcius
-    pres = aux['pressure'].data # mbar
-
-    # temp = aux[:, 4]
-    # pres = aux[:, 5]
     f3m = (1. - (temp - 11.) / (273. + 11.)) * (1. + (pres - 744.) / 744.)
 
     # zenith angle
-    # z_rad = np.deg2rad(90. - aux[:, 9])
     z_rad = np.deg2rad(90. - aux['tel_altitude'].data)
 
     lat_rad = np.deg2rad(aux['geo_latitude'].data)
     dec_rad = np.deg2rad(aux['dec'].data)
     azi_rad = np.deg2rad(aux['tel_azimuth'].data)
+
     # hour angle
     ha_rad = [sla.slalib.sla_pda2h(lat_rad[i], dec_rad[i], azi_rad[i])[0] for i in range(len(dec_rad))]
+
     # parallactic angle
     pa_rad = [sla.slalib.sla_pa(ha_rad[i], dec_rad[i], lat_rad[i]) for i in range(len(dec_rad))]
 
@@ -4180,7 +4209,7 @@ class ImagingAstrometryData(object):
         observing_times_2D_TDB_JD = Time(self.observing_times_2D_MJD, format='mjd', scale='utc').tdb.jd
 
         # compute parallax factors, this is a 2xN_obs array
-        observing_parallax_factors = getParallaxFactors(self.RA_deg, self.Dec_deg, observing_times_2D_TDB_JD, horizons_file_seed=earth_ephemeris_file_seed, verbose=verbose, overwrite=overwrite)
+        observing_parallax_factors = get_parallax_factors(self.RA_deg, self.Dec_deg, observing_times_2D_TDB_JD, horizons_file_seed=earth_ephemeris_file_seed, verbose=verbose, overwrite=overwrite)
 
         # set reference epoch for position and computation of proper motion coefficients tspsi and tcpsi
         if reference_epoch_MJD is None:
@@ -4253,7 +4282,7 @@ class ImagingAstrometryData(object):
         self.dcr_parameter_coefficients_array = np.array([self.dcr_parameter_coefficients_table[c].data for c in self.dcr_parameter_coefficients_table.colnames])
 
 
-        self.linear_parameter_coefficients_table = tablehstack((self.five_parameter_coefficients_table,self.dcr_parameter_coefficients_table))
+        self.linear_parameter_coefficients_table = tablehstack((self.five_parameter_coefficients_table, self.dcr_parameter_coefficients_table))
         self.linear_parameter_coefficients_array = np.array([self.linear_parameter_coefficients_table[c].data for c in self.linear_parameter_coefficients_table.colnames])
 
     def set_data_1D(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None):
