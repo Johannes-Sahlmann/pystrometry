@@ -219,7 +219,8 @@ class OrbitSystem(object):
                         'rvQuadraticDrift_mspyr': None,
                         'rvCubicDrift_mspyr': None, 'Tref_MJD': None,
                         'scan_angle_definition': 'hipparcos',
-                        'rho_mas': None,
+                        'rho_mas': None,  # DCR coefficient
+                        'd_mas': None,  # DCR coefficient (if DCR corrector is used)
                         'a_mas': None,
                         'offset_alphastar_mas': None,
                         'offset_delta_mas': None,
@@ -1674,10 +1675,9 @@ class PpmPlotter(object):
             pl.ylabel('O-C (mas)')
             if residual_y_axis_limit is not None:
                 pl.ylim((-residual_y_axis_limit, residual_y_axis_limit))
-
         if not separate_residual_panels:
             # pl.legend(loc='best')
-            pl.legend()
+            pl.legend(loc=3)
 
         if omc_description is not None:
             ax=pl.gca()
@@ -4332,7 +4332,7 @@ def get_theta_best_genome(best_genome_file, reference_time_MJD, theta_names, m1_
 
     best_genome = Table.read(best_genome_file, format='ascii.basic', data_start=2, delimiter=',', guess=False)
 
-    if instrument != 'FORS2':
+    if instrument.lower() != 'fors2':
         best_genome.remove_column('d_mas')
 
     # if verbose:
