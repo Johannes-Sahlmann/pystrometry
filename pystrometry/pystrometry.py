@@ -1933,9 +1933,11 @@ class AstrometricOrbitPlotter(object):
                                                          coordinate_system=self.relative_coordinate_system)
 
             else:
-                orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
-                                                                          np.array(T['spsi']),
+                orbit_model = tmporb.photocenter_orbit(np.array(T['MJD']),np.array(T['spsi']),
                                                                           np.array(T['cpsi']))
+                # orbit_model = tmporb.pjGetBarycentricAstrometricOrbitFast(np.array(T['MJD']),
+                #                                                           np.array(T['spsi']),
+                #                                                           np.array(T['cpsi']))
 
             setattr(self, 'orbit_system_companion_{:d}'.format(p), tmporb)
             setattr(self, 'orbit_model_%d' % (p), orbit_model)
@@ -2443,7 +2445,9 @@ class AstrometricOrbitPlotter(object):
         elif self.data_type == '2d':
             timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(
                 self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
-            orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve,
+            # orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve,
+            #                                                        cpsi_curve)
+            orbit_curve = orb.photocenter_orbit(timestamps_1D, spsi_curve,
                                                                    cpsi_curve)
             phi1_curve = orbit_curve[xi_curve]
             phi2_curve = orbit_curve[yi_curve]
@@ -2595,7 +2599,8 @@ class AstrometricOrbitPlotter(object):
             orbit_curve = orb.relative_orbit_fast(timestamps_1D, spsi_curve, cpsi_curve, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
         else:
-            orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve, cpsi_curve)
+            orbit_curve = orb.photocenter_orbit(timestamps_1D, spsi_curve, cpsi_curve)
+            # orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve, cpsi_curve)
         phi1_curve = orbit_curve[xi_curve]
         phi2_curve = orbit_curve[yi_curve]
 
@@ -2604,7 +2609,8 @@ class AstrometricOrbitPlotter(object):
             orbit_epoch = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
         else:
-            orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
+            orbit_epoch = orb.photocenter_orbit(t_epoch_MJD, spsi_epoch, cpsi_epoch)
+            # orbit_epoch = orb.pjGetBarycentricAstrometricOrbitFast(t_epoch_MJD, spsi_epoch, cpsi_epoch)
         phi1_model_epoch = orbit_epoch[xi_epoch]
         phi2_model_epoch = orbit_epoch[yi_epoch]
 
@@ -2613,7 +2619,8 @@ class AstrometricOrbitPlotter(object):
             orbit_frame = orb.relative_orbit_fast(t_frame_mjd, spsi_frame, cpsi_frame, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
         else:
-            orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
+            orbit_frame = orb.photocenter_orbit(t_frame_mjd, spsi_frame, cpsi_frame)
+            # orbit_frame = orb.pjGetBarycentricAstrometricOrbitFast(t_frame_mjd, spsi_frame, cpsi_frame)
         phi1_model_frame = orbit_frame[xi_frame]
         phi2_model_frame = orbit_frame[yi_frame]
 
@@ -2625,7 +2632,8 @@ class AstrometricOrbitPlotter(object):
                                                       shift_omega_by_pi=True,
                                                       coordinate_system=self.relative_coordinate_system)
             else:
-                orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
+                orbit_periastron = orb.photocenter_orbit(t_periastron_mjd, spsi_periastron, cpsi_periastron)
+                # orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
             phi1_model_periastron = orbit_periastron[xi_periastron]
             phi2_model_periastron = orbit_periastron[yi_periastron]
             pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], 'k.-', lw=0.5, color='0.5')
