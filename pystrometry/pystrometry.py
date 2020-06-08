@@ -1603,7 +1603,8 @@ class PpmPlotter(object):
             ax.invert_xaxis()
             pl.xlabel('Offset in Right Ascension (mas)')
             pl.ylabel('Offset in Declination (mas)')
-            pl.title(self.title)
+            if self.title is not None:
+                pl.title(self.title)
             if save_plot:
                 fig_name = os.path.join(plot_dir, 'PPM_{}_frames.pdf'.format(name_seed.replace('.', 'p')))
                 plt.savefig(fig_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
@@ -1650,7 +1651,8 @@ class PpmPlotter(object):
         ax.invert_xaxis()
         pl.xlabel('Offset in Right Ascension (mas)')
         pl.ylabel('Offset in Declination (mas)')
-        pl.title(self.title)
+        if self.title is not None:
+            pl.title(self.title)
 
         if descr is not None:
             pl.text(0.01, 0.99, descr, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes)
@@ -1844,7 +1846,7 @@ class AstrometricOrbitPlotter(object):
                             'residuals': None,
                             'scan_angle_definition': 'hipparcos',
                             'include_ppm': True,
-                            'title': '',
+                            'title': None,
                             'relative_orbit': False,
                             'verbose': False,
                             }
@@ -2188,7 +2190,7 @@ class AstrometricOrbitPlotter(object):
                 self.model_parameters[0]['muDE_mas'])
 
         if argument_dict['epoch_omc_description'] == 'default':
-            argument_dict['epoch_omc_description'] = '$N_e={}$, $N_f={}$, $\Delta t={:.0f}$ d\nDOF$_\\mathrm{{eff}}$={}, ' \
+            argument_dict['epoch_omc_description'] = '$N_e={}$, $N_f={}$,\n$\Delta t={:.0f}$ d, DOF$_\\mathrm{{eff}}$={},\n' \
                               '$\Sigma_\\mathrm{{O-C,epoch}}$={:2.3f} mas\n$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
                 len(np.unique(self.data.epoch_data['OB'])), len(self.data.epoch_data),
                 np.ptp(self.data.epoch_data['MJD']), self.nFree_ep, self.epoch_omc_std,
@@ -2241,7 +2243,8 @@ class AstrometricOrbitPlotter(object):
                 ax.invert_xaxis()
                 pl.xlabel('Offset in Right Ascension (mas)')
                 pl.ylabel('Offset in Declination (mas)')
-                pl.title(self.title)
+                if self.title is not None:
+                    pl.title(self.title)
 
                 # orbit panel
                 pl.subplot(n_rows-1, n_columns, 3)
@@ -2289,7 +2292,8 @@ class AstrometricOrbitPlotter(object):
                 ax.invert_xaxis()
                 pl.xlabel('Offset in Right Ascension (mas)')
                 pl.ylabel('Offset in Declination (mas)')
-                pl.title(self.title)
+                if self.title is not None:
+                    pl.title(self.title)
 
                 # orbit panel
                 pl.subplot(n_panels, 1, 2)
@@ -2321,7 +2325,8 @@ class AstrometricOrbitPlotter(object):
                 pl.clf()
 
                 self.insert_orbit_plot(orb, argument_dict)
-                pl.title(self.title)
+                if self.title is not None:
+                    pl.title(self.title)
                 pl.axis('equal')
                 ax = plt.gca()
                 ax.invert_xaxis()
@@ -2349,13 +2354,14 @@ class AstrometricOrbitPlotter(object):
                 else:
                     n_rows = 2
 
-                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows*4, n_columns*2), facecolor='w',
+                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, sharey=False, figsize=(n_columns*4.0, n_rows*2.5), facecolor='w',
                                         edgecolor='k', squeeze=False)
 
                 self.insert_orbit_timeseries_plot(orb, argument_dict, ax=axes[0][0])
                 if self.data_type == '2d':
                     self.insert_orbit_timeseries_plot(orb, argument_dict, direction='y', ax=axes[0][1])
-                    fig.suptitle(self.title)
+                    if self.title is not None:
+                        fig.suptitle(self.title)
 
                 if argument_dict['omc_panel']:
                     self.insert_orbit_epoch_residuals_plot(orb, argument_dict, ax=axes[1][0])
@@ -2375,8 +2381,10 @@ class AstrometricOrbitPlotter(object):
                     labels = axes[-1][1].get_xticklabels()
                     plt.setp(labels, rotation=30)
 
-                # fig.tight_layout(pad=0.0)
+                # if self.title is None:
+                #     fig.tight_layout(pad=0.0)
                 # plt.tight_layout()
+                # pl.subplots_adjust(right=1.5)
                 pl.show()
                 if argument_dict['save_plot']:
                     if argument_dict['frame_residual_panel']:
@@ -2454,13 +2462,13 @@ class AstrometricOrbitPlotter(object):
 
             if direction=='x':
                 ax.plot(self.t_curve_MJD - orb.Tref_MJD, phi1_curve, 'k-')
-                ax.set_ylabel('Offset in RA (mas)')
+                ax.set_ylabel('Offset in RA/Dec (mas)')
             elif direction=='y':
                 ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Ymean_orb, 'ko')
                 ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Ymean_orb, yerr=self.errResidualY,
                             fmt='none', ecolor='k')
                 ax.plot(self.t_curve_MJD - orb.Tref_MJD, phi2_curve, 'k-')
-                ax.set_ylabel('Offset in Dec (mas)')
+                # ax.set_ylabel('Offset in Dec (mas)')
 
 
 
@@ -2497,7 +2505,7 @@ class AstrometricOrbitPlotter(object):
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
                                 yerr=self.errResidualY, fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
-            ax.set_ylabel('O-C (mas)')
+            # ax.set_ylabel('O-C (mas)')
 
     def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None):
         """
@@ -3090,7 +3098,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
 
     n_rows = 2
     n_columns = 1
-    fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows * 3, n_columns * 6),
+    fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows * 3.5, n_columns * 5.5),
                             facecolor='w', edgecolor='k', squeeze=False)
 
     if 'rv_mps' in rv.colnames:
@@ -3162,6 +3170,9 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
     axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
     axes[1][0].set_xlabel('Time (Julian year)')
+
+    labels = axes[-1][0].get_xticklabels()
+    plt.setp(labels, rotation=30)
 
     fig.tight_layout(h_pad=0.0)
 
