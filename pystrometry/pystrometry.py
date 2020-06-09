@@ -222,8 +222,8 @@ class OrbitSystem(object):
                         'rho_mas': None,  # DCR coefficient
                         'd_mas': None,  # DCR coefficient (if DCR corrector is used)
                         'a_mas': None,
-                        'offset_alphastar_mas': None,
-                        'offset_delta_mas': None,
+                        'offset_alphastar_mas': 0.,
+                        'offset_delta_mas': 0.,
                         'alpha_mas': None,  # photocenter semimajor axis,
                         'delta_mag': None,  # magnitude difference between components
                         'nuisance_x': None,  # nuisance parameters used when performing MCMC analyses 
@@ -1513,7 +1513,6 @@ class PpmPlotter(object):
             # write outliers to file
             if epoch_outlier_dir is not None:
                 out_file = os.path.join(epoch_outlier_dir, 'epoch_1D_outliers.txt')
-                # 1/0
 
                 # T = Table([outlier_1D_index.astype(np.int)], names=['index_1D'])
                 # write outlier epoch to file
@@ -1836,6 +1835,9 @@ class AstrometricOrbitPlotter(object):
         # 2d_indices dict 'xi', 'yi'
         # data_type str '1d', '2d', 'mixed'
 
+
+
+
         if attribute_dict is not None:
             for key, value in attribute_dict.items():
                 setattr(self, key, value)
@@ -1855,6 +1857,12 @@ class AstrometricOrbitPlotter(object):
                 if key not in attribute_dict.keys():
                     setattr(self, key, value)
 
+        required_attributes = ['linear_coefficients', 'model_parameters', 'data']
+        for attribute_name in required_attributes:
+            if hasattr(self, attribute_name) is False:
+                raise ValueError('Instance has to have a attribute named: {}'.format(attribute_name))
+
+
         self.attribute_dict = attribute_dict
         linear_coefficient_matrix = self.linear_coefficients['matrix']
 
@@ -1872,7 +1880,13 @@ class AstrometricOrbitPlotter(object):
 
         # parameters of first companion
         theta_0 = self.model_parameters[0]
+        required_parameters = ['offset_alphastar_mas', 'offset_delta_mas', 'absolute_plx_mas',
+                               'muRA_mas', 'muDE_mas']
         theta_names = theta_0.keys()
+        for parameter_name in required_parameters:
+            if parameter_name not in theta_names:
+                raise ValueError('Model parameter {} has to be set!'.format(parameter_name))
+
 
         # if ('plx_abs_mas' in theta_names) & ('plx_corr_mas' in theta_names):
         #     theta_0['plx_mas']= theta_0['plx_abs_mas'] + ['plx_corr_mas']
@@ -4159,17 +4173,36 @@ def dcr_coefficients(aux):
 
 
 class ImagingAstrometryData(object):
-    """
-    structure class for 2D imaging astrometry
-    """
+    """Structure class for 2D imaging astrometry."""
 
-    def __init__(self, data_table, out_dir=None, data_type='2d'):
+
+
+    def __init__(self, data_table, out_dir=None, data_type='2d', time_column_name='MJD',
+                 simbad_object_name=None):
+        """
+
+        Parameters
+        ----------
+        data_table
+        out_dir
+        data_type
+        """
+
+        required_data_table_columns = [time_column_name, 'frame', 'OB']
+        for column_name in required_data_table_columns:
+            if column_name not in data_table.colnames:
+                raise ValueError('Input table has to have a column named: {}'.format(column_name))
 
         # sort data table by increasing time
-        self.time_column_name = 'MJD'
+        self.time_column_name = time_column_name
+        self.simbad_object_name = simbad_object_name
+        self.data_type = data_type
+        self.scan_angle_definition = 'hipparcos'
+
         data_table.sort(self.time_column_name)
 
         self.data_table = data_table
+        # self.epoch_data = data_table
         self.number_of_frames = len(np.unique(self.data_table['frame']))
         self.number_of_observing_blocks = len(np.unique(self.data_table['OB']))
         self.observing_time_span_day = np.ptp(data_table[self.time_column_name])
@@ -4184,17 +4217,18 @@ class ImagingAstrometryData(object):
             self.number_of_1D_measurements = len(self.data_1D)
 
 
-        self.simbad_object_name = None
         if out_dir is not None:
             self.out_dir = out_dir
         else:
             self.out_dir = os.getcwd()
 
-    def info(self):
-        print('Number of OBs: \t %d' % self.number_of_observing_blocks)
-        print('Number of frames / measurements: \t %d / %d' % (self.number_of_frames,self.number_of_1D_measurements))
-        print('Observation time span: \t %3.1f days' % self.observing_time_span_day)
-
+    def __str__(self):
+        """Return string describing the instance."""
+        description = '\nNumber of OBs: \t {}'.format(self.number_of_observing_blocks)
+        description += '\nNumber of frames / measurements: \t {} / {}'.format(self.number_of_frames,
+                                                                              self.number_of_1D_measurements)
+        description += '\nObservation time span: \t {:3.1f} days'.format(self.observing_time_span_day)
+        return description
 
     def set_object_coordinates(self, RA_deg=None, Dec_deg=None, overwrite=False):
         if (self.simbad_object_name is None) & (RA_deg is None) & (Dec_deg is None):
@@ -4224,6 +4258,25 @@ class ImagingAstrometryData(object):
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
 
     def set_five_parameter_coefficients(self, earth_ephemeris_file_seed=None, verbose=False, reference_epoch_MJD=None, overwrite=False):
+        """Set the coefficients of the five linear parameters, i.e. parallax factors and 0,1's for
+        coordinates.
+
+        Parameters
+        ----------
+        earth_ephemeris_file_seed
+        verbose
+        reference_epoch_MJD
+        overwrite
+
+        Returns
+        -------
+
+        """
+        required_attributes = ['RA_deg', 'Dec_deg']
+        for attribute_name in required_attributes:
+            if hasattr(self, attribute_name) is False:
+                raise ValueError('Instance has to have a attribute named: {}'.format(attribute_name))
+
 
         # TODO
         # clarify use of tdb here!
@@ -4303,6 +4356,7 @@ class ImagingAstrometryData(object):
         self.dcr_parameter_coefficients_array = np.array([self.dcr_parameter_coefficients_table[c].data for c in self.dcr_parameter_coefficients_table.colnames])
 
 
+        self.linear_parameter_coefficients_table = tablehstack((self.five_parameter_coefficients_table, self.dcr_parameter_coefficients_table))
         self.linear_parameter_coefficients_table = tablehstack((self.five_parameter_coefficients_table, self.dcr_parameter_coefficients_table))
         self.linear_parameter_coefficients_array = np.array([self.linear_parameter_coefficients_table[c].data for c in self.linear_parameter_coefficients_table.colnames])
 
