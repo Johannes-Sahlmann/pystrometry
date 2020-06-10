@@ -2143,6 +2143,49 @@ class AstrometricOrbitPlotter(object):
 
         self.residuals = residuals
 
+
+    def epoch_parameters(self):
+        """Return structure with epoch mean parameters to facilitate e.g. detection limit computation.
+
+        Returns
+        -------
+
+        """
+
+        cat = Table()
+        cat['MJD'] = self.t_MJD_epoch
+        cat['RA*_mas'] = self.Xmean_ppm
+        cat['DE_mas'] = self.Ymean_ppm
+        cat['sRA*_mas'] = self.errResidualX
+        cat['sDE_mas'] = self.errResidualY
+        cat['OB'] = self.medi
+        cat['frame'] = self.medi
+
+        iad = ImagingAstrometryData(cat, data_type=self.data_type)
+        iad.RA_deg = self.orbit_system.RA_deg
+        iad.Dec_deg = self.orbit_system.DE_deg
+        iad.set_five_parameter_coefficients()
+        iad.set_data_1D()
+
+        # covariance matrix
+        S_mean = np.mat(np.diag(1. / np.power(iad.data_1D['sigma_da_mas'], 2)))
+
+        # mean signal/abscissa
+        M_mean = np.mat(iad.data_1D['da_mas'])
+
+        # coefficient matrix
+        C_mean = iad.five_parameter_coefficients_array
+
+        mean_dict = {'covariance_matrix': S_mean,
+                     'signal': M_mean,
+                     'coefficient_matrix': C_mean,
+                     'iad': iad
+                     }
+
+        # return C_mean, S_mean, M_mean
+        return mean_dict
+
+
     def print_residual_statistics(self):
         """Print statistics to stdout."""
         print('='*100)
@@ -2728,111 +2771,179 @@ class AstrometricOrbitPlotter(object):
                     verticalalignment='top', transform=pl.gca().transAxes)
 
 
-class pDetLim(object):
-    """
-    Class to support determination of planet detectin limits from astrometry
+class DetectionLimit(object):
+    """Class to support determination of planet detection limits from astrometry."""
 
-    """
 
-    def __init__(self, dwNr, M1_Msun, absPlx_mas, M2_jup_grid_N, M2_Mjup_lowlim, M2_Mjup_upplim, N_sim_perPeriod,
-                 P_day_grid_N, P_day_grid_min, P_day_grid_max, dwDir, overwrite=0):
-        # self.name = name
-        self.M1_Msun = M1_Msun
-        self.absPlx_mas = absPlx_mas
-        self.M2_jup_grid_N = M2_jup_grid_N
-        self.N_sim_perPeriod = N_sim_perPeriod
-        self.P_day_grid_N = P_day_grid_N
-        self.M2_Mjup_lowlim = M2_Mjup_lowlim
-        self.M2_Mjup_upplim = M2_Mjup_upplim
-        self.P_day_grid_min = P_day_grid_min
-        self.P_day_grid_max = P_day_grid_max
-        self.dwDir = dwDir
-        self.overwrite = overwrite
-        self.dwNr = dwNr
+    def __init__(self, attribute_dict={}):
+        """The default attribute values are stored in the hardcoded
+        dictionary below, which also defines the list of acceptable
+        attributes.
 
-        self.N_sim = P_day_grid_N * N_sim_perPeriod * M2_jup_grid_N;  # number of planetary systems generated
+        The content of attribute_dict is transferred to the instance.
 
-        print('Simulations: total number %d (%d periods, %d M2, %d random) ' % (
-        self.N_sim, P_day_grid_N, M2_jup_grid_N, N_sim_perPeriod))
-        print('Simulations: M2 resolution %3.3f Mjup ' % ((M2_Mjup_upplim - M2_Mjup_lowlim) / self.M2_jup_grid_N))
+        Parameters
+        ----------
+        attribute_dict : dict
+        """
+        self.attribute_dict = attribute_dict
+        default_dict = {'m1_msun': 1.,  # primary mass
+                        'absolute_plx_mas': 25.,  # parallax
+                        'identifier': 'starname',  # name
+                        'm2_grid_n': 10,  # number of samples across the secondary mass range
+                        'm2_mjup_lower': 1.,  # lower limit for secondary mass
+                        'm2_mjup_upper': 30.,  # upper limit for secondary mass
+                        'simulations_per_gridpoint_n': 1000,  # number of simulations at any grid point
+                        'period_grid_n': 10,  # number of samples across the period range
+                        'period_day_lower': 50.,  # lower limit of orbital period
+                        'period_day_upper': 1000.,  # lower limit of orbital period
+                        'out_dir': os.getcwd(),
+                        'overwrite': False
+                        }
 
-    def prepareReferenceDataset(self, xfP, useMeanEpochs=1, horizonsFileSeed=None):
+        # Assign user values as attributes when present, use defaults if not
+        attribute_keys = attribute_dict.keys()
+        for key, val in default_dict.items():
+            if key in attribute_keys:
+                setattr(self, key, attribute_dict[key])
+            else:
+                setattr(self, key, val)
 
-        self.T0_MJD = xfP.tref_MJD;
+        # Warn users if a key in attribute_dict isn't a default attribute
+        mismatch = [key for key in attribute_dict.keys()
+                    if key not in default_dict.keys()]
+        if mismatch:
+            raise KeyError('Key{0} {1} {2} absent in default OrbitClass'
+                           .format('s' if len(mismatch) > 1 else '',
+                                   mismatch,
+                                   'are' if len(mismatch) > 1 else 'is'))
 
-        if useMeanEpochs == 1:  # fastSimu works with epoch averages
-            orb_mean = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0.,
-                                   Tp_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
-                                   muDE_mas=0, Tref_MJD=xfP.tref_MJD)
-            #             ppm1dMeas_mean_mas = orb_mean.getPpm(xfP.t_MJD_epoch, horizonsFileSeed=horizonsFileSeed)
-            ppm1dMeas_mean_mas = orb_mean.ppm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
-                                              psi_deg=xfP.psi_deg)
-            C_mean = orb_mean.coeffMatrix
-            TableC1_mean = Table(C_mean.T, names=('cpsi', 'spsi', 'ppfact', 'tcpsi', 'tspsi'))
-            tmp_mean, xi_mean, yi_mean = xfGetMeanParMatrix(xfP)
-            S_mean = np.mat(np.diag(1. / np.power(tmp_mean['sigma_da_mas'], 2)));
-            M_mean = np.mat(tmp_mean['da_mas'])
-            # res_mean = linfit(M_mean, S_mean, C_mean)
-            res_mean = linearfit.LinearFit(M_mean, S_mean, C_mean)
+        self.n_simulations = self.period_grid_n* self.simulations_per_gridpoint_n * self.m2_grid_n  # number of planetary systems generated
+        print('Instantiating DetectionLimit object:')
+        print('Simulations: total number {}: {} periods, {} secondary masses, {} random)'.format(
+            self.n_simulations, self.period_grid_n, self.m2_grid_n, self.simulations_per_gridpoint_n))
+        print('Simulations: M2 resolution {:3.3f} Mjup'.format((self.m2_mjup_upper - self.m2_mjup_lower) / self.m2_grid_n))
+
+    def prepare_reference_dataset(self, xfP, use_mean_epochs=True, horizonsFileSeed=None):
+        """
+
+        Parameters
+        ----------
+        xfP
+        use_mean_epochs
+        horizonsFileSeed
+
+        Returns
+        -------
+
+        """
+        if use_mean_epochs:  # fastSimu works with epoch averages
+            # C_mean, S_mean, M_mean = xfP.epoch_parameters()
+            mean_parameters = xfP.epoch_parameters()
+
+            res_mean = linearfit.LinearFit(mean_parameters['signal'], mean_parameters['covariance_matrix'],
+                                           mean_parameters['coefficient_matrix'])
             res_mean.fit()
-            # res_mean.makeReadableNumbers()
 
-            self.TableC1_mean = TableC1_mean
-            self.tmp_mean = tmp_mean
+            self.S_mean = mean_parameters['covariance_matrix']
+            self.C_mean = mean_parameters['coefficient_matrix']
+            self.M_mean = mean_parameters['signal']
+            self.iad = mean_parameters['iad']
             self.res_mean = res_mean
-            self.S_mean = S_mean
-            self.C_mean = C_mean
-            # res_mean.disp()
 
-    def run_simulation(self, simuRun=1, log_P_day_grid=True):
-        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N)
+        # 1/0
+        #
+        #
+        self.tp_mjd = xfP.orbit_system.Tp_day
+        #
+        #
+        #     orb_mean = OrbitSystem(P_day=1., ecc=0.0, m1_MS=1.0, m2_MJ=0.0, omega_deg=0., OMEGA_deg=0., i_deg=0.,
+        #                            Tp_day=0, RA_deg=xfP.RA_deg, DE_deg=xfP.DE_deg, plx_mas=self.absPlx_mas, muRA_mas=0,
+        #                            muDE_mas=0, Tref_MJD=xfP.tref_MJD)
+        #     ppm1dMeas_mean_mas = orb_mean.ppm(xfP.t_MJD_epoch, horizons_file_seed=horizonsFileSeed,
+        #                                       psi_deg=xfP.psi_deg)
+        #     C_mean = orb_mean.coeffMatrix
+        #     TableC1_mean = Table(C_mean.T, names=('cpsi', 'spsi', 'ppfact', 'tcpsi', 'tspsi'))
+        #     tmp_mean, xi_mean, yi_mean = xfGetMeanParMatrix(xfP)
+        #     S_mean = np.mat(np.diag(1. / np.power(tmp_mean['sigma_da_mas'], 2)))
+        #     M_mean = np.mat(tmp_mean['da_mas'])
+        #     # res_mean = linfit(M_mean, S_mean, C_mean)
+        #     res_mean = linearfit.LinearFit(M_mean, S_mean, C_mean)
+        #     res_mean.fit()
+        #     # res_mean.makeReadableNumbers()
+        #
+        #     self.TableC1_mean = TableC1_mean
+        #     self.tmp_mean = tmp_mean
+        #     self.res_mean = res_mean
+        #     self.S_mean = S_mean
+        #     self.C_mean = C_mean
+        #     # res_mean.disp()
+
+    def run_simulation(self, simu_run=1, log_P_day_grid=True):
+        """
+
+        Parameters
+        ----------
+        simu_run
+        log_P_day_grid
+
+        Returns
+        -------
+
+        """
+        self.m2_jup_grid = np.linspace(self.m2_mjup_lower, self.m2_mjup_upper, self.m2_grid_n)
+
         if log_P_day_grid:
-            self.P_day_grid = np.logspace(np.log10(self.P_day_grid_min), np.log10(self.P_day_grid_max),
-                                          self.P_day_grid_N)
+            self.p_day_grid = np.logspace(np.log10(self.period_day_lower),
+                                          np.log10(self.period_day_upper),
+                                          self.period_grid_n)
         else:
-            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N)
-            # P_day_grid  = np.linspace((P_day_grid_min),(P_day_grid_max),num=P_day_grid_N) # for comparison with GAIA
+            self.p_day_grid = np.linspace(self.period_day_lower, self.period_day_upper,
+                                          self.period_grid_n)
 
-        #         simuRun = 1;
-        simuDir = self.dwDir + 'simu/simuRun%d/' % simuRun;
-        if not os.path.exists(simuDir):
-            os.makedirs(simuDir)
+        simu_dir = os.path.join(self.out_dir, 'simu/simu_run{}/'.format(simu_run))
+        if not os.path.exists(simu_dir):
+            os.makedirs(simu_dir)
 
-        mcFileName = simuDir + 'dw%02d_detectionLimits_%d%s.pkl' % (
-        self.dwNr, self.N_sim, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p'))
-        # meanResiduals = np.zeros((self.N_sim, len(self.res_mean.omc[0])))
-        meanResiduals = np.zeros((self.N_sim, len(self.res_mean.residuals)))
-        meanResidualRMS = np.zeros(self.N_sim)
+        mc_file_name = os.path.join(simu_dir, '{}_detectionLimits_{}_m1{:1.3f}.pkl'.format(
+            self.identifier, self.n_simulations, self.m1_msun))
 
-        if ((not os.path.isfile(mcFileName)) or (self.overwrite == 1)):
+        mean_residuals = np.zeros((self.n_simulations, len(self.res_mean.residuals)))
+        mean_residual_rms = np.zeros(self.n_simulations)
 
+        if ((not os.path.isfile(mc_file_name)) or (self.overwrite)):
+
+            # sample OMEGA space uniformly
             OMEGA_deg_vals = np.linspace(0, 359, 360)
-            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, self.N_sim)
+            simu_OMEGA_deg = np.random.choice(OMEGA_deg_vals, self.n_simulations)
 
+            # sample inclination space according to sin(i) probability
             i_deg_vals = np.linspace(0, 179, 180)
             PDF_i_deg = 1. / 2 * np.sin(np.deg2rad(i_deg_vals))
             PDF_i_deg_normed = PDF_i_deg / np.sum(PDF_i_deg)
-            simu_i_deg = np.random.choice(i_deg_vals, self.N_sim, p=PDF_i_deg_normed)
+            simu_i_deg = np.random.choice(i_deg_vals, self.n_simulations, p=PDF_i_deg_normed)
 
-            simu_M2_jup = np.zeros(self.N_sim)
-            temp_M2 = np.zeros(self.M2_jup_grid_N * self.N_sim_perPeriod)
-            for jj in range(self.M2_jup_grid_N):
-                tempIdx = np.arange(jj * self.N_sim_perPeriod, (jj + 1) * self.N_sim_perPeriod)
-                temp_M2[tempIdx] = self.M2_jup_grid[jj] * np.ones(self.N_sim_perPeriod)
+            simu_M2_jup = np.zeros(self.n_simulations)
+            temp_M2 = np.zeros(self.m2_grid_n * self.simulations_per_gridpoint_n)
+            for jj in range(self.m2_grid_n):
+                tempIdx = np.arange(jj * self.simulations_per_gridpoint_n, (jj + 1) * self.simulations_per_gridpoint_n)
+                temp_M2[tempIdx] = self.m2_jup_grid[jj] * np.ones(self.simulations_per_gridpoint_n)
 
-            simu_P_day = np.zeros(self.N_sim)
-            for jj in range(self.P_day_grid_N):
-                tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-                                    (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
-                simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N)
+            simu_P_day = np.zeros(self.n_simulations)
+            for jj in range(self.period_grid_n):
+                tempIdx = np.arange(jj * self.simulations_per_gridpoint_n * self.m2_grid_n,
+                                    (jj + 1) * self.simulations_per_gridpoint_n * self.m2_grid_n)
+                simu_P_day[tempIdx] = self.p_day_grid[jj] * np.ones(self.simulations_per_gridpoint_n * self.m2_grid_n)
                 simu_M2_jup[tempIdx] = temp_M2;
 
-            simu_T0_day = self.T0_MJD + np.random.rand(self.N_sim) * simu_P_day;
+            # time of perisatron passage
+            simu_tp_mjd = self.tp_mjd + np.random.rand(self.n_simulations) * simu_P_day
 
-            ecc = 0.;
-            omega_deg = 0.;
+            # simulate circular orbits only
+            ecc = 0.
+            omega_deg = 0.
 
-            if 0 == 1:
+            if 0:
                 pl.figure(figsize=(10, 10), facecolor='w', edgecolor='k')
                 pl.clf()
                 pl.subplot(2, 2, 1)
@@ -2851,36 +2962,36 @@ class pDetLim(object):
 
             print('Running simulations ...')
             print('Simulation 0000000')
-            spsi = np.array(self.TableC1_mean['spsi'])
-            cpsi = np.array(self.TableC1_mean['cpsi'])
-            ref_da_mas = np.array(self.tmp_mean['da_mas'])
-            # ref_omc_mas = self.res_mean.omc[0]
+            spsi = np.array(self.iad.data_1D['spsi'])
+            cpsi = np.array(self.iad.data_1D['cpsi'])
+            ref_da_mas = np.array(self.M_mean)
+
             ref_omc_mas = self.res_mean.residuals
-            for j in range(self.N_sim):
-                tot_da_mas = [];
-                simu_da_mas = [];
-                simu_da_mas = pjGetOrbitFast(P_day=simu_P_day[j], ecc=ecc, m1_MS=self.M1_Msun, m2_MJ=simu_M2_jup[j],
+            for j in range(self.n_simulations):
+                # tot_da_mas = []
+                # simu_da_mas = []
+                simu_da_mas = pjGetOrbitFast(P_day=simu_P_day[j], ecc=ecc, m1_MS=self.m1_msun, m2_MJ=simu_M2_jup[j],
                                              omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j],
-                                             T0_day=simu_T0_day[j], plx_mas=self.absPlx_mas,
-                                             t_MJD=np.array(self.tmp_mean['MJD']), spsi=spsi, cpsi=cpsi)
-                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_T0_day[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] )
+                                             T0_day=simu_tp_mjd[j], plx_mas=self.absolute_plx_mas,
+                                             t_MJD=np.array(self.iad.data_1D['MJD']), spsi=spsi, cpsi=cpsi)
+                # orb_simu = OrbitSystem(P_day=simu_P_day[j], ecc=ecc, m1_MS=M1_Msun, m2_MJ = simu_M2_jup[j] , omega_deg=omega_deg, OMEGA_deg=simu_OMEGA_deg[j], i_deg=simu_i_deg[j], Tp_day = simu_tp_mjd[j], RA_deg=RA_deg,DE_deg=DE_deg,plx_mas = plx_mas, muRA_mas=res.p[3][0],muDE_mas=res.p[4][0] )
                 # simu_da_mas = orb_simu.pjGetOrbitFast(0 , t_MJD = tmp_mean['MJD'], psi_deg = psi_deg )#, verbose=0):
 
                 tot_da_mas = ref_da_mas - ref_omc_mas + simu_da_mas  # remove noise structure
-                # simu_res = linfit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
+
                 simu_res = linearfit.LinearFit(np.mat(tot_da_mas), self.S_mean, self.C_mean)
                 simu_res.fit()
-                # meanResiduals[j,:] = np.array(simu_res.omc)[0]
-                meanResidualRMS[j] = np.std(np.array(simu_res.residuals))
+
+                mean_residual_rms[j] = np.std(np.array(simu_res.residuals))
                 if np.mod(j, 10000) == 0:
                     print('\b\b\b\b\b\b\b%07d' % j)
                     # print '\x1b[%07d\r' % j,
-            pickle.dump((meanResidualRMS), open(mcFileName, "wb"))
+            pickle.dump((mean_residual_rms), open(mc_file_name, "wb"))
 
         else:
-            meanResidualRMS = pickle.load(open(mcFileName, "rb"))
+            mean_residual_rms = pickle.load(open(mc_file_name, "rb"))
 
-        self.meanResidualRMS = meanResidualRMS
+        self.mean_residual_rms = mean_residual_rms
 
     def run_simulation_parallel(self, simulation_run_number=1, log_P_day_grid=True, parallel=True):
         """
@@ -2898,25 +3009,25 @@ class pDetLim(object):
             os.makedirs(simulation_dir)
 
         # generate grid of companion masses
-        self.M2_jup_grid = np.linspace(self.M2_Mjup_lowlim, self.M2_Mjup_upplim, self.M2_jup_grid_N)
+        self.m2_jup_grid = np.linspace(self.m2_mjup_lower, self.m2_mjup_upper, self.m2_grid_n)
 
         # generate grid of orbital periods (log or linear spacing)
         if log_P_day_grid:
-            self.P_day_grid = np.logspace(np.log10(self.P_day_grid_min), np.log10(self.P_day_grid_max),
-                                          self.P_day_grid_N)
+            self.p_day_grid = np.logspace(np.log10(self.period_day_lower), np.log10(self.period_day_upper),
+                                          self.period_grid_n)
         else:
-            self.P_day_grid = np.linspace(self.P_day_grid_min, self.P_day_grid_max, self.P_day_grid_N)
+            self.p_day_grid = np.linspace(self.period_day_lower, self.period_day_upper, self.period_grid_n)
 
         # pickle file to save results
         mc_file_name = os.path.join(simulation_dir, 'dw%02d_detectionLimits_%d%s.pkl' % (
-            self.dwNr, self.N_sim, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p')))
+            self.dwNr, self.n_simulations, ('_MA%1.3f' % self.M1_Msun).replace('.', 'p')))
 
-        # meanResiduals = np.zeros((self.N_sim, len(self.res_mean.omc[0])))
-        mean_residual_rms = np.zeros(self.N_sim)
+        # meanResiduals = np.zeros((self.n_simulations, len(self.res_mean.omc[0])))
+        mean_residual_rms = np.zeros(self.n_simulations)
 
-        N_sim_within_loop = self.N_sim_perPeriod * self.M2_jup_grid_N
+        N_sim_within_loop = self.simulations_per_gridpoint_n * self.m2_grid_n
         # array to hold results, sliced by orbital period
-        mean_residual_rms = np.zeros((self.P_day_grid_N, N_sim_within_loop))
+        mean_residual_rms = np.zeros((self.period_grid_n, N_sim_within_loop))
 
         def compute_mean_residual_rms(P_day, ecc, m1_MS, m2_MJ,
                                       omega_deg, OMEGA_deg, i_deg,
@@ -2968,16 +3079,16 @@ class pDetLim(object):
             simu_i_deg = np.random.choice(i_deg_vals, N_sim_within_loop, p=PDF_i_deg_normed)
 
             simu_M2_jup = np.zeros(N_sim_within_loop)
-            # temp_M2 = np.zeros(self.M2_jup_grid_N * self.N_sim_perPeriod)
-            for jj in range(self.M2_jup_grid_N):
-                tempIdx = np.arange(jj * self.N_sim_perPeriod, (jj + 1) * self.N_sim_perPeriod)
-                simu_M2_jup[tempIdx] = self.M2_jup_grid[jj] * np.ones(self.N_sim_perPeriod)
+            # temp_M2 = np.zeros(self.m2_grid_n * self.simulations_per_gridpoint_n)
+            for jj in range(self.m2_grid_n):
+                tempIdx = np.arange(jj * self.simulations_per_gridpoint_n, (jj + 1) * self.simulations_per_gridpoint_n)
+                simu_M2_jup[tempIdx] = self.m2_jup_grid[jj] * np.ones(self.simulations_per_gridpoint_n)
 
-            # simu_P_day = np.zeros(self.N_sim)
-            # for jj in range(self.P_day_grid_N):
-            #     tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-            #                         (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
-            #     simu_P_day[tempIdx] = self.P_day_grid[jj] * np.ones(self.N_sim_perPeriod * self.M2_jup_grid_N)
+            # simu_P_day = np.zeros(self.n_simulations)
+            # for jj in range(self.period_grid_n):
+            #     tempIdx = np.arange(jj * self.simulations_per_gridpoint_n * self.m2_grid_n,
+            #                         (jj + 1) * self.simulations_per_gridpoint_n * self.m2_grid_n)
+            #     simu_P_day[tempIdx] = self.p_day_grid[jj] * np.ones(self.simulations_per_gridpoint_n * self.m2_grid_n)
             #     simu_M2_jup[tempIdx] = temp_M2;
 
 
@@ -2996,7 +3107,7 @@ class pDetLim(object):
             pool = Pool(processes=n_processes)
 
             arg_list = []
-            for jj, P_day in enumerate(self.P_day_grid):
+            for jj, P_day in enumerate(self.p_day_grid):
                 # print('Processing period number %d'%jj)
 
                 np.random.seed(random_seed)
@@ -3024,40 +3135,61 @@ class pDetLim(object):
         else:
             mean_residual_rms = pickle.load(open(mc_file_name, "rb"))
 
-        self.meanResidualRMS = mean_residual_rms.flatten()
+        self.mean_residual_rms = mean_residual_rms.flatten()
 
 
-    def plotSimuResults(self, xfP, factor=1., visplot=1, confidence_limit=0.997, x_axis_unit='day', semilogx=True, y_data_divisor=None, y_data_factor=1., new_figure=True, line_width=2.):
+    def plot_simu_results(self, xfP, factor=1., visplot=True, confidence_limit=0.997,
+                          x_axis_unit='day', semilogx=True, y_data_divisor=None, y_data_factor=1.,
+                          new_figure=True, line_width=2.):
+        """
 
-        if xfP.psi_deg is None:
-            criterion = np.std([xfP.meanResidualX, xfP.meanResidualY]) * factor;
+        Parameters
+        ----------
+        xfP
+        factor
+        visplot
+        confidence_limit
+        x_axis_unit
+        semilogx
+        y_data_divisor
+        y_data_factor
+        new_figure
+        line_width
+
+        Returns
+        -------
+
+        """
+
+        # if xfP.psi_deg is None:
+        if xfP.data_type is '2d':
+            criterion = np.std([xfP.meanResidualX, xfP.meanResidualY]) * factor
         else:
-            criterion = np.std([xfP.meanResidualX]) * factor;
+            criterion = np.std([xfP.meanResidualX]) * factor
         print('Detection criterion is %3.3f mas ' % (criterion))
         print('Using confidence limit of {:.3f}'.format(confidence_limit))
 
-        Nsmaller = np.zeros((self.P_day_grid_N, self.M2_jup_grid_N))
-        for jj in range(self.P_day_grid_N):
-            tempIdx = np.arange(jj * self.N_sim_perPeriod * self.M2_jup_grid_N,
-                                (jj + 1) * self.N_sim_perPeriod * self.M2_jup_grid_N)
-            for kk in range(self.M2_jup_grid_N):
-                pix = np.arange(kk * self.N_sim_perPeriod, (kk + 1) * self.N_sim_perPeriod)
-                # Nsmaller[jj,kk] = np.sum( np.std(meanResiduals[tempIdx[pix]],axis=1) <= criterion )
-                Nsmaller[jj, kk] = np.sum(self.meanResidualRMS[tempIdx[pix]] <= criterion)
+        n_smaller = np.zeros((self.period_grid_n, self.m2_grid_n))
 
-        detLimit = np.zeros((self.P_day_grid_N, 2))
-        for jj in range(self.P_day_grid_N):
+        for jj in range(self.period_grid_n):
+            tempIdx = np.arange(jj * self.simulations_per_gridpoint_n * self.m2_grid_n,
+                                (jj + 1) * self.simulations_per_gridpoint_n * self.m2_grid_n)
+            for kk in range(self.m2_grid_n):
+                pix = np.arange(kk * self.simulations_per_gridpoint_n, (kk + 1) * self.simulations_per_gridpoint_n)
+                n_smaller[jj, kk] = np.sum(self.mean_residual_rms[tempIdx[pix]] <= criterion)
+
+        detection_limit = np.zeros((self.period_grid_n, 2))
+        for jj in range(self.period_grid_n):
             try:
-                I = np.where(Nsmaller[jj, :] < self.N_sim_perPeriod * (1 - confidence_limit))[0][0]
+                limit_index = np.where(n_smaller[jj, :] < self.simulations_per_gridpoint_n * (1 - confidence_limit))[0][0]
                 try:
-                    M2_val = self.M2_jup_grid[I]
+                    M2_val = self.m2_jup_grid[limit_index]
                 except ValueError:
-                    M2_val = np.max(self.M2_jup_grid)
+                    M2_val = np.max(self.m2_jup_grid)
             except IndexError:
-                #                 pdb.set_trace()
-                M2_val = np.max(self.M2_jup_grid)
+                M2_val = np.max(self.m2_jup_grid)
 
-            detLimit[jj, :] = [self.P_day_grid[jj], M2_val]
+            detection_limit[jj, :] = [self.p_day_grid[jj], M2_val]
 
         if visplot:
             if x_axis_unit == 'day':
@@ -3071,25 +3203,25 @@ class pDetLim(object):
                 pl.clf()
             if semilogx:
                 if y_data_divisor is not None:
-                    pl.semilogx(detLimit[:, 0] * x_axis_factor, y_data_divisor/detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
+                    pl.semilogx(detection_limit[:, 0] * x_axis_factor, y_data_divisor/detection_limit[:, 1]*y_data_factor, 'k-', lw=line_width)
                 else:
-                    pl.semilogx(detLimit[:, 0] * x_axis_factor, detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
+                    pl.semilogx(detection_limit[:, 0] * x_axis_factor, detection_limit[:, 1]*y_data_factor, 'k-', lw=line_width)
             else:
                 if y_data_divisor is not None:
-                    pl.plot(detLimit[:, 0] * x_axis_factor, y_data_divisor/detLimit[:, 1]*y_data_factor, 'k-', lw=line_width)
+                    pl.plot(detection_limit[:, 0] * x_axis_factor, y_data_divisor/detection_limit[:, 1]*y_data_factor, 'k-', lw=line_width)
                 else:
-                    pl.plot(detLimit[:, 0] * x_axis_factor, detLimit[:, 1] * y_data_factor, 'k-',
+                    pl.plot(detection_limit[:, 0] * x_axis_factor, detection_limit[:, 1] * y_data_factor, 'k-',
                             lw=line_width)
             pl.title('{:.1f}% confidence limit'.format(confidence_limit * 100))
             if y_data_divisor is not None:
-                pl.ylim((0, y_data_divisor/np.max(self.M2_jup_grid)*y_data_factor))
+                pl.ylim((0, y_data_divisor / np.max(self.m2_jup_grid) * y_data_factor))
             else:
-                pl.ylim((0, np.max(self.M2_jup_grid)*y_data_factor))
+                pl.ylim((0, np.max(self.m2_jup_grid) * y_data_factor))
             pl.xlabel(x_axis_label)
             if new_figure:
                 pl.show()
 
-        self.detLimit = detLimit
+        self.detection_limit = detection_limit
 
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
