@@ -1969,6 +1969,9 @@ class AstrometricOrbitPlotter(object):
         else:
             residuals = self.residuals
 
+        if np.any(np.isnan(residuals)):
+            raise ValueError('NaN found in residuals')
+
         self.ppm_meas = np.array(T['da_mas']) - self.DCR - self.orbit_model
         self.orb_meas = np.array(T['da_mas']) - self.DCR - self.ppm_model
 
@@ -2022,6 +2025,11 @@ class AstrometricOrbitPlotter(object):
                                             weights=1. / (np.array(T['sigma_da_mas'])[tmpIndexX] ** 2.))
             self.Xmean_orb[jj] = np.average(self.orb_meas[tmpIndexX],
                                             weights=1. / (T['sigma_da_mas'][tmpIndexX] ** 2.))
+
+            if np.any(np.isnan(self.Xmean_ppm)):
+                raise ValueError('NaN found in Xmean_ppm')
+            if np.any(np.isnan(self.Xmean_orb)):
+                raise ValueError('NaN found in Xmean_orb')
 
             if '2d' in self.data_type:
 
@@ -2234,6 +2242,19 @@ class AstrometricOrbitPlotter(object):
                             'orbit_description': 'default',
                             'scan_angle_definition': 'gaia',
                             'orbit_signal_description': 'default',
+                            'ppm_description': 'default',
+                            'epoch_omc_description': 'default',
+                            'name_seed': 'star',
+                            'make_1d_overview_figure': True,
+                            'make_condensed_summary_figure': True,
+                            'frame_residual_panel': False,
+                            'arrow_offset_x': 40.,
+                            'arrow_offset_y': 0.,
+                            'save_plot': False,
+                            'orbit_only_panel': False,
+                            'make_xy_residual_figure': False,
+                            'make_ppm_figure': False,
+                            'plot_dir': os.getcwd(),
                             }
 
             for key, value in default_argument_dict.items():
@@ -2284,6 +2305,39 @@ class AstrometricOrbitPlotter(object):
             #     theta_p['plx_mas'] = theta_p['plx_abs_mas'] + theta_p['plx_corr_mas']
 
             orb = OrbitSystem(attribute_dict=theta_p)
+            if getattr(orb, 'Tref_MJD') is None:
+                raise UserWarning('Reference time was not set.')
+
+            # PPM plot and residuals
+            if argument_dict['make_ppm_figure']:
+                n_rows = 2
+                n_columns = 1
+                fig = pl.figure(figsize=(6, 8), facecolor='w', edgecolor='k')
+                pl.clf()
+
+                # PPM panel
+                pl.subplot(n_rows, n_columns, 1)
+                self.insert_ppm_plot(orb, argument_dict)
+                pl.axis('equal')
+                ax = plt.gca()
+                ax.invert_xaxis()
+                pl.xlabel('Offset in Right Ascension (mas)')
+                pl.ylabel('Offset in Declination (mas)')
+                if self.title is not None:
+                    pl.title(self.title)
+
+                pl.subplot(n_rows, n_columns, 2)
+                self.insert_epoch_residual_plot(orb, argument_dict)
+
+                plt.tight_layout()
+                pl.show()
+                if argument_dict['save_plot']:
+                    figure_file_name = os.path.join(argument_dict['plot_dir'],
+                                                        'ppm_{}.pdf'.format(
+                                                            name_seed_2.replace('.', 'p')))
+                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                                pad_inches=0.05)
+
 
             # 1D astrometry overview figure
             if argument_dict['make_1d_overview_figure']:
@@ -2457,7 +2511,7 @@ class AstrometricOrbitPlotter(object):
 
 
     def insert_ppm_plot(self, orb, argument_dict):
-        """
+        """Plot the PPM model curve and the orbit-substracted, epoch-averaged measurements.
 
         Parameters
         ----------
@@ -3723,7 +3777,22 @@ def pjGet_a_m_relative(m1_MS, m2_MJ, P_day):
     return a_rel_m
 
 
-def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
+def secondary_mass_at_detection_limit( m1_MS, Period_day, d_pc, a1_detection_mas ):
+    """
+    formerly pjGet_DetectionLimits
+
+
+    Parameters
+    ----------
+    m1_MS
+    Period_day
+    d_pc
+    a1_detection_mas
+
+    Returns
+    -------
+
+    """
 
     a_m = a1_detection_mas / 1.e3 * d_pc * AU_m
     m1_kg = m1_MS * MS_kg
@@ -3734,9 +3803,6 @@ def pjGet_DetectionLimits( m1_MS, Period_day, d_pc, a1_detection_mas ):
     return m2_MJ
 
 
-# def mean_anomaly(t_day, T0_day, P_day):
-#     return 2*np.pi*(t_day-T0_day)/P_day
-    # M_rad= 2*pi*(nu_daym1*t_day - phi0)
 
 
 def mean_anomaly(t_mjd, t_periastron_mjd, p_day):
