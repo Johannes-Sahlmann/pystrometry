@@ -266,7 +266,7 @@ class OrbitSystem(object):
 
         if ('lambda_ref' in attribute_keys) and (self.lambda_ref is not None):
             if self.Tref_MJD is None:
-                raise AttributeError('When lambda_ref si used, the reference time Tref_MJD needs to be set!')
+                raise AttributeError('When lambda_ref is used, the reference time Tref_MJD needs to be set!')
             self.Tp_day = periastron_time(self.lambda_ref, self.omega_deg, self.Tref_MJD, self.P_day)
 
         # treatment of diluted systems
@@ -701,9 +701,26 @@ class OrbitSystem(object):
         return rv_ms
 
 
+    def get_t_plot(self, time_offset_day=0., n_curve=100, n_orbit=1, format='jyear'):
+        """Return an array of times to use for plotting the timeseries
+
+        Parameters
+        ----------
+        time_offset_day
+
+        Returns
+        -------
+
+        """
+
+        t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
+        t_plot = getattr(Time(t_day, format='mjd'), format)
+        return t_plot
+
+
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
                       line_style='-', line_width=1, rv_unit='kmps', time_offset_day=0.,
-                      gamma_mps=None, axis=None):
+                      gamma_mps=None, axis=None, plot_parameters_ensemble=None):
         """Plot the radial velocity orbit of the primary
 
         Returns
@@ -726,6 +743,9 @@ class OrbitSystem(object):
         if component=='primary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
+            # if plot_parameters_ensemble is not None:
+            #     rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
+            #     1/0
         elif component=='secondary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
@@ -2549,6 +2569,8 @@ class AstrometricOrbitPlotter(object):
         if ax is None:
             ax = pl.gca()
 
+        ax.axhline(y=0, color='0.5', ls=':', zorder=-50)
+
         if direction=='x':
             ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, 'ko')
             ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, yerr=self.errResidualX,
@@ -2566,7 +2588,12 @@ class AstrometricOrbitPlotter(object):
                 self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
             # orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve,
             #                                                        cpsi_curve)
-            orbit_curve = orb.photocenter_orbit(timestamps_1D, spsi_curve,
+            if self.relative_orbit:
+                orbit_curve = orb.relative_orbit_fast(timestamps_1D, spsi_curve, cpsi_curve,
+                                                      shift_omega_by_pi=True,
+                                                      coordinate_system=self.relative_coordinate_system)
+            else:
+                orbit_curve = orb.photocenter_orbit(timestamps_1D, spsi_curve,
                                                                    cpsi_curve)
             phi1_curve = orbit_curve[xi_curve]
             phi2_curve = orbit_curve[yi_curve]
@@ -3279,7 +3306,7 @@ class DetectionLimit(object):
 
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
-                 data_colour='k', include_degenerate_orbit=False):
+                 data_colour='k', include_degenerate_orbit=False, plot_parameters_ensemble=None):
     """
 
     Parameters
@@ -3341,8 +3368,37 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             rv['rv_model_{}'.format(basic_unit)] = orbit_system.compute_radial_velocity(np.array(rv['MJD']))/conversion_factor
             gamma_mps = None
         # plot RV orbit of primary
-        orbit_system.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day, n_orbit=n_orbit,
+        time_offset_day = rv['MJD'][0] - orbit_system.Tp_day
+        orbit_system.plot_rv_orbit(time_offset_day=time_offset_day, n_orbit=n_orbit,
                                    n_curve=10000, axis=axes[0][0], rv_unit=basic_unit)
+        if plot_parameters_ensemble is not None:
+            n_curve = 500
+            n_ensemble = len(plot_parameters_ensemble['offset_alphastar_mas'])
+
+            # array to store RVs
+            rv_ensemble = np.zeros((n_ensemble, n_curve))
+
+            # get times at which to sample orbit
+            t_plot_ensemble_jyear = orbit_system.get_t_plot(time_offset_day=time_offset_day, n_orbit=n_orbit, n_curve=n_curve)
+            t_plot_ensemble_mjd = orbit_system.get_t_plot(time_offset_day=time_offset_day,
+                                                          n_orbit=n_orbit, n_curve=n_curve,
+                                                          format='mjd')
+
+            for key in ['m2_MS', 'm_tot_ms', 'P_year', 'a1_mas', 'arel_mas', 'arel_AU']:
+                if key in plot_parameters_ensemble.keys():
+                    plot_parameters_ensemble.pop(key)
+                plot_parameters_ensemble['Tref_MJD'] = np.ones(n_ensemble)*orbit_system.Tref_MJD
+            for index_ensemble in range(n_ensemble):
+                tmp_system = OrbitSystem({key: samples[index_ensemble] for key, samples in plot_parameters_ensemble.items()})
+                rv_ensemble[index_ensemble, :] = tmp_system.compute_radial_velocity(t_plot_ensemble_mjd)/1e3
+            axes[0][0].fill_between(t_plot_ensemble_jyear, np.percentile(rv_ensemble, 15.865, axis=0),
+                            np.percentile(rv_ensemble, 84.134, axis=0), color='0.7')
+            # 1/0
+            # orbit_system_ensemble = [OrbitSystem({})]
+            # for key,
+            # rv_mps = (self.compute_radial_velocity(t_day))
+
+            # 1/0
         if include_degenerate_orbit:
             orbit_system_degenerate = copy.deepcopy(orbit_system)
             orbit_system_degenerate.omega_deg += 180.
