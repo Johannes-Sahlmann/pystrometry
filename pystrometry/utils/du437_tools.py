@@ -458,10 +458,6 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     iad.load_data()
 
-
-    # iad.epoch_data.write(os.path.join(epoch_data_dir, '{}_OBSERVATION_DATA_SORTED.rdb'.format(source_id)))
-    # 1/0
-    # iad_mjd = Time(iad.epoch_data[iad.time_column]*365.25, format='jd').mjd
     iad_mjd = Time(iad.epoch_data[iad.time_column]*365.25+t_ref_jd, format='jd').mjd
     iad.epoch_data['MJD'] = iad_mjd
 
@@ -519,15 +515,14 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
         attribute_dict['omega_deg'] += 180.
         attribute_dict['OMEGA_deg'] += 180.
 
-    # print(attribute_dict)
+    print(attribute_dict)
+    1/0
     # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
     # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
-    # 1/0
 
     orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
     print(orbit)
 
-    # 1/0
     # set coeffMatrix in orbit object
     ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
@@ -546,6 +541,8 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     plot_dict['scan_angle_definition'] = scan_angle_definition
     # plot_dict['xi'] = iad.epoch_data['xi']  # AL indices
     # plot_dict['yi'] = iad.epoch_data['yi']  # AC indices
+
+
 
     for key in iad.epoch_data.colnames:
         if '_obs' in key:

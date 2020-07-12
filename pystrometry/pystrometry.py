@@ -82,7 +82,6 @@ except KeyError:
     ephemeris_dir = os.path.join(local_dir, 'data')
 
 
-
 def fractional_luminosity(mag1, mag2):
     """
     defining fraction luminosity of masses M1 and M2 as beta = L2/(L1+L2) and
@@ -919,7 +918,8 @@ class OrbitSystem(object):
 
         return phi1
 
-    def ppm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0):
+    def ppm(self, t_MJD, psi_deg=None, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None,
+            horizons_file_seed=None, instrument=None, verbose=False):
         """Compute parallax and proper motion.
 
         Parameters
@@ -948,18 +948,15 @@ class OrbitSystem(object):
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:
-            parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed, verbose=verbose, instrument=instrument)
+            parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed,
+                                        verbose=verbose, instrument=instrument, overwrite=False)
 
         self.parf = parf
         if self.Tref_MJD is None:
             self.Tref_MJD = np.mean(t_MJD)
 
-        #     t0_MJD = self.Tref_MJD
-        # else:
-        #     t0_MJD = np.mean(t_MJD)
         trel_year = (t_MJD - self.Tref_MJD)/year2day
 
-        # self.t0_MJD = t0_MJD
         # % sin(psi) and cos(psi)
         if psi_deg is not None:
             psi_rad = np.deg2rad(psi_deg)
@@ -987,6 +984,7 @@ class OrbitSystem(object):
             C = np.array([cpsi, spsi, ppfact, tcpsi, tspsi])
         elif self.scan_angle_definition == 'gaia':
             C = np.array([spsi, cpsi, ppfact, tspsi, tcpsi])
+
         self.coeffMatrix = C
         self.timeUsedInTcspsi = np.array(t)
         if psi_deg is not None:
@@ -997,9 +995,9 @@ class OrbitSystem(object):
         parallax_for_ppm_mas = self.absolute_plx_mas - self.parallax_correction_mas
 
         inVec = np.array([offsetRA_mas, offsetDE_mas, parallax_for_ppm_mas, self.muRA_mas, self.muDE_mas])
+        # inVec = np.array([offsetRA_mas, offsetDE_mas, parallax_for_ppm_mas, 0, 0])
 
         ppm = np.dot(C.T, inVec)
-
         if psi_deg is not None:
             return ppm
         else:
@@ -1925,8 +1923,8 @@ class AstrometricOrbitPlotter(object):
         elif self.relative_orbit:
             self.ppm_model = np.zeros(len(T))
         else:
+            # these are only the positional offsets
             self.ppm_model = np.array(np.dot(linear_coefficient_matrix[0:2, :].T, ppm_parameters[0:2])).flatten()
-            # self.ppm_model = np.zeros(linear_coefficient_matrix.shape[1])
 
         if ('esinw' in theta_names):
             # self.ecc, self.omega_deg = mcmc_helpers.decode_eccentricity_omega(theta_0['esinw'], theta_0['ecosw'])
@@ -2338,6 +2336,7 @@ class AstrometricOrbitPlotter(object):
                 # PPM panel
                 pl.subplot(n_rows, n_columns, 1)
                 self.insert_ppm_plot(orb, argument_dict)
+
                 pl.axis('equal')
                 ax = plt.gca()
                 ax.invert_xaxis()
@@ -3146,7 +3145,7 @@ class DetectionLimit(object):
         # from multiprocessing import Pool
         from pathos.multiprocessing import ProcessingPool as Pool
 
-        if ((not os.path.isfile(mc_file_name)) or (self.overwrite == 1)):
+        if ((not os.path.isfile(mc_file_name)) or (self.overwrite)):
             random_seed = 1234
 
             OMEGA_deg_vals = np.linspace(0, 359, 360)
@@ -3530,8 +3529,8 @@ def get_spsi_cpsi_for_2Dastrometry( timestamps_2D , scan_angle_definition='hippa
         spsi = (np.arange(1, n_1d+1)  )%2
 
         # indices of X and Y measurements
-        yi = np.where(spsi==0)[0]    #index of X coordinates (cpsi = 1) psi =  0 deg
-        xi = np.where(cpsi==0)[0]    #index of Y coordinates (spsi = 1) psi = 90 deg
+        yi = np.where(spsi==0)[0]
+        xi = np.where(cpsi==0)[0]
 
     return timestamps_1D, cpsi, spsi, xi, yi
 
