@@ -1075,7 +1075,7 @@ class OrbitSystem(object):
         # fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=True, sharey=True)
 
         if new_figure:
-            fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=share_axes, sharey=share_axes)
+                fig, axes = pl.subplots(n_figure_rows, n_figure_columns, figsize=(n_figure_columns*6, n_figure_rows*5), facecolor='w', edgecolor='k', sharex=share_axes, sharey=share_axes)
         else:
             axes = pl.gcf().axes
         # plot smooth orbit curve

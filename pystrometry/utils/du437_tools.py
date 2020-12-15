@@ -160,6 +160,8 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
 
 
     # period phase error:
+
+
     miks_name = 'period'
     miks_field = 'p1_{}'.format(miks_name)
     mapped_name = parameter_mapping[miks_name]
@@ -182,6 +184,36 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
     if save_plot:
         figure_name = os.path.join(plot_dir, 'period_phase_error_{}.pdf'.format(table.meta['comparison_to']))
         pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
+
+    # pl.close('all')
+    threshold = {'delta_chi2': {'value': 1000, 'operator': '>'},
+                 'f_test_probability': {'value': 1e-100, 'operator': '<'}
+                 }
+    for miks_field in ['meritFunction', 'chi2WithPlanet', 'chi2SingleStar', 'delta_chi2', 'f_test_probability', 'p1_estSNratio', 'p1_period_snr']:
+        pl.figure(figsize=(8, 4), facecolor='w', edgecolor='k')
+        index = np.where(discrepancy_table['period_phase_error'] < 100)[0]
+        pl.loglog(discrepancy_table['period_phase_error'][index], table[miks_field][index], 'bo', alpha=0.7)
+        # pl.ylim((-1,1))
+        # pl.fill_between(pl.xlim(), period_phase_error_threshold, y2=-period_phase_error_threshold, color='g', alpha=0.5)
+        pl.xlabel('Period phase error')
+        pl.ylabel(miks_field)
+        n_passed_threshold = None
+        if miks_field in ['delta_chi2', 'f_test_probability']:
+            value = threshold[miks_field]['value']
+            operator = threshold[miks_field]['operator']
+            if operator == '>':
+                n_passed_threshold = len(np.where(table[miks_field] > value)[0])
+                pl.fill_between(pl.xlim(), value, y2=pl.ylim()[1], color='g', alpha=0.5)
+            elif operator == '<':
+                n_passed_threshold = len(np.where(table[miks_field] < value)[0])
+                pl.fill_between(pl.xlim(), value, y2=pl.ylim()[0], color='g', alpha=0.5)
+
+        pl.title('{} of {} systems shown. {} pass threshold'.format(len(index), len(table), n_passed_threshold))
+        pl.show()
+        if save_plot:
+            figure_name = os.path.join(plot_dir, 'period_phase_error_vs_{}_{}.pdf'.format(miks_field, table.meta['comparison_to']))
+            pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
+
 
     if 1:
         formats = {}
@@ -515,8 +547,7 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
         attribute_dict['omega_deg'] += 180.
         attribute_dict['OMEGA_deg'] += 180.
 
-    print(attribute_dict)
-    1/0
+    # print(attribute_dict)
     # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
     # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
 
