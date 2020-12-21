@@ -19,7 +19,10 @@ import aplpy
 
 import pickle
 
-import pystortion
+try:
+    import pystortion
+except ImportError:
+    print('WARNING: pystortion package not available!')
 # import uhelpers as helpers
 
 
