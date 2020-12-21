@@ -151,9 +151,9 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
         pl.xlabel('{} ({})'.format(mapped_name, table.meta['comparison_to']))
         pl.ylabel('{} (MIKS-GA)'.format(miks_field))
         pl.title('{} sources from {}'.format(len(table), table.meta['comparison_to']))
-        pl.show()
         pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
                 transform=pl.gca().transAxes)
+        pl.show()
         if save_plot:
             figure_name = os.path.join(plot_dir, '{}_comparison_to_{}.pdf'.format(miks_field, table.meta['comparison_to']))
             pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
@@ -177,8 +177,8 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
     pl.fill_between(pl.xlim(), period_phase_error_threshold, y2=-period_phase_error_threshold, color='g', alpha=0.5)
     pl.xlabel('Truth period (day)')
     pl.ylabel('Period phase error')
-    description_str = '{}/{} = {:2.1f}% within +/- {:2.1f}'.format(n_period_recovered, len(discrepancy_table), n_period_recovered/len(discrepancy_table)*100, period_phase_error_threshold)
-    pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
+    description_str_2 = '{}/{} = {:2.1f}% within +/- {:2.1f}\n'.format(n_period_recovered, len(discrepancy_table), n_period_recovered/len(discrepancy_table)*100, period_phase_error_threshold)+description_str
+    pl.text(0.01, 0.99, description_str_2, horizontalalignment='left', verticalalignment='top',
             transform=pl.gca().transAxes)
     pl.show()
     if save_plot:
@@ -209,6 +209,8 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
                 pl.fill_between(pl.xlim(), value, y2=pl.ylim()[0], color='g', alpha=0.5)
 
         pl.title('{} of {} systems shown. {} pass threshold'.format(len(index), len(table), n_passed_threshold))
+        pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
+                transform=pl.gca().transAxes)
         pl.show()
         if save_plot:
             figure_name = os.path.join(plot_dir, 'period_phase_error_vs_{}_{}.pdf'.format(miks_field, table.meta['comparison_to']))
