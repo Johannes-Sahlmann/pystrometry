@@ -15,7 +15,6 @@ from astropy.table import Table, Column
 from astropy.table import vstack as tablevstack
 import pylab as pl
 import numpy as np
-import aplpy
 
 import pickle
 
@@ -23,7 +22,11 @@ try:
     import pystortion
 except ImportError:
     print('WARNING: pystortion package not available!')
-# import uhelpers as helpers
+
+try:
+    import aplpy
+except ImportError:
+    print('WARNING: aplpy package not available!')
 
 
 
