@@ -20,7 +20,7 @@ import aplpy
 import pickle
 
 import pystortion
-import uhelpers as helpers
+# import uhelpers as helpers
 
 
 
@@ -42,9 +42,9 @@ class ScampXml(object):
         self.table.add_column(Column(data=ob_numbers, name='EPOCH'))
         self.table.add_column(Column(data=obs_date_mjd, name='MJD'))
 
-    def plot(self, plot_dir):
-        helpers.make_dir(plot_dir)
-        helpers.plot_columns_simple(self.table, plot_dir)
+    # def plot(self, plot_dir):
+    #     helpers.make_dir(plot_dir)
+    #     helpers.plot_columns_simple(self.table, plot_dir)
 
     def info(self):
         self.target = str(np.unique(np.array(self.table['Image_Ident'])))

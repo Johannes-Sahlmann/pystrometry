@@ -9,7 +9,7 @@ from numpy.testing import assert_allclose
 
 from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2, get_ephemeris
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
-from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_spsi_cpsi_for_2Dastrometry
+from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_cpsi_spsi_for_2Dastrometry
 
 
 def test_angular_to_linear():
@@ -163,7 +163,7 @@ def test_orbit_computation(verbose=False):
                                               n_curve)
 
 
-            timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(timestamps_curve_2D)
+            timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(timestamps_curve_2D)
 
             # relative orbit
             phi0_curve_relative = orbit_system.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve,
@@ -187,3 +187,10 @@ def test_orbit_computation(verbose=False):
         if (systems[0]['orbit_system'].gamma_ms ==0) and (systems[1]['orbit_system'].gamma_ms ==0):
             assert_allclose(systems[0]['rv_orbit'], -1*systems[1]['rv_orbit'], atol=absolute_tolerance)
             assert_allclose(systems[0]['rv_orbit'], systems[2]['rv_orbit'], atol=absolute_tolerance)
+
+
+def test_default_orbit(verbose=False):
+    """Perform basic checks on single Keplerian systems."""
+
+    orb = OrbitSystem()
+    orb.ppm(np.array([40672.5]))

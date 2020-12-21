@@ -515,7 +515,7 @@ class OrbitSystem(object):
         t1_plus_step = (t1 + step).value
 
         # see about editing get_spsi with better indexing instead of xi/yi
-        t1D, cpsi, spsi, xi, yi = get_spsi_cpsi_for_2Dastrometry(
+        t1D, cpsi, spsi, xi, yi = get_cpsi_spsi_for_2Dastrometry(
             [t0, t0_plus_step, t1, t1_plus_step])
 
         # Return coordinates of the source at the desired 4 times
@@ -698,7 +698,6 @@ class OrbitSystem(object):
             rv_ms += drift_ms
 
         return rv_ms
-
 
     def get_t_plot(self, time_offset_day=0., n_curve=100, n_orbit=1, format='jyear'):
         """Return an array of times to use for plotting the timeseries
@@ -937,6 +936,8 @@ class OrbitSystem(object):
         -------
 
         """
+        assert isinstance(t_MJD, (list, np.ndarray))
+
         # check that t_MJD is sorted and increasing
         if sorted(list(t_MJD)) != list(t_MJD):
             raise RuntimeError('Please sort the input timestamps first.')
@@ -964,7 +965,7 @@ class OrbitSystem(object):
             cpsi = np.cos(psi_rad)
             t = trel_year
         else:
-            t, cpsi, spsi, xi, yi = get_spsi_cpsi_for_2Dastrometry(trel_year, scan_angle_definition=self.scan_angle_definition)
+            t, cpsi, spsi, xi, yi = get_cpsi_spsi_for_2Dastrometry(trel_year, scan_angle_definition=self.scan_angle_definition)
         tspsi = t*spsi
         tcpsi = t*cpsi
 
@@ -1006,7 +1007,7 @@ class OrbitSystem(object):
 
 
     def plot_orbits(self, timestamps_curve_2D=None, timestamps_probe_2D=None, timestamps_probe_2D_label=None,
-                    delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
+                    delta_mag=None, N_orbit=1., N_curve=100, save_plot=False, plot_dir=None,
                     new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
                     show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
                     timeformat='jyear', name_seed='', verbose=False):
@@ -1045,12 +1046,12 @@ class OrbitSystem(object):
         if timestamps_curve_2D is None:
             timestamps_curve_2D = np.linspace(self.Tp_day - self.P_day, self.Tp_day + N_orbit + self.P_day, N_curve)
 
-        timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry( timestamps_curve_2D )
+        timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(timestamps_curve_2D)
         # relative orbit
         phi0_curve_relative = self.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve, shift_omega_by_pi = True)
 
         if timestamps_probe_2D is not None:
-            timestamps_probe_1D, cpsi_probe, spsi_probe, xi_probe, yi_probe = get_spsi_cpsi_for_2Dastrometry( timestamps_probe_2D )
+            timestamps_probe_1D, cpsi_probe, spsi_probe, xi_probe, yi_probe = get_cpsi_spsi_for_2Dastrometry(timestamps_probe_2D)
             phi0_probe_relative = self.relative_orbit_fast(timestamps_probe_1D, spsi_probe, cpsi_probe, shift_omega_by_pi = True)
 
         if delta_mag is not None:
@@ -1191,7 +1192,7 @@ class OrbitSystem(object):
 
     def plot_ppm(self, timestamps_curve_2D=None, timestamps_probe_2D=None,
                     timestamps_probe_2D_label=None,
-                    delta_mag=None, N_orbit=1., N_curve=100., save_plot=False, plot_dir=None,
+                    delta_mag=None, N_orbit=1., N_curve=100, save_plot=False, plot_dir=None,
                     new_figure=True, line_color='k', line_style='-', line_width=1, share_axes=False,
                     show_orientation=False, arrow_offset_x=0, invert_xaxis=True, show_time=True,
                     show_difference_to=None, timeformat='jyear',
@@ -1206,7 +1207,8 @@ class OrbitSystem(object):
             N_curve = len(timestamps_curve_2D)
 
         ppm_curve_mas = self.ppm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
-        ppm_probe_mas = self.ppm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
+        if timestamps_probe_2D is not None:
+            ppm_probe_mas = self.ppm(timestamps_probe_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
         if show_difference_to is not None:
             # expect OrbitSystem instance as input
             ppm_curve_mas_2 = show_difference_to.ppm(timestamps_curve_2D, offsetRA_mas=0, offsetDE_mas=0, externalParallaxFactors=None, horizons_file_seed=None, instrument=None, verbose=0)
@@ -1275,7 +1277,6 @@ class OrbitSystem(object):
                 axes = pl.gcf().axes
 
             t_plot_curve = getattr(Time(timestamps_curve_2D, format='mjd'), timeformat)
-            t_plot_probe = getattr(Time(timestamps_probe_2D, format='mjd'), timeformat)
 
             # plot smooth PPM curve
             axes[0].plot(t_plot_curve, ppm_curve_mas[0], 'k-', lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
@@ -1294,6 +1295,7 @@ class OrbitSystem(object):
 
             # plot individual epochs
             if timestamps_probe_2D is not None:
+                t_plot_probe = getattr(Time(timestamps_probe_2D, format='mjd'), timeformat)
                 axes[0].plot(t_plot_probe, ppm_probe_mas[0], 'bo', label=timestamps_probe_2D_label, **kwargs)
                 axes[1].plot(t_plot_probe, ppm_probe_mas[1], 'bo', label=timestamps_probe_2D_label, **kwargs)
                 if timestamps_probe_2D_label is not None:
@@ -2583,7 +2585,7 @@ class AstrometricOrbitPlotter(object):
             # ax.set_title(self.title)
 
         elif self.data_type == '2d':
-            timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(
+            timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(
                 self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
             # orbit_curve = orb.pjGetBarycentricAstrometricOrbitFast(timestamps_1D, spsi_curve,
             #                                                        cpsi_curve)
@@ -2739,7 +2741,7 @@ class AstrometricOrbitPlotter(object):
 
         """
 
-        timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
+        timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
         if self.relative_orbit:
             orbit_curve = orb.relative_orbit_fast(timestamps_1D, spsi_curve, cpsi_curve, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
@@ -2749,7 +2751,7 @@ class AstrometricOrbitPlotter(object):
         phi1_curve = orbit_curve[xi_curve]
         phi2_curve = orbit_curve[yi_curve]
 
-        t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch = get_spsi_cpsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
+        t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch = get_cpsi_spsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
         if self.relative_orbit:
             orbit_epoch = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
@@ -2759,7 +2761,7 @@ class AstrometricOrbitPlotter(object):
         phi1_model_epoch = orbit_epoch[xi_epoch]
         phi2_model_epoch = orbit_epoch[yi_epoch]
 
-        t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_spsi_cpsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
+        t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame = get_cpsi_spsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
         if self.relative_orbit:
             orbit_frame = orb.relative_orbit_fast(t_frame_mjd, spsi_frame, cpsi_frame, shift_omega_by_pi=True,
                                                      coordinate_system=self.relative_coordinate_system)
@@ -2771,7 +2773,7 @@ class AstrometricOrbitPlotter(object):
 
         # show periastron
         if 1:
-            t_periastron_mjd, cpsi_periastron, spsi_periastron, xi_periastron, yi_periastron = get_spsi_cpsi_for_2Dastrometry(orb.Tp_day, scan_angle_definition=argument_dict['scan_angle_definition'])
+            t_periastron_mjd, cpsi_periastron, spsi_periastron, xi_periastron, yi_periastron = get_cpsi_spsi_for_2Dastrometry(orb.Tp_day, scan_angle_definition=argument_dict['scan_angle_definition'])
             if self.relative_orbit:
                 orbit_periastron = orb.relative_orbit_fast(t_periastron_mjd, spsi_periastron, cpsi_periastron,
                                                       shift_omega_by_pi=True,
@@ -3490,7 +3492,7 @@ def xfGetMeanParMatrix(xfP):
     return tmp, xi, yi
 
 
-def get_spsi_cpsi_for_2Dastrometry( timestamps_2D , scan_angle_definition='hipparcos'):
+def get_cpsi_spsi_for_2Dastrometry(timestamps_2D, scan_angle_definition='hipparcos'):
     """Return cos(psi) and sin(psi) for regular 2D astrometry, where psi is the scan angle.
 
     For Hipparcos
@@ -4547,7 +4549,7 @@ class ImagingAstrometryData(object):
         # time relative to reference epoch in years for proper motion coefficients
         observing_relative_time_2D_year = (self.observing_times_2D_MJD - self.reference_epoch_MJD)/year2day
 
-        observing_relative_time_1D_year, observing_1D_cpsi, observing_1D_spsi, self.observing_1D_xi, self.observing_1D_yi = get_spsi_cpsi_for_2Dastrometry( observing_relative_time_2D_year )
+        observing_relative_time_1D_year, observing_1D_cpsi, observing_1D_spsi, self.observing_1D_xi, self.observing_1D_yi = get_cpsi_spsi_for_2Dastrometry(observing_relative_time_2D_year)
 
         observing_1D_tcpsi = observing_1D_cpsi * observing_relative_time_1D_year
         observing_1D_tspsi = observing_1D_spsi * observing_relative_time_1D_year
