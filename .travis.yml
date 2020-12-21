@@ -26,7 +26,7 @@ env:
         - CONDA_CHANNELS='http://ssb.stsci.edu/astroconda'
         - CONDA_DEPENDENCIES='pytest sphinx'
         - PIP_DEPENDENCIES=''
-        - PYTHON_VERSION=3.6
+        - PYTHON_VERSION=3.7
         - NUMPY_VERSION=stable
         - ASTROPY_VERSION=stable
         - EVENT_TYPE='push pull_request'
