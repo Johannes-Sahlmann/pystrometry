@@ -6,8 +6,17 @@
 
 # pystrometry  -  Support for high-precision astrometry timeseries analysis
 
+This code collection evolved over the last 10+ years and does therefore not always conform with coding 
+standards and best practices. It provides several basic functionalities but is still 
+under active development.
+
+
+
 
 ### Example usage
+
+- 
+
 - Plotting the orbital motion with default parameters 
 
 
