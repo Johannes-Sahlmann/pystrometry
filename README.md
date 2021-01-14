@@ -7,7 +7,9 @@
 # pystrometry  -  Support for high-precision astrometry timeseries analysis
 
 This code collection evolved over the last 10+ years and does therefore not always conform with coding 
-standards and best practices. It provides several basic functionalities but is still 
+standards and best practices, but it is installable via PyPI: `pip install pystrometry`. 
+
+pystrometry already provides a variety of functionalities but is still 
 under active development.
 
 

@@ -3437,61 +3437,6 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
         rv.pprint()
 
 
-
-
-
-def xfGetMeanParMatrix(xfP):
-    """ Copied over from functions_and_classes, 2018-08-14, should be deleted
-
-    Parameters
-    ----------
-    xfP
-
-    Returns
-    -------
-
-    """
-    if xfP.psi_deg is None:
-        cat = Table()
-        cat['MJD'] = xfP.t_MJD_epoch
-        cat['RA*_mas'] = xfP.Xmean
-        cat['DE_mas'] = xfP.Ymean
-        cat['sRA*_mas'] = xfP.errResidualX
-        cat['sDE_mas'] = xfP.errResidualY
-        cat['OB'] = xfP.medi
-
-        # tmp = cat['MJD','fx[1]','fx[2]','fy[1]','fy[2]','RA*_mas','DE_mas','sRA*_mas','sDE_mas','OB','frame'];
-        tmp = cat.copy()
-        tmp = tablevstack((tmp, tmp))
-        tmp.sort('MJD')
-        tmp.add_column(Column(name='da_mas', data=np.zeros(len(tmp))))
-        tmp.add_column(Column(name='sigma_da_mas', data=np.zeros(len(tmp))))
-
-        spsi = (np.arange(1, len(tmp) + 1) + 1) % 2;  # % first X then Y
-        cpsi = (np.arange(1, len(tmp) + 1)) % 2;
-        # xi = spsi==0;    #index of X coordinates (cpsi = 1) psi =  0 deg
-        # yi = cpsi==0;    #index of Y coordinates (spsi = 1) psi = 90 deg
-
-        xi = np.where(spsi == 0)[0];  # index of X coordinates (cpsi = 1) psi =  0 deg
-        yi = np.where(cpsi == 0)[0];  # index of Y coordinates (spsi = 1) psi = 90 deg
-
-        tmp['da_mas'][xi] = tmp['RA*_mas'][xi]
-        tmp['da_mas'][yi] = tmp['DE_mas'][yi]
-        tmp['sigma_da_mas'][xi] = tmp['sRA*_mas'][xi]
-        tmp['sigma_da_mas'][yi] = tmp['sDE_mas'][yi]
-
-    else:
-        tmp = Table()
-        tmp['MJD'] = xfP.t_MJD_epoch
-        tmp['da_mas'] = xfP.Xmean
-        tmp['sigma_da_mas'] = xfP.errResidualX
-        tmp['OB'] = xfP.medi
-        xi = None
-        yi = None
-
-    return tmp, xi, yi
-
-
 def get_cpsi_spsi_for_2Dastrometry(timestamps_2D, scan_angle_definition='hipparcos'):
     """Return cos(psi) and sin(psi) for regular 2D astrometry, where psi is the scan angle.
 
@@ -3624,31 +3569,23 @@ def companion_mass_in_diluted_system(alpha_mas, absolute_parallax_mas, m1_kg, p_
         g = g_value
 
         m2_kg = np.array([-(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3, -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*((-1./2) - np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - ((-1./2) - np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3, -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*((-1./2) + np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - ((-1./2) + np.sqrt(3)*1j/2)*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1./3)/3])
-
         # m2_kg = -(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)/(3*(27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1/3.)) - (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(3*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) - (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)) + np.sqrt(-4*(-3*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**2/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2)**3 + (27*(alpha**3*m1**2 + beta**3*g*m1**3)/(beta**3*g - 3*beta**2*g + 3*beta*g - g) - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2 + 2*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**2)/2 - 9*(2*alpha**3*m1 + 3*beta**3*g*m1**2 - 3*beta**2*g*m1**2)*(alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)/(2*(beta**3*g - 3*beta**2*g + 3*beta*g - g)**2) + (alpha**3 + 3*beta**3*g*m1 - 6*beta**2*g*m1 + 3*beta*g*m1)**3/(beta**3*g - 3*beta**2*g + 3*beta*g - g)**3)**(1/3.)/3
 
     if 0:
+        # solve the equation using sympy
 
-        # omega = sp.Symbol('omega')
         alpha = sp.Symbol('alpha')
         beta = sp.Symbol('beta')
         g = sp.Symbol('g')
-        # P = sp.Symbol('P')
         m1 = sp.Symbol('m1')
         m2 = sp.Symbol('m2')
-        # zero_equation = g * (m1 + m2) * P**2 - (alpha / (omega * (m2/(m1 + m2) - beta)))**3 # == 0
         zero_equation = g * (m1 + m2) - (alpha / (m2/(m1 + m2) - beta))**3 # == 0
         res = sp.solvers.solve(zero_equation, m2, check=False)
         print(sp.python(res))
         for i, sol in enumerate(res):
             print('Solution {}'.format(i))
             if i == 1:
-                # print(sp.python(sol))
-            # sol = res[3]
-            # m2_kg = sol.evalf(subs={g: 3., m1: 15., beta: 0.4, alpha: 4.})
                 m2_kg = sol.evalf(subs={g: g_value, m1: m1_kg, beta: beta_value, alpha: alpha_value})
-                # print(m2_kg)
-
                 return m2_kg
 
     return m2_kg
