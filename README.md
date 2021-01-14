@@ -18,10 +18,16 @@ under active development.
 ### Example usage
 
 - 
-Plotting example from [notebook](notebooks/2_exoplanet_example_orbit.ipynb)  
+Plotting example from this notebook: [2_exoplanet_example_orbit.ipynb](notebooks/2_exoplanet_example_orbit.ipynb_)  
 <p align="center">
   <img src="notebooks/figures/example_orbit.png" width="800"/>
 </p>
+
+Plotting example from this notebook: [1_exoplanet_signatures.ipynb](notebooks/1_exoplanet_signatures.ipynb_)  
+<p align="center">
+  <img src="notebooks/figures/nasa_True_True_astrometry_signatures.png" width="800"/>
+</p>
+
 
 - Plotting the orbital motion with default parameters 
 

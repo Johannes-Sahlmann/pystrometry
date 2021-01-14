@@ -3,11 +3,11 @@ import copy
 
 from astropy import constants as const
 from astropy.time import Time
+import astropy.units as u
 import numpy as np
 from numpy.testing import assert_allclose
 
-
-from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2, get_ephemeris
+from ..pystrometry import semimajor_axis_barycentre_linear, pjGet_m2, get_ephemeris, semimajor_axis_relative_linear, semimajor_axis_relative_angular
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
 from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_cpsi_spsi_for_2Dastrometry
 
@@ -45,7 +45,7 @@ def test_keplerian_equations(verbose=False):
     m2_kg = copy.deepcopy(MJ_kg)
     P_day = 400.
 
-    a_m = pjGet_a_m_barycentre(m1_kg/MS_kg, m2_kg/MJ_kg, P_day)
+    a_m = semimajor_axis_barycentre_linear(m1_kg / MS_kg, m2_kg / MJ_kg, P_day)
 
     # m2_kg_recovered = keplerian_secondary_mass(m1_kg, a_m, P_day)
     m2_kg_recovered = pjGet_m2(m1_kg, a_m, P_day)
@@ -193,4 +193,20 @@ def test_default_orbit(verbose=False):
     """Perform basic checks on single Keplerian systems."""
 
     orb = OrbitSystem()
-    orb.ppm(np.array([40672.5]))
+    times_mjd = np.array([40672.5])
+    orb.ppm(times_mjd)
+
+    # test photocentre orbit
+    timestamps_curve_1d, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(times_mjd)
+    assert_allclose(orb.photocenter_orbit(timestamps_curve_1d, cpsi_curve, spsi_curve),
+                    [-1.57307485e-03, -6.08159828e-19], rtol=1e-9)
+
+
+def test_semimajor_axes():
+    m1_mjup = (const.M_earth / const.M_jup).value
+    p_day = u.year.to(u.day)
+    d_pc = 10.
+    a_relative_m = semimajor_axis_relative_linear(1.0, m1_mjup, p_day)
+    assert_allclose(a_relative_m*u.m.to(u.AU), 1, atol=1e-4)
+
+    assert_allclose(semimajor_axis_relative_angular(1.0, m1_mjup, p_day, d_pc), 10, atol=1e-3)

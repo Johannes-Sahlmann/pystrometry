@@ -273,12 +273,12 @@ class OrbitSystem(object):
             # set photocenter orbit size
             beta = fractional_luminosity(0., self.delta_mag)
             f = fractional_mass(self.m1_MS, self.m2_MS)
-            a_rel_mas = self.pjGet_a_relative()
+            a_rel_mas = self.a_relative_angular()
             self.alpha_mas = (f - beta) * a_rel_mas
             if self.alpha_mas < 0:
                 self.alpha_mas = 0.
         else:
-            self.alpha_mas = self.pjGet_a_barycentre()
+            self.alpha_mas = self.a_barycentre_angular()
             self.a_mas  = self.alpha_mas
 
 
@@ -311,7 +311,7 @@ class OrbitSystem(object):
         description += "Secondary mass = {:4.3f} Msol \t = {:4.3f} Mjup \t = {:4.3f} MEarth\n".format(self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg)
         description += "Mass ratio q=m2/m1 = {:4.6f}\n".format(self.m2_MS / self.m1_MS)
 
-        description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}\n'.format(self.pjGet_a_barycentre(), self.pjGet_a_relative())
+        description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}\n'.format(self.a_barycentre_angular(), self.a_relative_angular())
         if self.delta_mag is not None:
             description += 'alpha_mas = {:2.3f}, delta_mag = {:2.3f}\n'.format(self.alpha_mas, self.delta_mag)
             description += 'fract.lum beta = {:2.4f}, lum.ratio=L2/L1 = {:2.4f}\n'.format(fractional_luminosity(0, self.delta_mag), luminosity_ratio(fractional_luminosity(0, self.delta_mag)))
@@ -551,11 +551,8 @@ class OrbitSystem(object):
         return accel_a, accel_d, accel_mag
 
 
-    # 0J0: Added the following three functions to the class for ease of access
-    #### see about pjGet_DetectionLimits next? ####
-    def pjGet_a_barycentre(self):
-        """
-        Get the semi-major axis, in milliarcseconds, of the primary object's
+    def a_barycentre_angular(self):
+        """Get the semi-major axis, in milliarcseconds, of the primary object's
         orbit around the system barycenter. Relies on parameter values from the
         current OrbitSystem instance.
 
@@ -564,18 +561,18 @@ class OrbitSystem(object):
         a_barycentre : `float`
             The apparent semi-major axis of the primary, in milliarcseconds.
         """
-        M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
-             / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
-        a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
-        d_pc  = 1. / (self.absolute_plx_mas / 1000.)
-        a_rad = np.arctan2(a_m, d_pc*pc_m)
-        a_mas = a_rad * rad2mas # semimajor axis in mas
-        return a_mas
+        return semimajor_axis_barycentre_angular(self.m1_MS, self.m2_MJ, self.P_day, self.absolute_plx_mas)
+        # M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
+        #      / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+        # a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+        # d_pc  = 1. / (self.absolute_plx_mas / 1000.)
+        # a_rad = np.arctan2(a_m, d_pc*pc_m)
+        # a_mas = a_rad * rad2mas # semimajor axis in mas
+        # return a_mas
 
 
-    def pjGet_a_m_barycentre(self):
-        """
-        Get the semi-major axis, in meters, of the primary object's orbit
+    def a_barycentre_linear(self):
+        """Get the semi-major axis, in meters, of the primary object's orbit
         around the system barycenter. Relies on parameter values from the
         current OrbitSystem instance.
 
@@ -584,15 +581,15 @@ class OrbitSystem(object):
         a_m_barycentre : `float`
             The physical semi-major axis of the primary, in meters.
         """
-        M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
-             / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
-        a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
-        return a_m
+        return semimajor_axis_barycentre_linear(self.m1_MS, self.m2_MJ, self.P_day)
+        # M = (Ggrav * (self.m2_MJ * MJ_kg)**3.
+        #      / (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
+        # a_m = (M / (4. * np.pi**2.) * (self.P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+        # return a_m
 
 
-    def pjGet_a_relative(self):
-        """
-        Get the semi-major axis, in milliarcseconds, of the secondary object's
+    def a_relative_angular(self):
+        """Get the semi-major axis, in milliarcseconds, of the secondary object's
         orbit around the primary. Relies on parameter values from the current
         OrbitSystem instance.
 
@@ -601,20 +598,20 @@ class OrbitSystem(object):
         a_relative : `float`
             The apparent semi-major axis of the secondary, in milliarcseconds.
         """
-        a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
-                    / 4. / (np.pi**2.)
-                     * (self.P_day * day2sec)**2.)**(1./3.))
-        #M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        d_pc  = 1./ (self.absolute_plx_mas / 1000.)
-        a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
-        a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
-        return a_rel_mas
+        return semimajor_axis_relative_angular(self.m1_MS, self.m2_MJ, self.P_day, self.absolute_plx_mas)
+        # a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
+        #             / 4. / (np.pi**2.)
+        #              * (self.P_day * day2sec)**2.)**(1./3.))
+        # #M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
+        # #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+        # d_pc  = 1./ (self.absolute_plx_mas / 1000.)
+        # a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
+        # a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
+        # return a_rel_mas
 
 
-    def pjGet_a_m_relative(self):
-        """
-        Get the semi-major axis, in meters, of the secondary object's orbit
+    def a_relative_linear(self):
+        """Get the semi-major axis, in meters, of the secondary object's orbit
         around the primary. Relies on parameter values from the current
         OrbitSystem instance.
 
@@ -623,10 +620,11 @@ class OrbitSystem(object):
         a_m_relative : `float`
             The physical semi-major axis of the secondary, in meters.
         """
-        a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
-                    / 4. / (np.pi**2.)
-                    * (self.P_day * day2sec)**2.)**(1./3.))
-        return a_rel_m
+        return semimajor_axis_relative_linear(self.m1_MS, self.m2_MJ, self.P_day)
+        # a_rel_m = ((Ggrav * (self.m1_MS * MS_kg + self.m2_MJ * MJ_kg)
+        #             / 4. / (np.pi**2.)
+        #             * (self.P_day * day2sec)**2.)**(1./3.))
+        # return a_rel_m
 
 
     def rv_semiamplitude_mps(self, component='primary'):
@@ -797,38 +795,31 @@ class OrbitSystem(object):
         return [phi1 ,phi2, t_day, rv_ms, phi1_rel ,phi2_rel]
 
 
-    def pjGetBarycentricAstrometricOrbitFast(self, t_MJD, spsi, cpsi):#, scan_angle_definition='hipparcos'):
-        # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
-        #    written: J. Sahlmann   18 May 2015   ESAC
-        #    updated: J. Sahlmann   25.01.2016   STScI/ESA
-        # */
-        #       #**************ASTROMETRY********************************************************
-        #       M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        #       a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        #       a_rad = np.arctan2(a_m,d_pc*pc_m)
-        #       a_mas = a_rad * rad2mas # semimajor axis in mas
-        #       TIC     = thiele_innes_constants( [ a_mas   , omega_deg     , OMEGA_deg, i_deg ] ) #Thiele-Innes constants
-        #       phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,Tp_day,TIC)
-        #       return phi1
+    def pjGetBarycentricAstrometricOrbitFast(self, t_MJD, spsi, cpsi):
+        """Simulate fast 1D astrometry for planet detection limits.
 
-#         t_MJD = self.MjdUsedInTcspsi
+        written: J. Sahlmann   18 May 2015   ESAC
+        updated: J. Sahlmann   25.01.2016   STScI/ESA
+        updated: J. Sahlmann   14.01.2021   RHEA for ESA
 
-        # m2_MS = self.m2_MJ * MJ_kg/MS_kg# #companion mass in units of SOLAR mass
-        d_pc  = 1./ (self.absolute_plx_mas/1000.)
+        Parameters
+        ----------
+        t_MJD
+        spsi
+        cpsi
 
-        # omega_rad = np.deg2rad(self.omega_deg)
-        # OMEGA_rad = np.deg2rad(self.OMEGA_deg)
-        # i_rad = np.deg2rad(self.i_deg)
+        Returns
+        -------
 
-        #**************ASTROMETRY********************************************************
+        """
 
-        M = Ggrav * (self.m2_MJ * MJ_kg)**3. / ( self.m1_MS*MS_kg + self.m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
-        a_m = ( M / (4. * np.pi**2.) * (self.P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
-        a_rad = np.arctan2(a_m, d_pc*pc_m)
-        a_mas = a_rad * rad2mas # semimajor axis in mas
-        TIC     = thiele_innes_constants([a_mas   , self.omega_deg     , self.OMEGA_deg, self.i_deg]) #Thiele-Innes constants
-        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC, scan_angle_definition=self.scan_angle_definition)
-        # phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC)
+        # semimajor axis in mas
+        a_mas = self.a_barycentre_angular()
+
+        # Thiele-Innes constants
+        TIC = thiele_innes_constants([a_mas, self.omega_deg, self.OMEGA_deg, self.i_deg])
+        phi1 = astrom_signalFast(t_MJD, spsi, cpsi, self.ecc, self.P_day, self.Tp_day, TIC,
+                                 scan_angle_definition=self.scan_angle_definition)
         return phi1
 
 
@@ -3649,9 +3640,8 @@ def pjGet_m2(m1_kg, a_m, P_day):
     return m2_kg
 
 
-def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
-    """
-    Get the semi-major axis, in milliarcseconds, of a primary object's orbit
+def semimajor_axis_barycentre_angular(m1_MS, m2_MJ, P_day, plx_mas):
+    """Return the semi-major axis, in milliarcseconds, of a primary object's orbit
     around the system barycenter.
 
     Parameters
@@ -3673,16 +3663,24 @@ def pjGet_a_barycentre(m1_MS, m2_MJ, P_day, plx_mas):
     a_barycentre : `float`
         The apparent semi-major axis of the primary, in milliarcseconds.
     """
-    M = (Ggrav * (m2_MJ * MJ_kg)**3.
-         / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.) # mass term for the barycentric orbit of the primary mass
-    a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)  # semimajor axis of the primary mass in m
+    # # mass term for the barycentric orbit of the primary mass
+    # M = (Ggrav * (m2_MJ * MJ_kg)**3. / (m1_MS * MS_kg + m2_MJ * MJ_kg)**2.)
+    #
+    # # semimajor axis of the primary mass in meter
+    # a_m = (M / (4. * np.pi**2.) * (P_day * day2sec)**2.)**(1./3.)
+
+    a_m = semimajor_axis_barycentre_linear(m1_MS, m2_MJ, P_day)
+
     d_pc  = 1. / (plx_mas / 1000.)
     a_rad = np.arctan2(a_m, d_pc*pc_m)
-    a_mas = a_rad * rad2mas # semimajor axis in mas
+
+    # semimajor axis in mas
+    a_mas = a_rad * rad2mas
+
     return a_mas
 
 
-def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
+def semimajor_axis_barycentre_linear(m1_MS, m2_MJ, P_day):
     """
     Get the semi-major axis, in meters, of a primary object's orbit around the
     system barycenter.
@@ -3709,7 +3707,7 @@ def pjGet_a_m_barycentre(m1_MS, m2_MJ, P_day):
     return a_m
 
 
-def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
+def semimajor_axis_relative_angular(m1_MS, m2_MJ, P_day, plx_mas):
     """
     Get the semi-major axis, in milliarcseconds, of a secondary object's orbit
     around its primary.
@@ -3733,20 +3731,20 @@ def pjGet_a_relative(m1_MS, m2_MJ, P_day, plx_mas):
     a_relative : `float`
         The apparent semi-major axis of the secondary, in milliarcseconds.
     """
-    a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
-                / 4. / (np.pi**2.)
-                * (P_day * day2sec)**2.)**(1./3.))
+    # a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
+    #             / 4. / (np.pi**2.)
+    #             * (P_day * day2sec)**2.)**(1./3.))
     #M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
     #a_m = ( M / (4. * np.pi**2.) * (P_day*day2sec)**2. )**(1./3.)  # semimajor axis of the primary mass in m
+    a_rel_m = semimajor_axis_relative_linear(m1_MS, m2_MJ, P_day)
     d_pc  = 1./ (plx_mas / 1000.)
     a_rel_rad = np.arctan2(a_rel_m, d_pc * pc_m)
     a_rel_mas = a_rel_rad * rad2mas # semimajor axis in mas
     return a_rel_mas
 
 
-def pjGet_a_m_relative(m1_MS, m2_MJ, P_day):
-    """
-    Get the semi-major axis, in meters, of a secondary object's orbit around
+def semimajor_axis_relative_linear(m1_MS, m2_MJ, P_day):
+    """Get the semi-major axis, in meters, of a secondary object's orbit around
     its primary.
 
     Parameters
