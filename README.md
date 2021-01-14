@@ -20,7 +20,7 @@ under active development.
 - 
 Plotting example from [notebook](notebooks/2_exoplanet_example_orbit.ipynb)  
 <p align="center">
-  <img src="notebooks/figures/example_orbit.png" width="200"/>
+  <img src="notebooks/figures/example_orbit.png" width="800"/>
 </p>
 
 - Plotting the orbital motion with default parameters 
