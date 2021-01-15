@@ -54,14 +54,12 @@ The code is in this notebook: [1_exoplanet_signatures.ipynb](notebooks/1_exoplan
   <img src="notebooks/figures/nasa_True_True_astrometry_signatures.png" width="800"/>
 </p>
 
-
-
-### Conda environment creation
+### Example conda environment creation that allows for running the example notebooks 
 This requires a conda installation.
 
 Create a dedicated environment (here named `astrom`) with the necessary dependencies:
 
-    conda create --name astrom --yes python=3.7 pandas pip==20.2.4
+    conda create --name astrom --yes python=3.7 pandas pip jupyterlab
     
 Activate that environment: 
 
@@ -71,9 +69,10 @@ Install pystrometry from PyPI:
 
     pip install pystrometry
 
+Open jupyter notebook, e.g.
 
-### Documentation
-
+    jupyter notebook [path-to-downloaded-file]2_exoplanet_example_orbit.ipynb
+ 
 
 ### Contributing
 Please open a new issue or new pull request for bugs, feedback, or new features you would like to see. If there is an issue you would like to work on, please leave a comment and we will be happy to assist. New contributions and contributors are very welcome!   
