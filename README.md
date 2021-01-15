@@ -9,7 +9,7 @@
 This code collection evolved over the last 10+ years and does therefore not always conform with coding 
 standards and best practices, but it is installable via PyPI: `pip install pystrometry`. 
 
-pystrometry already provides a variety of functionalities but is still 
+pystrometry provides a variety of functionalities and has been used in several publications. It is 
 under active development.
 
 
@@ -20,7 +20,7 @@ under active development.
                 
         orb = OrbitSystem()  # default parameters
         orb.plot_orbits()    
-    More customised orbit plotting example from this notebook: [2_exoplanet_example_orbit.ipynb](notebooks/2_exoplanet_example_orbit.ipynb_)  
+    More customised orbit plotting example from this notebook: [2_exoplanet_example_orbit.ipynb](notebooks/2_exoplanet_example_orbit.ipynb)  
 <p align="center">
   <img src="notebooks/figures/example_orbit.png" width="800"/>
 </p>
@@ -49,7 +49,7 @@ under active development.
         delta_ra_star_mas, delta_dec_mas = orb.ppm(t_mjd)
 
 - Compute and plot the astrometric amplitudes of known exoplanets.  
-The code is in this notebook: [1_exoplanet_signatures.ipynb](notebooks/1_exoplanet_signatures.ipynb_)  
+The code is in this notebook: [1_exoplanet_signatures.ipynb](notebooks/1_exoplanet_signatures.ipynb)  
 <p align="center">
   <img src="notebooks/figures/nasa_True_True_astrometry_signatures.png" width="800"/>
 </p>
@@ -62,11 +62,14 @@ This requires a conda installation.
 Create a dedicated environment (here named `astrom`) with the necessary dependencies:
 
     conda create --name astrom --yes python=3.7 pandas pip==20.2.4
-    pip install pystrometry
     
 Activate that environment: 
 
     conda activate astrom
+
+Install pystrometry from PyPI:
+
+    pip install pystrometry
 
 
 ### Documentation
