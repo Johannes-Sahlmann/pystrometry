@@ -151,15 +151,17 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
         pl.xlabel('{} ({})'.format(mapped_name, table.meta['comparison_to']))
         pl.ylabel('{} (MIKS-GA)'.format(miks_field))
         pl.title('{} sources from {}'.format(len(table), table.meta['comparison_to']))
-        pl.show()
         pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
                 transform=pl.gca().transAxes)
+        pl.show()
         if save_plot:
             figure_name = os.path.join(plot_dir, '{}_comparison_to_{}.pdf'.format(miks_field, table.meta['comparison_to']))
             pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
 
 
     # period phase error:
+
+
     miks_name = 'period'
     miks_field = 'p1_{}'.format(miks_name)
     mapped_name = parameter_mapping[miks_name]
@@ -175,13 +177,45 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
     pl.fill_between(pl.xlim(), period_phase_error_threshold, y2=-period_phase_error_threshold, color='g', alpha=0.5)
     pl.xlabel('Truth period (day)')
     pl.ylabel('Period phase error')
-    description_str = '{}/{} = {:2.1f}% within +/- {:2.1f}'.format(n_period_recovered, len(discrepancy_table), n_period_recovered/len(discrepancy_table)*100, period_phase_error_threshold)
-    pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
+    description_str_2 = '{}/{} = {:2.1f}% within +/- {:2.1f}\n'.format(n_period_recovered, len(discrepancy_table), n_period_recovered/len(discrepancy_table)*100, period_phase_error_threshold)+description_str
+    pl.text(0.01, 0.99, description_str_2, horizontalalignment='left', verticalalignment='top',
             transform=pl.gca().transAxes)
     pl.show()
     if save_plot:
         figure_name = os.path.join(plot_dir, 'period_phase_error_{}.pdf'.format(table.meta['comparison_to']))
         pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
+
+    # pl.close('all')
+    threshold = {'delta_chi2': {'value': 1000, 'operator': '>'},
+                 'f_test_probability': {'value': 1e-100, 'operator': '<'}
+                 }
+    for miks_field in ['meritFunction', 'chi2WithPlanet', 'chi2SingleStar', 'delta_chi2', 'f_test_probability', 'p1_estSNratio', 'p1_period_snr']:
+        pl.figure(figsize=(8, 4), facecolor='w', edgecolor='k')
+        index = np.where(discrepancy_table['period_phase_error'] < 100)[0]
+        pl.loglog(discrepancy_table['period_phase_error'][index], table[miks_field][index], 'bo', alpha=0.7)
+        # pl.ylim((-1,1))
+        # pl.fill_between(pl.xlim(), period_phase_error_threshold, y2=-period_phase_error_threshold, color='g', alpha=0.5)
+        pl.xlabel('Period phase error')
+        pl.ylabel(miks_field)
+        n_passed_threshold = None
+        if miks_field in ['delta_chi2', 'f_test_probability']:
+            value = threshold[miks_field]['value']
+            operator = threshold[miks_field]['operator']
+            if operator == '>':
+                n_passed_threshold = len(np.where(table[miks_field] > value)[0])
+                pl.fill_between(pl.xlim(), value, y2=pl.ylim()[1], color='g', alpha=0.5)
+            elif operator == '<':
+                n_passed_threshold = len(np.where(table[miks_field] < value)[0])
+                pl.fill_between(pl.xlim(), value, y2=pl.ylim()[0], color='g', alpha=0.5)
+
+        pl.title('{} of {} systems shown. {} pass threshold'.format(len(index), len(table), n_passed_threshold))
+        pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
+                transform=pl.gca().transAxes)
+        pl.show()
+        if save_plot:
+            figure_name = os.path.join(plot_dir, 'period_phase_error_vs_{}_{}.pdf'.format(miks_field, table.meta['comparison_to']))
+            pl.savefig(figure_name, transparent=True, bbox_inches='tight', pad_inches=0)
+
 
     if 1:
         formats = {}
@@ -458,10 +492,6 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     iad.load_data()
 
-
-    # iad.epoch_data.write(os.path.join(epoch_data_dir, '{}_OBSERVATION_DATA_SORTED.rdb'.format(source_id)))
-    # 1/0
-    # iad_mjd = Time(iad.epoch_data[iad.time_column]*365.25, format='jd').mjd
     iad_mjd = Time(iad.epoch_data[iad.time_column]*365.25+t_ref_jd, format='jd').mjd
     iad.epoch_data['MJD'] = iad_mjd
 
@@ -522,12 +552,10 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     # print(attribute_dict)
     # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
     # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
-    # 1/0
 
     orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
     print(orbit)
 
-    # 1/0
     # set coeffMatrix in orbit object
     ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
@@ -546,6 +574,8 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     plot_dict['scan_angle_definition'] = scan_angle_definition
     # plot_dict['xi'] = iad.epoch_data['xi']  # AL indices
     # plot_dict['yi'] = iad.epoch_data['yi']  # AC indices
+
+
 
     for key in iad.epoch_data.colnames:
         if '_obs' in key:

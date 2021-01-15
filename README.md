@@ -1,25 +1,33 @@
 [![Build Status](https://travis-ci.org/Johannes-Sahlmann/pystrometry.svg?branch=master)](https://travis-ci.org/Johannes-Sahlmann/pystrometry)
 [![Documentation Status](https://readthedocs.org/projects/pystrometry/badge/?version=latest)](https://pystrometry.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://badge.fury.io/py/pystrometry.svg)](https://badge.fury.io/py/pystrometry)
-[![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/Johannes-Sahlmann/pystrometry/blob/master/LICENSE.md)
+[![PyPI - License](https://img.shields.io/pypi/l/Django.svg)](https://github.com/Johannes-Sahlmann/pystrometry/blob/master/LICENSE.rst)
 [![DOI](https://zenodo.org/badge/172252669.svg)](https://zenodo.org/badge/latestdoi/172252669)
 
 # pystrometry  -  Support for high-precision astrometry timeseries analysis
 
+This code collection evolved over the last 10+ years and does therefore not always conform with coding 
+standards and best practices, but it is installable via PyPI: `pip install pystrometry`. 
 
-### Example usage
-- Plotting the orbital motion with default parameters 
+pystrometry already provides a variety of functionalities but is still 
+under active development.
 
 
+### Example usages
+- Plotting the orbital motion with default parameters   
+        
         from pystrometry.pystrometry import OrbitSystem 
-        from collections import OrderedDict
                 
         orb = OrbitSystem()  # default parameters
-        orb.plot_orbits() 
+        orb.plot_orbits()    
+    More customised orbit plotting example from this notebook: [2_exoplanet_example_orbit.ipynb](notebooks/2_exoplanet_example_orbit.ipynb_)  
+<p align="center">
+  <img src="notebooks/figures/example_orbit.png" width="800"/>
+</p>
 
-- Define the orbital parameters
+- Define the system parameters
 
-
+        from collections import OrderedDict
         attribute_dict = OrderedDict([  ('RA_deg', 164.), 
                                         ('DE_deg', -21.),
                                         ('absolute_plx_mas', 27.), 
@@ -35,11 +43,30 @@
         orb = OrbitSystem(attribute_dict)
         orb.plot_orbits() 
 
-
-Get the proper motion in RA, Dec:
+    Compute the proper motion displacements in RA, Dec for the system:
     
-    t_mjd = np.linspace(50000, 52000)
-    delta_ra_star_mas, delta_dec_mas = orb.ppm(t_mjd)
+        t_mjd = np.linspace(50000, 52000)
+        delta_ra_star_mas, delta_dec_mas = orb.ppm(t_mjd)
+
+- Compute and plot the astrometric amplitudes of known exoplanets.  
+The code is in this notebook: [1_exoplanet_signatures.ipynb](notebooks/1_exoplanet_signatures.ipynb_)  
+<p align="center">
+  <img src="notebooks/figures/nasa_True_True_astrometry_signatures.png" width="800"/>
+</p>
+
+
+
+### Conda environment creation
+This requires a conda installation.
+
+Create a dedicated environment (here named `astrom`) with the necessary dependencies:
+
+    conda create --name astrom --yes python=3.7 pandas pip==20.2.4
+    pip install pystrometry
+    
+Activate that environment: 
+
+    conda activate astrom
 
 
 ### Documentation

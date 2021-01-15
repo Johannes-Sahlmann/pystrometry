@@ -15,12 +15,18 @@ from astropy.table import Table, Column
 from astropy.table import vstack as tablevstack
 import pylab as pl
 import numpy as np
-import aplpy
 
 import pickle
 
-import pystortion
-import uhelpers as helpers
+try:
+    import pystortion
+except ImportError:
+    print('WARNING: pystortion package not available!')
+
+try:
+    import aplpy
+except ImportError:
+    print('WARNING: aplpy package not available!')
 
 
 
@@ -42,9 +48,9 @@ class ScampXml(object):
         self.table.add_column(Column(data=ob_numbers, name='EPOCH'))
         self.table.add_column(Column(data=obs_date_mjd, name='MJD'))
 
-    def plot(self, plot_dir):
-        helpers.make_dir(plot_dir)
-        helpers.plot_columns_simple(self.table, plot_dir)
+    # def plot(self, plot_dir):
+    #     helpers.make_dir(plot_dir)
+    #     helpers.plot_columns_simple(self.table, plot_dir)
 
     def info(self):
         self.target = str(np.unique(np.array(self.table['Image_Ident'])))

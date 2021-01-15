@@ -2,25 +2,42 @@ from collections import OrderedDict
 import copy
 
 from astropy import constants as const
+from astropy.time import Time
+import astropy.units as u
 import numpy as np
 from numpy.testing import assert_allclose
 
-
-from ..pystrometry import pjGet_a_m_barycentre, pjGet_m2 # keplerian_secondary_mass,
+from ..pystrometry import semimajor_axis_barycentre_linear, pjGet_m2, get_ephemeris, semimajor_axis_relative_linear, semimajor_axis_relative_angular
 from ..pystrometry import convert_from_linear_to_angular, convert_from_angular_to_linear
-from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_spsi_cpsi_for_2Dastrometry
+from ..pystrometry import thiele_innes_constants, geometric_elements, OrbitSystem, get_cpsi_spsi_for_2Dastrometry
 
 
 def test_angular_to_linear():
+    """Test conversion between milliarcsecond and meter."""
+
     a_mas = 3.
     absolute_parallax_mas = 100.
 
     a_recovered_mas = convert_from_linear_to_angular(convert_from_angular_to_linear(a_mas, absolute_parallax_mas), absolute_parallax_mas)
-    print(np.abs(a_mas - a_recovered_mas))
+    # print(np.abs(a_mas - a_recovered_mas))
     assert np.abs(a_mas - a_recovered_mas) < 1e-14
 
 
-def test_keplerian_equations():
+def test_get_ephemeris():
+    """Test retrieval of ephemeris information from JPL Horizons."""
+
+    start_time = Time(2018., format='jyear')
+    stop_time = Time(2019., format='jyear')
+
+    xyzdata = get_ephemeris(start_time=start_time, stop_time=stop_time, step_size='5d',
+                  verbose=False, overwrite=True)
+
+    assert len(xyzdata) == 74
+
+
+def test_keplerian_equations(verbose=False):
+    """Test semimajor axis and mass consistency when applying Kepler's equations."""
+
     MS_kg = const.M_sun.value
     MJ_kg = const.M_jup.value  # jupiter mass in kg
 
@@ -28,16 +45,17 @@ def test_keplerian_equations():
     m2_kg = copy.deepcopy(MJ_kg)
     P_day = 400.
 
-    a_m = pjGet_a_m_barycentre(m1_kg/MS_kg, m2_kg/MJ_kg, P_day)
-    print('')
+    a_m = semimajor_axis_barycentre_linear(m1_kg / MS_kg, m2_kg / MJ_kg, P_day)
 
     # m2_kg_recovered = keplerian_secondary_mass(m1_kg, a_m, P_day)
     m2_kg_recovered = pjGet_m2(m1_kg, a_m, P_day)
 
-    print(m2_kg/MJ_kg)
-    print(m2_kg_recovered/MJ_kg)
+    if verbose:
+        print('')
+        print(m2_kg/MJ_kg)
+        print(m2_kg_recovered/MJ_kg)
+        print(m2_kg/m2_kg_recovered - 1 )
 
-    print(m2_kg/m2_kg_recovered - 1 )
     assert m2_kg/m2_kg_recovered - 1 < 1e-14
 
 
@@ -145,7 +163,7 @@ def test_orbit_computation(verbose=False):
                                               n_curve)
 
 
-            timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_spsi_cpsi_for_2Dastrometry(timestamps_curve_2D)
+            timestamps_curve_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(timestamps_curve_2D)
 
             # relative orbit
             phi0_curve_relative = orbit_system.relative_orbit_fast(timestamps_curve_1D, spsi_curve, cpsi_curve,
@@ -169,3 +187,26 @@ def test_orbit_computation(verbose=False):
         if (systems[0]['orbit_system'].gamma_ms ==0) and (systems[1]['orbit_system'].gamma_ms ==0):
             assert_allclose(systems[0]['rv_orbit'], -1*systems[1]['rv_orbit'], atol=absolute_tolerance)
             assert_allclose(systems[0]['rv_orbit'], systems[2]['rv_orbit'], atol=absolute_tolerance)
+
+
+def test_default_orbit(verbose=False):
+    """Perform basic checks on single Keplerian systems."""
+
+    orb = OrbitSystem()
+    times_mjd = np.array([40672.5])
+    orb.ppm(times_mjd)
+
+    # test photocentre orbit
+    timestamps_curve_1d, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(times_mjd)
+    assert_allclose(orb.photocenter_orbit(timestamps_curve_1d, cpsi_curve, spsi_curve),
+                    [-1.57307485e-03, -6.08159828e-19], rtol=1e-9)
+
+
+def test_semimajor_axes():
+    m1_mjup = (const.M_earth / const.M_jup).value
+    p_day = u.year.to(u.day)
+    d_pc = 10.
+    a_relative_m = semimajor_axis_relative_linear(1.0, m1_mjup, p_day)
+    assert_allclose(a_relative_m*u.m.to(u.AU), 1, atol=1e-4)
+
+    assert_allclose(semimajor_axis_relative_angular(1.0, m1_mjup, p_day, d_pc), 10, atol=1e-3)
