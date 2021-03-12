@@ -62,8 +62,6 @@ class GaiaIad(object):
             t_index = np.where(self.epoch_data['transitId'] == transit_id)[0]
             self.epoch_data[self.transit_id_name][t_index] = ob_number + 1
 
-        # self.xi = range(len(self.epoch_data))
-
     def set_epoch_median_subtraction(self):
         """Subtract the median of an epoch from AL/AC measurements and add to table."""
         self.epoch_data['da_mas_obs_epoch_median_subtracted'] = np.zeros(len(self.epoch_data))
