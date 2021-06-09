@@ -2286,9 +2286,9 @@ class AstrometricOrbitPlotter(object):
                 self.epoch_precision_mean)
 
         if argument_dict['frame_omc_description'] == 'default':
-            argument_dict['frame_omc_description'] = '$N_f={}$, $\Sigma_\\mathrm{{O-C,frame}}$={:2.3f} mas\n' \
+            argument_dict['frame_omc_description'] = '$N_f={}/{}$, $\Sigma_\\mathrm{{O-C,frame}}$={:2.3f} mas\n' \
                                     '$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
-                len(self.data.epoch_data), np.std(self.residuals), np.mean(self.data.epoch_data['sigma_da_mas']))
+                len(self.data.epoch_data), self.data.n_original_frames, np.std(self.residuals), np.mean(self.data.epoch_data['sigma_da_mas']))
             if 'excess_noise' in argument_dict.keys():
                 argument_dict['frame_omc_description'] += '\nexN = {:2.2f}, mF = {:2.0f}'.format(
             argument_dict['excess_noise'], argument_dict['merit_function'])
@@ -2300,10 +2300,10 @@ class AstrometricOrbitPlotter(object):
 
         #  loop over number of companions
         for p in range(self.number_of_companions):
-            if argument_dict['orbit_description'] == 'default':
+            if argument_dict['orbit_description'][p] == 'default':
                 argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$\\omega={:2.3f}$ deg\n$\\Omega={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], getattr(self, 'orbit_system_companion_{:d}'.format(p)).alpha_mas, self.model_parameters[p]['i_deg'], self.model_parameters[p]['omega_deg'], self.model_parameters[p]['OMEGA_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
             else:
-                argument_dict['tmp_orbit_description'] = argument_dict['orbit_description']
+                argument_dict['tmp_orbit_description'] = argument_dict['orbit_description'][p]
 
 
             theta_p = self.model_parameters[p]
@@ -2390,7 +2390,7 @@ class AstrometricOrbitPlotter(object):
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
-                                                        'orbit_1d_summary_{}.pdf'.format(
+                                                        'orbit_1d_summary_{}.png'.format(
                                                             name_seed_2.replace('.', 'p')))
                     plt.savefig(figure_file_name, transparent=True, bbox_inches='tight',
                                 pad_inches=0.05)
@@ -2513,8 +2513,10 @@ class AstrometricOrbitPlotter(object):
                     if argument_dict['frame_residual_panel']:
                         figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_time_{}_frameres.pdf'.format(name_seed_2.replace('.', 'p')))
                     else:
+                        # figure_file_name = os.path.join(argument_dict['plot_dir'],
+                        #                        'orbit_time_{}.pdf'.format(name_seed_2.replace('.', 'p')))
                         figure_file_name = os.path.join(argument_dict['plot_dir'],
-                                               'orbit_time_{}.pdf'.format(name_seed_2.replace('.', 'p')))
+                                               'orbit_time_{}.png'.format(name_seed_2.replace('.', 'p')))
                     plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
 
