@@ -452,7 +452,7 @@ def make_orbit_figures(selected_systems, index, epoch_data_dir, mapping_dr3id_to
         name_seed = 'DR3_{}'.format(source_id)
 
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
-             'orbit_only_panel': True, 'ppm_description': 'default', 'epoch_omc_description': 'default',
+             'orbit_only_panel': False, 'ppm_description': 'default', 'epoch_omc_description': 'default',
              'orbit_description': 'default', 'arrow_offset_x': +100, 'arrow_offset_y': +100,
              'name_seed': name_seed, 'scan_angle_definition': scan_angle_definition}
 
@@ -638,7 +638,7 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     if mapping_dr3id_to_starname is not None:
         axp.title = 'Gaia DR3 {} ({}{})'.format(source_id, mapping_dr3id_to_starname[source_id], mag_str)
-        name_seed = 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id])
+        name_seed = 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id].replace('/', '-'))
     else:
         name_seed = 'DR3_{}'.format(source_id)
 
@@ -650,7 +650,7 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     argument_dict['save_plot'] = True
     argument_dict['omc_panel'] = True
     argument_dict['orbit_only_panel'] = False
-    argument_dict['orbit_only_panel'] = True
+    # argument_dict['orbit_only_panel'] = True
     # argument_dict['make_condensed_summary_figure'] = True
     # argument_dict['make_xy_residual_figure'] = True
     argument_dict['make_condensed_summary_figure'] = False

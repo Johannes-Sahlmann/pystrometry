@@ -2347,7 +2347,7 @@ class AstrometricOrbitPlotter(object):
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                         'ppm_{}.pdf'.format(
                                                             name_seed_2.replace('.', 'p')))
-                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight',
                                 pad_inches=0.05)
 
 
@@ -2392,7 +2392,7 @@ class AstrometricOrbitPlotter(object):
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                         'orbit_1d_summary_{}.png'.format(
                                                             name_seed_2.replace('.', 'p')))
-                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight',
                                 pad_inches=0.05)
 
             ##################################################
@@ -2437,14 +2437,14 @@ class AstrometricOrbitPlotter(object):
 
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'], 'ppm_orbit_{}.pdf'.format(name_seed_2.replace('.', 'p')))
-                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
                 ##################################################
 
 
             ##################################################
             #  ORBIT only
             if argument_dict['orbit_only_panel']:
-                pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+                fig = pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
                 pl.clf()
 
                 self.insert_orbit_plot(orb, argument_dict)
@@ -2458,7 +2458,7 @@ class AstrometricOrbitPlotter(object):
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_only_{}.pdf'.format(name_seed_2.replace('.', 'p')))
-                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
             ##################################################
 
 
@@ -2517,7 +2517,7 @@ class AstrometricOrbitPlotter(object):
                         #                        'orbit_time_{}.pdf'.format(name_seed_2.replace('.', 'p')))
                         figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                'orbit_time_{}.png'.format(name_seed_2.replace('.', 'p')))
-                    plt.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
 
 
             # if argument_dict['make_relative_orbit_figure']:
