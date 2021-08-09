@@ -2392,8 +2392,11 @@ class AstrometricOrbitPlotter(object):
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                         'orbit_1d_summary_{}.png'.format(
                                                             name_seed_2.replace('.', 'p')))
-                    fig.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                    try:
+                        fig.savefig(figure_file_name, transparent=True, bbox_inches='tight',
                                 pad_inches=0.05)
+                    except ValueError:
+                        print('WARNING: Could not save {}'.format(figure_file_name))
 
             ##################################################
             # TRIPLE PANEL FIGURE (PPM + ORBIT + EPOCH RESIDUALS)
