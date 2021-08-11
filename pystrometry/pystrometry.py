@@ -1156,9 +1156,9 @@ class OrbitSystem(object):
                                     facecolor='w', edgecolor='k', sharex=share_axes,
                                     sharey=share_axes)
             # plot smooth orbit curve
-            axes[0].plot(t_plot_curve, phi0_curve_barycentre[xi_curve], 'k-',
+            axes[0].plot(t_plot_curve, phi0_curve_barycentre[xi_curve],
                          lw=line_width, color=line_color, ls=line_style)
-            axes[1].plot(t_plot_curve, phi0_curve_barycentre[yi_curve], 'k-',
+            axes[1].plot(t_plot_curve, phi0_curve_barycentre[yi_curve],
                          lw=line_width, color=line_color, ls=line_style)
 
             axes[0].set_ylabel('Offset in Right Ascension (mas)')
@@ -1270,8 +1270,8 @@ class OrbitSystem(object):
             t_plot_curve = getattr(Time(timestamps_curve_2D, format='mjd'), timeformat)
 
             # plot smooth PPM curve
-            axes[0].plot(t_plot_curve, ppm_curve_mas[0], 'k-', lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
-            axes[1].plot(t_plot_curve, ppm_curve_mas[1], 'k-', lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
+            axes[0].plot(t_plot_curve, ppm_curve_mas[0], lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
+            axes[1].plot(t_plot_curve, ppm_curve_mas[1], lw=line_width, color=line_color, ls=line_style)  # , label='Barycentre'
             axes[0].axhline(y=0, color='0.7', ls='--', zorder=-50)
             axes[1].axhline(y=0, color='0.7', ls='--', zorder=-50)
 
@@ -1792,15 +1792,15 @@ class PpmPlotter(object):
         if self.psi_deg is None:
             print('Epoch   precision (naive)'),
             print((np.mean([self.errResidualX, self.errResidualY], axis=0)))
-            print('Epoch   precision (x_e_laz)'),
-            print((np.mean([self.sx_star_laz, self.sy_star_laz], axis=0)))
+            # print('Epoch   precision (x_e_laz)'),
+            # print((np.mean([self.sx_star_laz, self.sy_star_laz], axis=0)))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
         else:
             print('Epoch   precision (naive)', )
             print((np.mean([self.errResidualX], axis=0)))
-            print('Epoch   precision (x_e_laz)'),
-            print((np.mean([self.sx_star_laz], axis=0)))
+            # print('Epoch   precision (x_e_laz)'),
+            # print((np.mean([self.sx_star_laz], axis=0)))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
 
@@ -2218,13 +2218,13 @@ class AstrometricOrbitPlotter(object):
         print('Epoch   precision (naive)'),
         print(self.epoch_precision_mean)
         if self.data_type == '1d':
-            print('Epoch   precision (x_e_laz)'),
-            print(np.mean([self.sx_star_laz], axis=0))
+            # print('Epoch   precision (x_e_laz)'),
+            # print(np.mean([self.sx_star_laz], axis=0))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz])))
         elif '2d' in self.data_type:
-            print('Epoch   precision (x_e_laz)'),
-            print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
+            # print('Epoch   precision (x_e_laz)'),
+            # print(np.mean([self.sx_star_laz, self.sy_star_laz], axis=0))
             print('Average precision (naive) %3.3f mas' % (np.mean([self.errResidualX, self.errResidualY])))
             print('Average precision (x_e_laz) %3.3f mas' % (np.mean([self.sx_star_laz, self.sy_star_laz])))
         print('='*100)
@@ -2779,20 +2779,16 @@ class AstrometricOrbitPlotter(object):
                 # orbit_periastron = orb.pjGetBarycentricAstrometricOrbitFast(t_periastron_mjd, spsi_periastron, cpsi_periastron)
             phi1_model_periastron = orbit_periastron[xi_periastron]
             phi2_model_periastron = orbit_periastron[yi_periastron]
-            pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], 'k.-', lw=0.5, color='0.5')
-            pl.plot(phi1_model_periastron, phi2_model_periastron, 'ks', color='0.5', mfc='0.5')
+            pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
+            pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5')
 
 
 
-        pl.plot(phi1_curve, phi2_curve, 'k-', lw=1.5, color='0.5')
-        pl.plot(phi1_model_epoch, phi2_model_epoch, 'ko', color='0.7', ms=5, mfc='none')
+        pl.plot(phi1_curve, phi2_curve, ls='-', lw=1.5, color='0.5')
+        pl.plot(phi1_model_epoch, phi2_model_epoch, marker='o', color='0.7', ms=5, mfc='none', ls='')
 
 
         if self.data_type in ['1d', 'gaia_2d']:
-            # if self.data_type == '1d':
-            #     frame_index = np.arange(len(self.residuals))
-            # else:
-            #     1/0
             if argument_dict['scan_angle_definition'] == 'hipparcos':
                 frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
                 frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
@@ -2806,12 +2802,12 @@ class AstrometricOrbitPlotter(object):
 
             frame_residual_color = '0.8'
             pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
-                    phi2_model_frame + frame_residual_delta_along_scan, 'ko',
+                    phi2_model_frame + frame_residual_delta_along_scan, marker='o',
                     color=frame_residual_color, ms=4, mfc=frame_residual_color,
-                    mec=frame_residual_color)
+                    mec=frame_residual_color, ls='')
             pl.plot(phi1_model_epoch + epoch_residual_alphastar_along_scan,
-                    phi2_model_epoch + epoch_residual_delta_along_scan, 'ko', color='k',
-                    ms=5)  # , mfc='none', mew=2)
+                    phi2_model_epoch + epoch_residual_delta_along_scan, marker='o', color='k',
+                    ms=5, ls='')
 
             # plot epoch-level error-bars
             for jj in range(len(self.meanResidualX)):
