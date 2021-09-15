@@ -141,3 +141,54 @@ class GaiaIad(object):
         astrometric_snr = amplitude_mas * np.sqrt(n_ccd_transits)/median_uncertainty_mas
 
         return astrometric_snr
+
+
+class GaiaValIad:
+    """Class for Gaia Epoch Astrometric Data."""
+
+    _transit_id_field = 'transitid'
+    _fov_transit_id_field = 'OB'
+    _obs_uncertainty_field = 'errda_mas_obs'
+    _time_field = 't_min_t0_yr'
+
+    def __init__(self, source_id, epoch_data):
+        self.source_id = source_id
+        self.epoch_data = epoch_data
+        #         self.time_column = 'T-T0_yr'
+        #         self.epoch_data_suffix = epoch_data_suffix
+        self.n_filtered_frames = 0
+        self.n_original_frames = len(self.epoch_data)
+
+        # sort by time
+        self.epoch_data.sort(self._time_field)
+
+        # identify focal plane transits
+        unique_transit_ids = np.unique(self.epoch_data[self._transit_id_field])
+        self.n_fov_transit = len(unique_transit_ids)
+        self.epoch_data[self._fov_transit_id_field] = np.ones(len(self.epoch_data)).astype(int)
+        for ob_number, transit_id in enumerate(unique_transit_ids):
+            t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
+            self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
+
+    def __str__(self):
+        """Return string describing the instance."""
+        return 'GaiaValIad for source_id {} with {} frames)'.format(self.source_id,
+                                                                    len(self.epoch_data))
+
+    @classmethod
+    def from_dataframe(cls, df, source_id, df_source_id_field='source_id'):
+        """Extract data from dataframe an dreturn astropy table."""
+        return cls(source_id,
+                   Table.from_pandas(df.query('{}==@source_id'.format(df_source_id_field))))
+
+    def filter_on_frame_uncertainty(self, rse_filter_threshold=10):
+
+        rse = robust_scatter_estimate(self.epoch_data[self._obs_uncertainty_field])
+        remove_index = \
+        np.where(np.abs(self.epoch_data[self._obs_uncertainty_field]) > rse_filter_threshold * rse)[
+            0]
+        self.n_filtered_frames += len(remove_index)
+        print('RSE cut removed {} frames (of {})'.format(self.n_filtered_frames,
+                                                         self.n_original_frames))
+        self.epoch_data.remove_rows(remove_index)
+
