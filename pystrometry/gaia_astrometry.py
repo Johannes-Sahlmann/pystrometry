@@ -177,7 +177,7 @@ class GaiaValIad:
 
     @classmethod
     def from_dataframe(cls, df, source_id, df_source_id_field='source_id'):
-        """Extract data from dataframe an dreturn astropy table."""
+        """Extract data from dataframe and return astropy table."""
         return cls(source_id,
                    Table.from_pandas(df.query('{}==@source_id'.format(df_source_id_field))))
 
