@@ -12,6 +12,7 @@ Authors
 import os
 
 from astropy.table import Table
+from astropy.time import Time
 import numpy as np
 
 
@@ -149,7 +150,7 @@ class GaiaValIad:
     _transit_id_field = 'transitid'
     _fov_transit_id_field = 'OB'
     _obs_uncertainty_field = 'errda_mas_obs'
-    _time_field = 't_min_t0_yr'
+    scan_angle_definition = 'gaia'
 
     def __init__(self, source_id, epoch_data):
         self.source_id = source_id
@@ -192,3 +193,25 @@ class GaiaValIad:
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
 
+
+class GaiaValIadHybrid(GaiaValIad):
+    """Class for hybrid IAD that is produced internally in DU437 from a combination of StarObject and ObsConstStar data."""
+
+    _time_field = 't_min_t0_yr'
+
+    def set_reference_time(self, reference_time):
+        """Set reference time.
+
+        Parameters
+        ----------
+        reference_time : astropy.time
+            Reference time used in calculations.
+
+        """
+        #  convert to absolute time in MJD
+        self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
+
+        self.epoch_data['t-t_ref'] = self.epoch_data[self._time_field]
+        self.time_column = 't-t_ref'
+        self.t_ref_mjd = reference_time.mjd
+        self.reference_time = reference_time
