@@ -224,6 +224,7 @@ class OrbitSystem(object):
                         'rvQuadraticDrift_mspyr': None,
                         'rvCubicDrift_mspyr': None, 'Tref_MJD': None,
                         'scan_angle_definition': 'hipparcos',
+                        'solution_type': None,
                         'rho_mas': None,  # DCR coefficient
                         'd_mas': None,  # DCR coefficient (if DCR corrector is used)
                         'a_mas': None,
@@ -2330,7 +2331,7 @@ class AstrometricOrbitPlotter():
         #  loop over number of companions
         for p in range(self.number_of_companions):
             if (argument_dict['orbit_description'][p] == 'default') and (self.model_parameters[p]['solution_type'] in ['Acceleration7', 'Acceleration9']):
-                argument_dict['tmp_orbit_description'] = self.model_parameters[p]['solution_type']
+                argument_dict['tmp_orbit_description'] = '{}'.format(self.model_parameters[p]['solution_type'])
             elif (argument_dict['orbit_description'][p] == 'default'):
                 argument_dict['tmp_orbit_description'] = '$P={:2.3f}$ d\n$e={:2.3f}$\n$\\alpha={:2.3f}$ mas\n$i={:2.3f}$ deg\n$\\omega={:2.3f}$ deg\n$\\Omega={:2.3f}$ deg\n$M_1={:2.3f}$ Msun\n$M_2={:2.1f}$ Mjup'.format(self.model_parameters[p]['P_day'], self.model_parameters[p]['ecc'], getattr(self, 'orbit_system_companion_{:d}'.format(p)).alpha_mas, self.model_parameters[p]['i_deg'], self.model_parameters[p]['omega_deg'], self.model_parameters[p]['OMEGA_deg'], self.model_parameters[p]['m1_MS'], self.model_parameters[p]['m2_MJ'])
             else:
@@ -2339,7 +2340,10 @@ class AstrometricOrbitPlotter():
 
             theta_p = self.model_parameters[p]
             theta_names = theta_p.keys()
-            name_seed_2 = argument_dict['name_seed'] + '_companion{:d}'.format(p)
+            if self.model_parameters[p]['solution_type'] in ['Acceleration7', 'Acceleration9']:
+                name_seed_2 = argument_dict['name_seed'] + '_{}'.format(self.model_parameters[p]['solution_type'])
+            else:
+                name_seed_2 = argument_dict['name_seed'] + '_companion{:d}'.format(p)
 
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
@@ -2422,7 +2426,7 @@ class AstrometricOrbitPlotter():
                                                         'orbit_1d_summary_{}.png'.format(
                                                             name_seed_2.replace('.', 'p')))
                     try:
-                        fig.savefig(figure_file_name, transparent=True, bbox_inches='tight',
+                        fig.savefig(figure_file_name, transparent=False, bbox_inches='tight',
                                 pad_inches=0.05)
                     except ValueError:
                         print('WARNING: Could not save {}'.format(figure_file_name))
