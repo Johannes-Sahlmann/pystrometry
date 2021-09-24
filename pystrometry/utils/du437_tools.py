@@ -120,7 +120,7 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
 
     # also save table with discrepancies
     discrepancy_table = Table()
-    discrepancy_table['SourceId'] = table['SourceId']
+    discrepancy_table['sourceId'] = table['sourceId']
     discrepancy_table['Name'] = table['Name']
     discrepancy_table['Name_dedreq'] = table['Name_dedreq-695']
     discrepancy_table['m2_mjup'] = table['{}_m2_mjup'.format('p1')]
@@ -149,7 +149,7 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
         xymax = np.max(np.array([pl.xlim()[1], pl.ylim()[1]]))
         pl.plot([0, xymax], [0, xymax], 'k--')
         pl.xlabel('{} ({})'.format(mapped_name, table.meta['comparison_to']))
-        pl.ylabel('{} (MIKS-GA)'.format(miks_field))
+        pl.ylabel('{} (DU437)'.format(miks_field))
         pl.title('{} sources from {}'.format(len(table), table.meta['comparison_to']))
         pl.text(0.01, 0.99, description_str, horizontalalignment='left', verticalalignment='top',
                 transform=pl.gca().transAxes)
@@ -162,7 +162,7 @@ def make_comparison_figures(table, parameter_mapping, mapping_dr3id_to_starname,
     # period phase error:
 
 
-    miks_name = 'period'
+    miks_name = 'period_day'
     miks_field = 'p1_{}'.format(miks_name)
     mapped_name = parameter_mapping[miks_name]
 
@@ -318,31 +318,31 @@ def make_orbit_system(selected_systems, index, scan_angle_definition, t_ref_mjd,
     """
 
 
-    alpha_mas = selected_systems['p1_a1'][index]
-    absolute_parallax_mas = selected_systems['plx'][index]
+    alpha_mas = selected_systems['p1_a1_mas'][index]
+    absolute_parallax_mas = selected_systems['plx_mas'][index]
     a_m = pystrometry.convert_from_angular_to_linear(alpha_mas, absolute_parallax_mas)
-    P_day = selected_systems['p1_period'][index]
+    P_day = selected_systems['p1_period_day'][index]
     m2_kg = pystrometry.pjGet_m2(m1_MS*pystrometry.MS_kg, a_m, P_day)
     m2_MJ = m2_kg/pystrometry.MJ_kg
 
     attribute_dict = {
-        'offset_alphastar_mas': selected_systems['alphaStarOffset'][index],
-        'offset_delta_mas': selected_systems['deltaOffset'][index],
+        'offset_alphastar_mas': selected_systems['alphaStarOffset_mas'][index],
+        'offset_delta_mas': selected_systems['deltaOffset_mas'][index],
         # 'RA_deg': 0.,
         # 'DE_deg': 0.,
-        'RA_deg': selected_systems['alpha0'][index],
-        'DE_deg': selected_systems['delta0'][index],
+        'RA_deg': selected_systems['alpha0_deg'][index],
+        'DE_deg': selected_systems['delta0_deg'][index],
         # 'plx_mas': selected_systems['plx'][index],
-        'absolute_plx_mas': selected_systems['plx'][index],
-        'muRA_mas': selected_systems['muAlphaStar'][index],
-        'muDE_mas': selected_systems['muDelta'][index],
-        'P_day': selected_systems['p1_period'][index],
+        'absolute_plx_mas': selected_systems['plx_mas'][index],
+        'muRA_mas': selected_systems['muAlphaStar_masPyr'][index],
+        'muDE_mas': selected_systems['muDelta_masPyr'][index],
+        'P_day': selected_systems['p1_period_day'][index],
         'ecc': selected_systems['p1_ecc'][index],
-        'omega_deg': selected_systems['p1_omega'][index],
-        'OMEGA_deg': selected_systems['p1_OMEGA'][index],
-        'i_deg': selected_systems['p1_incl'][index],
-        'a_mas': selected_systems['p1_a1'][index],
-        'Tp_day': t_ref_mjd + selected_systems['p1_Tp'][index],
+        'omega_deg': selected_systems['p1_omega_deg'][index],
+        'OMEGA_deg': selected_systems['p1_OMEGA_deg'][index],
+        'i_deg': selected_systems['p1_incl_deg'][index],
+        'a_mas': selected_systems['p1_a1_mas'][index],
+        'Tp_day': t_ref_mjd + selected_systems['p1_Tp_day-T0'][index],
         'm1_MS': m1_MS,
         'm2_MJ': m2_MJ,
         'Tref_MJD': t_ref_mjd,
@@ -381,8 +381,8 @@ def make_astrometric_orbit_plotter(selected_systems, index, epoch_data_dir, dege
 
     """
 
-    source_id = selected_systems['SourceId'][index]
-    t_ref_jd = selected_systems['T0'][index]
+    source_id = selected_systems['sourceId'][index]
+    t_ref_jd = selected_systems['T0_JD'][index]
 
     iad = get_gaia_iad(source_id, t_ref_jd, epoch_data_dir, verbose=verbose)
 
@@ -392,9 +392,10 @@ def make_astrometric_orbit_plotter(selected_systems, index, epoch_data_dir, dege
     # set coeffMatrix in orbit object
     ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
-                               offsetRA_mas=selected_systems['alphaStarOffset'][index],
-                               offsetDE_mas=selected_systems['deltaOffset'][index],
+                               offsetRA_mas=selected_systems['alphaStarOffset_mas'][index],
+                               offsetDE_mas=selected_systems['deltaOffset_mas'][index],
                                externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
+    # 1/0
 
     plot_dict = {}
     plot_dict['model_parameters'] = {0: orbit.attribute_dict}
@@ -432,6 +433,9 @@ def make_orbit_figures(selected_systems, index, epoch_data_dir, mapping_dr3id_to
     axp = make_astrometric_orbit_plotter(selected_systems, index, epoch_data_dir,
                                          degenerate_orbit=degenerate_orbit, verbose=verbose, m1_MS=m1_MS)
 
+
+    iad = axp.data
+
     n_curve = 1500
     timestamps_curve_2d = np.linspace(np.min(iad.epoch_data['MJD']), np.max(iad.epoch_data['MJD']), n_curve)
     axp.t_curve_MJD = timestamps_curve_2d
@@ -448,7 +452,7 @@ def make_orbit_figures(selected_systems, index, epoch_data_dir, mapping_dr3id_to
         name_seed = 'DR3_{}'.format(source_id)
 
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
-             'orbit_only_panel': True, 'ppm_description': 'default', 'epoch_omc_description': 'default',
+             'orbit_only_panel': False, 'ppm_description': 'default', 'epoch_omc_description': 'default',
              'orbit_description': 'default', 'arrow_offset_x': +100, 'arrow_offset_y': +100,
              'name_seed': name_seed, 'scan_angle_definition': scan_angle_definition}
 
@@ -481,8 +485,8 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
                       plot_dir=os.path.expanduser('~'),
                       m1_MS=1., rv=None, show_plot=True, degenerate_orbit=False, epoch_data_suffix=None):
 
-    source_id = selected_systems['SourceId'][index]
-    t_ref_jd = selected_systems['T0'][index]
+    source_id = selected_systems['sourceId'][index]
+    t_ref_jd = selected_systems['T0_JD'][index]
     t_ref_mjd = Time(t_ref_jd, format='jd').mjd
 
     if epoch_data_suffix is None:
@@ -490,7 +494,15 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     else:
         iad = gaia_astrometry.GaiaIad(source_id, epoch_data_dir, epoch_data_suffix=epoch_data_suffix)
 
-    iad.load_data()
+    iad.load_data(filter_on_frame_uncertainty=True)
+
+    # pl.close('all')
+    # pl.figure()
+    # pl.hist(iad.epoch_data['errda_mas_obs'])
+    # # pl.show()
+    # pl.savefig('test.png')
+
+
 
     iad_mjd = Time(iad.epoch_data[iad.time_column]*365.25+t_ref_jd, format='jd').mjd
     iad.epoch_data['MJD'] = iad_mjd
@@ -512,59 +524,87 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     scan_angle_definition = 'gaia'
 
-    alpha_mas = selected_systems['p1_a1'][index]
-    absolute_parallax_mas = selected_systems['plx'][index]
-    a_m = pystrometry.convert_from_angular_to_linear(alpha_mas, absolute_parallax_mas)
-    P_day = selected_systems['p1_period'][index]
-    m2_kg = pystrometry.pjGet_m2(m1_MS*pystrometry.MS_kg, a_m, P_day)
-    m2_MJ = m2_kg/pystrometry.MJ_kg
+    # loop over every companion in system
+    from collections import OrderedDict
+    model_parameters = OrderedDict()
+    orbit_description = OrderedDict()
+    # for planet_index in np.arange(1, selected_systems['Nplanets'][index]+1):
+    for planet_index in np.arange(selected_systems['Nplanets'][index]):
+        planet_number = planet_index + 1
+        alpha_mas = selected_systems['p{}_a1_mas'.format(planet_number)][index]
+        absolute_parallax_mas = selected_systems['plx_mas'][index]
+        a_m = pystrometry.convert_from_angular_to_linear(alpha_mas, absolute_parallax_mas)
+        P_day = selected_systems['p{}_period_day'.format(planet_number)][index]
+        m2_kg = pystrometry.pjGet_m2(m1_MS*pystrometry.MS_kg, a_m, P_day)
+        m2_MJ = m2_kg/pystrometry.MJ_kg
 
-    attribute_dict = {
-        'offset_alphastar_mas': selected_systems['alphaStarOffset'][index],
-        'offset_delta_mas': selected_systems['deltaOffset'][index],
-        # 'RA_deg': 0.,
-        # 'DE_deg': 0.,
-        'RA_deg': selected_systems['alpha0'][index],
-        'DE_deg': selected_systems['delta0'][index],
-        # 'plx_mas': selected_systems['plx'][index],
-        'absolute_plx_mas': selected_systems['plx'][index],
-        'muRA_mas': selected_systems['muAlphaStar'][index],
-        'muDE_mas': selected_systems['muDelta'][index],
-        'P_day': selected_systems['p1_period'][index],
-        'ecc': selected_systems['p1_ecc'][index],
-        'omega_deg': selected_systems['p1_omega'][index],
-        'OMEGA_deg': selected_systems['p1_OMEGA'][index],
-        'i_deg': selected_systems['p1_incl'][index],
-        'a_mas': selected_systems['p1_a1'][index],
-        'Tp_day': iad.t_ref_mjd + selected_systems['p1_Tp'][index],
-        'm1_MS': m1_MS,
-        'm2_MJ': m2_MJ,
-        'Tref_MJD': iad.t_ref_mjd,
-        'scan_angle_definition': scan_angle_definition,
+        attribute_dict = {
+            'offset_alphastar_mas': selected_systems['alphaStarOffset_mas'][index],
+            'offset_delta_mas': selected_systems['deltaOffset_mas'][index],
+            # 'RA_deg': 0.,
+            # 'DE_deg': 0.,
+            'RA_deg': selected_systems['alpha0_deg'][index],
+            'DE_deg': selected_systems['delta0_deg'][index],
+            # 'plx_mas': selected_systems['plx'][index],
+            'absolute_plx_mas': selected_systems['plx_mas'][index],
+            'muRA_mas': selected_systems['muAlphaStar_masPyr'][index],
+            'muDE_mas': selected_systems['muDelta_masPyr'][index],
+            'P_day': selected_systems['p{}_period_day'.format(planet_number)][index],
+            'ecc': selected_systems['p{}_ecc'.format(planet_number)][index],
+            'omega_deg': selected_systems['p{}_omega_deg'.format(planet_number)][index],
+            'OMEGA_deg': selected_systems['p{}_OMEGA_deg'.format(planet_number)][index],
+            'i_deg': selected_systems['p{}_incl_deg'.format(planet_number)][index],
+            'a_mas': selected_systems['p{}_a1_mas'.format(planet_number)][index],
+            'Tp_day': iad.t_ref_mjd + selected_systems['p{}_Tp_day-T0'.format(planet_number)][index],
+            'm1_MS': m1_MS,
+            'm2_MJ': m2_MJ,
+            'Tref_MJD': iad.t_ref_mjd,
+            'scan_angle_definition': scan_angle_definition,
+        }
 
-    }
 
+        if degenerate_orbit:
+            attribute_dict['omega_deg'] += 180.
+            attribute_dict['OMEGA_deg'] += 180.
 
-    if degenerate_orbit:
-        attribute_dict['omega_deg'] += 180.
-        attribute_dict['OMEGA_deg'] += 180.
+        # print(attribute_dict)
+        # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
+        # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
 
-    # print(attribute_dict)
-    # print(pystrometry.geometric_elements(np.array([selected_systems['p1_{}'.format(key)][index] for key in 'A B F G'.split()])))
-    # print(pystrometry.mean_anomaly(iad.t_ref_mjd, attribute_dict['Tp_day'], attribute_dict['P_day']))
+        if planet_index == 0:
+            orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
+            # print(orbit)
 
-    orbit = pystrometry.OrbitSystem(attribute_dict=attribute_dict)
-    print(orbit)
+            # set coeffMatrix in orbit object
+            ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
+                np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
+                                       offsetRA_mas=selected_systems['alphaStarOffset_mas'][index], offsetDE_mas=selected_systems['deltaOffset_mas'][index],
+                                       externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
 
-    # set coeffMatrix in orbit object
-    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
-        np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
-                               offsetRA_mas=selected_systems['alphaStarOffset'][index], offsetDE_mas=selected_systems['deltaOffset'][index],
-                               externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
+        model_parameters[planet_index] = attribute_dict
 
+        # display additional info on orbit panel
+        # if 'P1_sigma_a1_mas' in selected_systems.columns:
+        # p1_a1_div_sigma_a1_mas
+
+        # if ('sigma_p1_a1_mas' in selected_systems.columns) and (selected_systems['Nplanets'][index]==1):
+        if ('sigma_p1_a1_mas' in selected_systems.columns) and (selected_systems['Nplanets'][index]==1):
+            # temporary: only for single-companion solutions
+            orbit_descr = '$\\alpha={0[p1_a1_mas]:2.{prec}f}\\pm{0[sigma_p1_a1_mas]:2.{prec}f}$ mas (ratio={0[p1_a1_div_sigma_a1_mas]:2.1f})\n'.format(dict(selected_systems[index]), prec=3)
+            orbit_descr += '$P={0[p1_period_day]:2.{prec}f}\\pm{0[sigma_p1_period_day]:2.{prec}f}$ d\n'.format(dict(selected_systems[index]), prec=1)
+            orbit_descr += '$e={0[p1_ecc]:2.{prec}f}\\pm{0[sigma_p1_ecc]:2.{prec}f}$\n'.format(dict(selected_systems[index]), prec=3)
+            orbit_descr += '$i={0[p1_incl_deg]:2.{prec}f}$ deg\n'.format(dict(selected_systems[index]), prec=2)
+            orbit_descr += '$\\omega={0[p1_omega_deg]:2.{prec}f}$ deg\n'.format(dict(selected_systems[index]), prec=2)
+            orbit_descr += '$\\Omega={0[p1_OMEGA_deg]:2.{prec}f}$ deg\n'.format(dict(selected_systems[index]), prec=2)
+            orbit_descr += '$M_1={0:2.{prec}f}$ Msun\n'.format(m1_MS, prec=2)
+            orbit_descr += '$M_2={0:2.{prec}f}$ Mjup\n'.format(m2_MJ, prec=2)
+        else:
+            orbit_descr = 'default'
+        orbit_description[planet_index] = orbit_descr
 
     plot_dict = {}
-    plot_dict['model_parameters'] = {0: attribute_dict}
+    # plot_dict['model_parameters'] = {0: attribute_dict}
+    plot_dict['model_parameters'] = model_parameters
     plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix} # dict ('matrix', 'table')
     plot_dict['data_type'] = '1d'
     if hasattr(iad, 'xi'):
@@ -572,10 +612,6 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
     else:
         plot_dict['data_type'] = '1d'
     plot_dict['scan_angle_definition'] = scan_angle_definition
-    # plot_dict['xi'] = iad.epoch_data['xi']  # AL indices
-    # plot_dict['yi'] = iad.epoch_data['yi']  # AC indices
-
-
 
     for key in iad.epoch_data.colnames:
         if '_obs' in key:
@@ -586,7 +622,7 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     plot_dict['data'] = iad
 
-    iad.epoch_data.pprint()
+    # iad.epoch_data.pprint()
 
     axp = pystrometry.AstrometricOrbitPlotter(plot_dict)
     axp.print_residual_statistics()
@@ -602,37 +638,35 @@ def make_orbit_figure(selected_systems, index, epoch_data_dir, mapping_dr3id_to_
 
     if mapping_dr3id_to_starname is not None:
         axp.title = 'Gaia DR3 {} ({}{})'.format(source_id, mapping_dr3id_to_starname[source_id], mag_str)
-        name_seed = 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id])
+        name_seed = 'DR3_{}_{}'.format(source_id, mapping_dr3id_to_starname[source_id].replace('/', '-'))
     else:
         name_seed = 'DR3_{}'.format(source_id)
 
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
              'orbit_only_panel': True, 'ppm_description': 'default', 'epoch_omc_description': 'default',
-             'orbit_description': 'default', 'arrow_offset_x': +100, 'arrow_offset_y': +100,
+             'orbit_description': orbit_description, 'arrow_offset_x': +100, 'arrow_offset_y': +100,
              'name_seed': name_seed, 'scan_angle_definition': scan_angle_definition}
 
     argument_dict['save_plot'] = True
     argument_dict['omc_panel'] = True
     argument_dict['orbit_only_panel'] = False
+    # argument_dict['orbit_only_panel'] = True
     # argument_dict['make_condensed_summary_figure'] = True
     # argument_dict['make_xy_residual_figure'] = True
     argument_dict['make_condensed_summary_figure'] = False
     argument_dict['make_xy_residual_figure'] = False
     argument_dict['make_1d_overview_figure'] = True
-    argument_dict['excess_noise'] = selected_systems['excessNoise'][index]
+    argument_dict['excess_noise'] = selected_systems['excessNoise_mas'][index]
     argument_dict['merit_function'] = selected_systems['meritFunction'][index]
 
     if show_plot:
         axp.plot(argument_dict=argument_dict)
-
         if rv is not None:
             from ..pystrometry import plot_rv_data
-
             my_orbit = copy.deepcopy(orbit)
             # my_orbit.m2_MJ = orbit.m2_MJ/10.
             plot_rv_data(rv, orbit_system=my_orbit, n_orbit=np.ceil(np.ptp(rv['MJD'])/orbit.P_day)+1)
             pl.show()
-
     return axp
 
 
@@ -655,14 +689,11 @@ def show_best_solution(file, out_dir):
     # apply cuts on data
     threshold = 1e7
     for colname in data.colnames:
-        if colname != 'SourceId':
+        if colname != 'sourceId':
             if np.any(np.abs(data[colname]) > threshold):
                 data.remove_rows(np.where(np.abs(data[colname]) > threshold)[0])
 
     print('Eliminated {} of {} rows with values > {:1.0e}'.format(len(units_table)-len(data), len(data), threshold))
 
-
-
     plot_columns_simple(data, os.path.join(out_dir, 'best_solution_simple_plots'),
                         name_seed='best_solution', units=units)
-

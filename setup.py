@@ -139,7 +139,7 @@ setup(name=PACKAGENAME,
       long_description_content_type="text/markdown",
       cmdclass=cmdclassd,
       zip_safe=False,
-      use_2to3=False,
+      # use_2to3=False,
       entry_points=entry_points,
       python_requires='>={}'.format(__minimum_python_version__),
       **package_info
