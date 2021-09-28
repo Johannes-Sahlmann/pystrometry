@@ -2281,6 +2281,7 @@ class AstrometricOrbitPlotter():
                             'horizons_file_seed': None,
                             'frame_omc_description': 'default',
                             'orbit_description': 'default',
+                            'orbit_show_frame_data': True,
                             'scan_angle_definition': 'gaia',
                             'orbit_signal_description': 'default',
                             'ppm_description': 'default',
@@ -2579,9 +2580,17 @@ class AstrometricOrbitPlotter():
                             offsetDE_mas=orb.offset_delta_mas,
                             horizons_file_seed=argument_dict['horizons_file_seed'])
 
-        pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
+        pl.plot(ppm_curve[0], ppm_curve[1], 'k-', lw=2)
         if self.data_type == '2d':
             pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
+        elif self.data_type == '1d':
+            # plot the PPM sampling only
+            t_epoch_mjd_2d = np.sort(np.tile(self.t_MJD_epoch, 2))
+            ppm_epoch = orb.ppm(t_epoch_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
+                                offsetDE_mas=orb.offset_delta_mas,
+                                horizons_file_seed=argument_dict['horizons_file_seed'])
+            pl.plot(ppm_epoch[0], ppm_epoch[1], marker='o', color='k', mfc='none', ms=5, zorder=-50, ls='none')
+
         plt.annotate('', xy=(np.float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'],
                              np.float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y']),
                      xytext=(0. + argument_dict['arrow_offset_x'], 0. + argument_dict['arrow_offset_y']),
@@ -2848,10 +2857,11 @@ class AstrometricOrbitPlotter():
                 epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
 
             frame_residual_color = '0.8'
-            pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
-                    phi2_model_frame + frame_residual_delta_along_scan, marker='o',
-                    color=frame_residual_color, ms=4, mfc=frame_residual_color,
-                    mec=frame_residual_color, ls='')
+            if argument_dict['orbit_show_frame_data']:
+                pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
+                        phi2_model_frame + frame_residual_delta_along_scan, marker='o',
+                        color=frame_residual_color, ms=4, mfc=frame_residual_color,
+                        mec=frame_residual_color, ls='')
             pl.plot(phi1_model_epoch + epoch_residual_alphastar_along_scan,
                     phi2_model_epoch + epoch_residual_delta_along_scan, marker='o', color='k',
                     ms=5, ls='')
