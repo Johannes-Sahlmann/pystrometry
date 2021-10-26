@@ -13,7 +13,7 @@ import pandas as pd
 
 
 def get_gaiadr_data(analysis_dataset_name, data_dir, source_id_array=None, gaia_data_release='dr3int5',
-                    overwrite_query=False, gaia_table_name='gaia_source', shared_user_name='dr3int5',
+                    overwrite_query=False, gaia_table_name='gaia_source', shared_user_name=None,
                     gacs_connection=None):
     """Query a Gaia archive table by source_id. Only data corresponding to source_id_array are returned.
 
@@ -44,10 +44,17 @@ def get_gaiadr_data(analysis_dataset_name, data_dir, source_id_array=None, gaia_
                 gaia = gacs_connection
             if getattr(gaia, '_TapPlus__isLoggedIn') is False:
                 gaia.login()
+            if shared_user_name is None:
+                shared_user_name = gaia_data_release
             table_name = 'user_{}'.format(shared_user_name)
         else:
             gaia = Gaia
-            table_name = '{}'.format(gaia_data_release)
+            if shared_user_name is not None:
+                if getattr(gaia, '_TapPlus__isLoggedIn') is False:
+                    gaia.login()
+                table_name = 'user_{}'.format(shared_user_name)
+            else:
+                table_name = '{}'.format(gaia_data_release)
 
         if source_id_array is not None:
             input_table_name = '{}_source_id'.format(analysis_dataset_name)
