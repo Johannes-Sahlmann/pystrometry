@@ -17,6 +17,9 @@ import pylab as pl
 
 from .. import gaia_astrometry, pystrometry
 
+from uncertainties import unumpy as unp
+from uncertainties import correlated_values_norm
+
 try:
     from helpers.table_helpers import plot_columns_simple
 except ImportError:
@@ -697,3 +700,158 @@ def show_best_solution(file, out_dir):
 
     plot_columns_simple(data, os.path.join(out_dir, 'best_solution_simple_plots'),
                         name_seed='best_solution', units=units)
+
+
+def geometric_elements(thiele_innes_parameters, thiele_innes_parameters_errors=None, corr_matrix=None):
+    """
+    Return geometrical orbit elements a, omega, OMEGA, i. If errors are not given
+    they are assumed to be 0 and correlation matrix is set to identity.
+
+    Parameters
+    ----------
+    thiele_innes_parameters : array
+        Array of Thiele Innes parameters [A,B,F,G] in milli-arcsecond
+    thiele_innes_parameters_errors : array, optional
+        Array of the errors of the Thiele Innes parameters [A,B,F,G] in milli-arcsecond
+    corr_matrix : (4, 4) array, optional
+        Correlation matrix for the Thiele Innes parameters [A,B,F,G]
+
+    Returns
+    -------
+    geometric_parameters : array
+        Orbital elements [a_mas, omega_deg, OMEGA_deg, i_deg]
+    geometric_parameters_errors : array
+        Errors of the orbital elements [a_mas, omega_deg, OMEGA_deg, i_deg]
+
+    """
+
+    # Checks on the errors and correlation matrix
+    if (thiele_innes_parameters_errors is None) and (corr_matrix is None):
+        # Define errors to 0 and correlation matrix to identity
+        thiele_innes_parameters_errors = [0,0,0,0]
+        corr_matrix = np.identity(4)
+    elif (thiele_innes_parameters_errors is not None) and (corr_matrix is not None):
+        # If both are given continue to the calculation
+        pass
+    else:
+        # If either one of them is provided but not the other raise an error
+        raise ValueError("thieles_innes_parameters_erros and corr_matrix must be" \
+                          "specified together.")
+            
+
+    # Define uncorrelated (value, uncertainty) pairs
+    A_u = (thiele_innes_parameters[0], thiele_innes_parameters_errors[0])
+    B_u = (thiele_innes_parameters[1], thiele_innes_parameters_errors[1])
+    F_u = (thiele_innes_parameters[2], thiele_innes_parameters_errors[2])
+    G_u = (thiele_innes_parameters[3], thiele_innes_parameters_errors[3])
+
+    # Create correlated quantities
+    A, B, F, G = correlated_values_norm([A_u, B_u, F_u, G_u], corr_matrix)
+
+    p = (A ** 2 + B ** 2 + G ** 2 + F ** 2) / 2.
+    q = A * G - B * F
+
+    a_mas = unp.sqrt(p + unp.sqrt(p ** 2 - q ** 2))
+    i_rad = unp.arccos(q / (a_mas ** 2.))
+    omega_rad = (unp.arctan2(B - F, A + G) + unp.arctan2(-B - F, A - G)) / 2.
+    OMEGA_rad = (unp.arctan2(B - F, A + G) - unp.arctan2(-B - F, A - G)) / 2.
+
+    # Convert radians to degrees
+    i_deg = i_rad * 180 / np.pi
+    omega_deg = omega_rad * 180 / np.pi
+    OMEGA_deg = OMEGA_rad * 180 / np.pi
+
+    # Extract nominal values and standard deviations
+    geometric_parameters = np.array([unp.nominal_values(a_mas), 
+                                     unp.nominal_values(omega_deg), 
+                                     unp.nominal_values(OMEGA_deg), 
+                                     unp.nominal_values(i_deg)])
+
+    geometric_parameters_errors = np.array([unp.std_devs(a_mas), 
+                                            unp.std_devs(omega_deg), 
+                                            unp.std_devs(OMEGA_deg), 
+                                            unp.std_devs(i_deg)])
+
+    return geometric_parameters, geometric_parameters_errors
+
+
+def correlation_matrix(input_table, num_pars=None):
+    """ 
+    This function reads the corr_vec from the nss_two_body_orbit table
+    and converts it to a numpy array with the full correlation matrix. 
+    By default it works for the 12 parameter 'Orbital' solution but it can
+    easily be adjusted to other solutions by providing the number of parameters
+    for the desired solution in the num_pars argument.
+    
+    Parameters
+    ----------
+    input_table : pandas Series or dict
+        A single row from the nss_two_body_orbit table for the desired target.
+    num_pars : int
+        Number of parameters for the corresponding solution of the desired target.
+
+    Returns
+    -------
+    corr_mat : ndarray
+        Correlation matrix for the specified parameters.
+    """
+
+    corr_vec = input_table['corr_vec']
+    if num_pars is None:
+        # Use the 'Orbital' solution by default which has 12 free parameters
+        num_pars = 12
+
+    corr_mat = np.ones([num_pars, num_pars], dtype=float)
+
+    # Fill in lower triangle with corr_vec
+    corr_mat[np.tril_indices(num_pars, k=-1)] = corr_vec
+    # Fill in upper triangle with mirror from lower triangle
+    upper_triangle = np.triu_indices(num_pars, k=1)
+    corr_mat[upper_triangle] = corr_mat.T[upper_triangle]
+
+    return corr_mat
+
+
+def covariance_matrix(input_table, pars=None):
+    """ 
+    Creates the covariance matrix from the corr_vec from the nss_two_body_orbit 
+    table. By default it works for the 12  'Orbital' parameter solution but it can
+    easily be adjusted to other solutions by providing the relevant parameters
+    (in the same order that they are listed in the Gaia documentation). 
+    
+    Parameters
+    ----------
+    input_table : pandas Series or dict
+        nss_two_body_orbit table for the desired target.
+    pars : list, optional
+        list of parameters for the corresponding solution of the desired
+        target. They have to be in the same order that they appear in the
+        Gaia documentation.
+
+    Returns
+    -------
+    cov_mat : ndarray
+        Covariance matrix for the specified parameters.
+    """
+
+    if pars is None:
+        # Use the 'Orbital' solution by default
+        pars = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes',
+                'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes',
+                'eccentricity', 'period', 't_periastron']
+
+    size = len(pars)
+
+    # First create correlation matrix
+    corr_mat = correlation_matrix(input_table, num_pars=size)
+    
+    # Copy of correlation matrix to construct covariance matrix
+    covar_mat = corr_mat.copy()
+
+    # Get uncertainties and apply variances to correlation matrix
+    pars_err = [par+'_error' for par in pars]
+    error = np.array([input_table[err_col] for err_col in pars_err])
+    err_mat = np.dot(error.reshape(size, 1), error.reshape(1, size))
+    covar_mat = covar_mat * err_mat
+    
+    return covar_mat
