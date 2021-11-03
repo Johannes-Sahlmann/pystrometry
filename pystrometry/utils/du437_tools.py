@@ -828,16 +828,22 @@ def covariance_matrix(input_table, parameters=None):
         Covariance matrix for the specified parameters.
     """
 
+    corr_vec = input_table['corr_vec']
+
     if parameters is None:
         # Use the 'Orbital' solution by default
         parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes',
                       'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes',
                       'eccentricity', 'period', 't_periastron']
+    else:
+        # Check that the number of parameters provided matches the length of corr_vec
+        assert len(parameters) == int((1+np.sqrt(8*len(corr_vec)+1))/2), \
+               'Number of parameters does not match with the expected length of corr_vec'
 
     size = len(parameters)
 
     # First create correlation matrix
-    corr_mat = correlation_matrix(input_table['corr_vec'])
+    corr_mat = correlation_matrix(corr_vec)
     
     # Copy of correlation matrix to construct covariance matrix
     covar_mat = corr_mat.copy()
