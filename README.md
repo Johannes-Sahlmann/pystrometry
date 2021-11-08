@@ -59,7 +59,7 @@ This requires a conda installation.
 
 Create a dedicated environment (here named `astrom`) with the necessary dependencies:
 
-    conda create --name astrom --yes python=3.7 pandas=1.2.5 pip jupyterlab pyyaml
+    conda create --name astrom --yes python=3.7 pandas=1.2.5 pip jupyterlab pyyaml uncertainties
     
 Activate that environment: 
 
