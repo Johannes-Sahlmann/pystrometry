@@ -4306,11 +4306,8 @@ def geometric_elements(thiele_innes_parameters, post_process=False):
     q = A * G - B * F
 
     a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2))
-    # i_rad = math.acos(q/(a_mas**2.))
-    # omega_rad = (math.atan2(B-F,A+G)+math.atan2(-B-F,A-G))/2.;
-    # OMEGA_rad = (math.atan2(B-F,A+G)-math.atan2(-B-F,A-G))/2.;
-
     i_rad = np.arccos(q / (a_mas ** 2.))
+
     omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.
     OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.
 
@@ -4323,20 +4320,14 @@ def geometric_elements(thiele_innes_parameters, post_process=False):
 
         OMEGA_rad[index_1] += np.pi
         omega_rad[index_1] += np.pi
+
         omega_1 = omega_rad[index_1]
         omega_1[omega_1 > 2 * np.pi] -= 2 * np.pi
         omega_rad[index_1] = omega_1
 
         omega_rad[index_2] += 2 * np.pi
 
-        # if OMEGA_rad < 0.:
-        #     OMEGA_rad += np.pi
-        #     omega_rad += np.pi
-        #     if omega_rad > 2*np.pi:
-        #         omega_rad -= 2*np.pi
-        # elif omega_rad < 0.:
-        #     omega_rad += 2 * np.pi
-
+        assert np.all(OMEGA_rad - np.minimum(OMEGA_rad, np.pi) == 0)
         OMEGA_rad = np.minimum(OMEGA_rad, np.pi)
         omega_rad = np.minimum(np.maximum(0., omega_rad), 2*np.pi)
 
