@@ -702,7 +702,8 @@ def show_best_solution(file, out_dir):
                         name_seed='best_solution', units=units)
 
 
-def geometric_elements_with_uncertainties(thiele_innes_parameters, thiele_innes_parameters_errors=None, correlation_matrix=None, post_process=False):
+def geometric_elements_with_uncertainties(thiele_innes_parameters, thiele_innes_parameters_errors=None, correlation_matrix=None,
+                                          post_process=False, return_angles_in_deg=True):
     """
     Return geometrical orbit elements a, omega, OMEGA, i. If errors are not given
     they are assumed to be 0 and correlation matrix is set to identity.
@@ -762,10 +763,15 @@ def geometric_elements_with_uncertainties(thiele_innes_parameters, thiele_innes_
         # convert angles to nominal ranges
         omega_rad, OMEGA_rad = pystrometry.adjust_omega_OMEGA(omega_rad, OMEGA_rad)
 
-    # Convert radians to degrees
-    i_deg = i_rad * 180 / np.pi
-    omega_deg = omega_rad * 180 / np.pi
-    OMEGA_deg = OMEGA_rad * 180 / np.pi
+    if return_angles_in_deg:
+        # Convert radians to degrees
+        i_deg = i_rad * 180 / np.pi
+        omega_deg = omega_rad * 180 / np.pi
+        OMEGA_deg = OMEGA_rad * 180 / np.pi
+    else:
+        i_deg = i_rad
+        omega_deg = omega_rad
+        OMEGA_deg = OMEGA_rad
 
     # Extract nominal values and standard deviations
     geometric_parameters = np.array([unp.nominal_values(a_mas), 
