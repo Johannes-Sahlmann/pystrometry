@@ -4257,30 +4257,57 @@ def RadialVelocitiesKepler(alpha_mps,beta_mps,delta_mps,theta_rad):
 
 
 def EllipticalRectangularCoordinates(ecc, E_rad):
-# /*
-#  * DOCUMENT
-#  *   EllipticalRectangularCoordinates(ecc,E_rad)
-#  *
-#  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$
-#  *
-#  *
-#  *   - INPUT
-#  *       - omega_rad Longitude of periastron expressed in radian
-#  *       - ecc Eccentricity
-#  *       - Tp_day Time of passage at periastron (julian date-2400000)
-#  *       - P_day Period of the orbit
-#  *       - t_day Date/time of the observations  (julian date-2400000)
-#  *
-#  *    OUTPUT
-#  *       Position on the sky. Needs the Thieles-Innes coef
-#  *
-#  *
-#  *
-#  *  SEE ALSO EccentricAnomaly
-#  */
-  X = np.cos(E_rad) - ecc
-  Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
-  return np.array([X,Y])
+    # /*
+    #  * DOCUMENT
+    #  *   EllipticalRectangularCoordinates(ecc,E_rad)
+    #  *
+    #  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$
+    #  *
+    #  *
+    #  *   - INPUT
+    #  *       - omega_rad Longitude of periastron expressed in radian
+    #  *       - ecc Eccentricity
+    #  *       - Tp_day Time of passage at periastron (julian date-2400000)
+    #  *       - P_day Period of the orbit
+    #  *       - t_day Date/time of the observations  (julian date-2400000)
+    #  *
+    #  *    OUTPUT
+    #  *       Position on the sky. Needs the Thieles-Innes coef
+    #  *
+    #  *
+    #  *
+    #  *  SEE ALSO EccentricAnomaly
+    #  */
+    X = np.cos(E_rad) - ecc
+    Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
+    return np.array([X,Y])
+
+
+def adjust_omega_OMEGA(omega_rad, OMEGA_rad):
+    """ Return omega and OMEGA in ranges of [0,2pi) and [0,pi)
+
+    Parameters
+    ----------
+    omega_rad
+    OMEGA_rad
+
+    Returns
+    -------
+
+    """
+
+    if OMEGA_rad < 0.:
+        OMEGA_rad += np.pi
+        omega_rad += np.pi
+        if omega_rad > 2 * np.pi:
+            omega_rad -= 2 * np.pi
+    elif omega_rad < 0.:
+        omega_rad += 2 * np.pi
+
+    return omega_rad, OMEGA_rad
+# def adjust_geometric_element_ranges(omega_rad, OMEGA_rad):
+#     """Return vectorised version of adjust_omega_OMEGA."""
+#     return np.vectorize(adjust_omega_OMEGA)
 
 
 def geometric_elements(thiele_innes_parameters, post_process=False):
@@ -4313,8 +4340,7 @@ def geometric_elements(thiele_innes_parameters, post_process=False):
 
     i_deg = np.rad2deg(i_rad)
     if post_process:
-        # re-adjust the quadrants and ranges
-
+        # adjust the value ranges
         index_1 = np.where(OMEGA_rad < 0.)[0]
         index_2 = np.where((OMEGA_rad >= 0.) & (omega_rad < 0.))[0]
 
@@ -4326,26 +4352,16 @@ def geometric_elements(thiele_innes_parameters, post_process=False):
         omega_rad[index_1] = omega_1
 
         omega_rad[index_2] += 2 * np.pi
-
-        assert np.all(OMEGA_rad - np.minimum(OMEGA_rad, np.pi) == 0)
-        OMEGA_rad = np.minimum(OMEGA_rad, np.pi)
-        omega_rad = np.minimum(np.maximum(0., omega_rad), 2*np.pi)
+        # assert np.all(OMEGA_rad - np.minimum(OMEGA_rad, np.pi) == 0)
+        # OMEGA_rad = np.minimum(OMEGA_rad, np.pi)
+        # omega_rad = np.minimum(np.maximum(0., omega_rad), 2*np.pi)
 
     omega_deg = np.rad2deg(omega_rad)
     OMEGA_deg = np.rad2deg(OMEGA_rad)
-    # OMEGA_deg = np.rad2deg(np.unwrap(OMEGA_rad))
 
     if np.any(np.isnan(a_mas)):
         index = np.where(np.isnan(a_mas))[0]
         raise RuntimeError('nan detected: {} occurrences'.format(len(index)))
-
-    # if isinstance(omega_deg, (list, tuple, np.ndarray)):
-    #     index = np.where(omega_deg < 0.)[0]
-    #     omega_deg[index] += 180.
-    #
-    # if isinstance(OMEGA_deg, (list, tuple, np.ndarray)):
-    #     index = np.where(OMEGA_deg < 0.)[0]
-    #     OMEGA_deg[index] += 180.
 
     geometric_parameters = np.array([a_mas, omega_deg, OMEGA_deg, i_deg])
     return geometric_parameters
