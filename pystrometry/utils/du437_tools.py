@@ -13,9 +13,12 @@ import os
 from astropy.table import Table
 from astropy.time import Time
 import numpy as np
+import pandas as pd
 import pylab as pl
 
 from .. import gaia_astrometry, pystrometry
+# from ..pystrometry.utils.du437_tools import geometric_elements_with_uncertainties, correlation_matrix, \
+#     covariance_matrix
 
 from uncertainties import unumpy as unp
 from uncertainties import correlated_values_norm
@@ -24,6 +27,111 @@ try:
     from helpers.table_helpers import plot_columns_simple
 except ImportError:
     print('universal_helpers not available')
+
+
+@pd.api.extensions.register_dataframe_accessor("nss")
+class NssDataFrame:
+    """Extend the pandas DataFrame class for NSS tables.
+
+    References
+    ----------
+        https://pandas.pydata.org/pandas-docs/stable/development/extending.html#extending-subclassing-pandas
+        https://pandas.pydata.org/pandas-docs/stable/development/extending.html#extending-extension-types
+
+    """
+
+
+    def __init__(self, pandas_obj):
+        """Set _obj attribute and validate input dataframe."""
+        self._obj = pandas_obj
+
+    def add_geometric_elements(self):
+        self._obj = pd.concat([self._obj, self._obj.apply(lambda x: pystrometry.geometric_elements(np.array(
+            [x['a_thiele_innes'], x['b_thiele_innes'], x['f_thiele_innes'], x['g_thiele_innes']])),
+                 axis=1, result_type='expand').rename(
+            columns={0: 'p1_a1_mas', 1: 'p1_omega_deg', 2: 'p1_OMEGA_deg', 3: 'p1_incl_deg'})], axis='columns')
+        return self._obj
+
+    def add_geometric_elements_unc(self):
+        """ Add GE with uncertainties assuming Gaussian distributions."""
+
+        def compute_ge(corr_vec, a,b,f,g,sa,sb,sf,sg):
+            # Extract the submatrix of the correlation matrix corresponding to the thiele innes parameters
+            correlation_matrix_ti = correlation_matrix(corr_vec)[5:9, 5:9]
+            thiele_innes_parameters = np.array([a,b,f,g])
+            thiele_innes_parameters_errors = np.array([sa,sb,sf,sg])
+            ge1, ge1_err = geometric_elements_with_uncertainties(thiele_innes_parameters,
+                                                                 thiele_innes_parameters_errors,
+                                                                 correlation_matrix_ti,
+                                                                 post_process=True,
+                                                                 return_angles_in_deg=True)
+            return np.concatenate((ge1, ge1_err))
+
+        if ('p1_a1_mas' not in self._obj.columns) and ('sigma_p1_a1_mas' not in self._obj.columns):
+            tmp = self._obj.apply(lambda x: compute_ge(x['corr_vec'], x['a_thiele_innes'], x['b_thiele_innes'], x['f_thiele_innes'], x['g_thiele_innes'],
+                                                       x['a_thiele_innes_error'], x['b_thiele_innes_error'], x['f_thiele_innes_error'], x['g_thiele_innes_error']),
+                                  axis=1, result_type='expand').rename(
+                columns={0: 'p1_a1_mas', 1: 'p1_omega_deg', 2: 'p1_OMEGA_deg', 3: 'p1_incl_deg',
+                         4: 'sigma_p1_a1_mas', 5: 'sigma_p1_omega_deg', 6: 'sigma_p1_OMEGA_deg', 7: 'sigma_p1_incl_deg'})
+            tmp['p1_a1_div_sigma_a1_mas'] = tmp['p1_a1_mas']/tmp['sigma_p1_a1_mas']
+
+            self._obj['sigma_p1_period_day'] = self._obj['period_error']
+            self._obj['sigma_p1_ecc'] = self._obj['eccentricity_error']
+
+            self._obj = pd.concat([self._obj, tmp], axis='columns')
+        else:
+            print('Columns already exist!')
+        return self._obj
+
+
+    def add_companion_mass_estimate(self, m1_MS=1., delta_mag=None):
+        """Add m2_MJ column to dataframe."""
+
+        if 'p1_a1_mas' not in self._obj.columns:
+            self.add_geometric_elements()
+
+        a_m = pystrometry.convert_from_angular_to_linear(self._obj['p1_a1_mas'], self._obj['parallax'])
+        m2_kg = pystrometry.pjGet_m2(m1_MS * pystrometry.MS_kg, a_m, self._obj['period'])
+        self._obj['m2_MJ'] = m2_kg / pystrometry.MJ_kg
+
+        return self._obj
+
+    def add_absolute_magnitude(self, column='phot_g_mean_mag'):
+        self._obj[f'absolute_{column}'] = self._obj[column] + 5 * np.log10(self._obj['parallax']) - 10
+        return self._obj
+
+    def add_colour(self):
+        self._obj['bp_rp'] = self._obj['phot_bp_mean_mag'] - self._obj['phot_rp_mean_mag']
+        return self._obj
+
+    def plot_cmd(self, label=None, title=None):
+        """Plot colour magnitude diagram."""
+
+        if 'absolute_phot_g_mean_mag' not in self._obj.columns:
+            self.add_absolute_magnitude()
+        if 'bp_rp' not in self._obj.columns:
+            self.add_colour()
+
+
+        colour_cutoff = 3.5
+        x = np.linspace(-1, colour_cutoff, 100)
+
+        def cutoff(x):
+            return 5.5 + 3 * x
+
+        # fig = pl.figure()
+        ax = pl.gca()
+
+        self._obj.plot('bp_rp', 'absolute_phot_g_mean_mag', kind='scatter', ax=ax, c='k', label=label)  # , c='parallax'
+        pl.title('{} ({} sources)'.format(title, len(self._obj)))
+        ax.invert_yaxis()
+        pl.plot(x, cutoff(x), 'k-')
+        pl.plot([colour_cutoff, colour_cutoff], [cutoff(colour_cutoff), 0], 'k-')
+
+        pl.xlabel('$G_\mathrm{BP}-G_\mathrm{RP}$')
+        pl.ylabel('$M_G$')
+
+        pl.show()
 
 
 def apply_elimination_cuts(table, selection_cuts, parameter_mapping):

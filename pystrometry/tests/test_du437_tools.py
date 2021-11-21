@@ -5,7 +5,7 @@ from ..utils.du437_tools import geometric_elements_with_uncertainties
 
 def test_geometric_elements_with_uncertainties():
     """Test computation of uncertainties in geometric elements from ABFG+covariance matrix."""
-    absolute_tolerance = 3e-5
+    absolute_tolerance = 3e-5  # this relatively high tolerance was necessary because of rounding errors in the test inputs
 
     # first test case
     thiele_innes_parameters = np.array([0.5887957934067639, -0.783542139419248, -0.586541897649227, -0.4380942241437222])
