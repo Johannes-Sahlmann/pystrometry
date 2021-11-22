@@ -194,6 +194,49 @@ class GaiaValIad:
         self.epoch_data.remove_rows(remove_index)
 
 
+class GaiaLpcIad(GaiaValIad):
+    """Class for LPC Data."""
+
+    _time_field = 'obmt'
+    _transit_id_field = 'transitId'
+    # _fov_transit_id_field = 'OB'
+    _obs_uncertainty_field = 'sigma_da_mas'
+    # scan_angle_definition = 'gaia'
+
+    def __init__(self, source_id, epoch_data):
+        """Initialise object from pandas.DataFrame."""
+        super().__init__(source_id, epoch_data)
+
+        self.epoch_data['spsi_obs'] = np.sin(self.epoch_data['theta'])
+        self.epoch_data['cpsi_obs'] = np.cos(self.epoch_data['theta'])
+        self.epoch_data['ppfact_obs'] = self.epoch_data['varpiFactorAl']
+        self.epoch_data['da_mas'] = self.epoch_data['w']
+        self.epoch_data['sigma_da_mas'] = self.epoch_data['wError']
+
+
+    def set_reference_time(self, reference_time):
+        """Set reference time.
+
+        Parameters
+        ----------
+        reference_time : astropy.time
+            Reference time used in calculations.
+
+        """
+
+        self.t_ref_mjd = reference_time.mjd
+        self.reference_time = reference_time
+
+        from agisp.utils import gaiaparameters
+
+        #  convert to absolute time in MJD
+        tcb = gaiaparameters.obmt_to_tcb_approximation(self.epoch_data[self._time_field] * gaiaparameters.obmt)
+        self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
+
+        self.epoch_data['t-t_ref'] = (self.epoch_data['MJD'] - self.t_ref_mjd)/365.25
+        self.time_column = 't-t_ref'
+
+
 class GaiaValIadHybrid(GaiaValIad):
     """Class for hybrid IAD that is produced internally in DU437 from a combination of StarObject and ObsConstStar data."""
 
