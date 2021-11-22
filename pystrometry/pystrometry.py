@@ -2281,6 +2281,7 @@ class AstrometricOrbitPlotter():
                             'horizons_file_seed': None,
                             'frame_omc_description': 'default',
                             'orbit_description': 'default',
+                            'orbit_show_frame_data': True,
                             'scan_angle_definition': 'gaia',
                             'orbit_signal_description': 'default',
                             'ppm_description': 'default',
@@ -2579,9 +2580,17 @@ class AstrometricOrbitPlotter():
                             offsetDE_mas=orb.offset_delta_mas,
                             horizons_file_seed=argument_dict['horizons_file_seed'])
 
-        pl.plot(ppm_curve[0], ppm_curve[1], 'k-')
+        pl.plot(ppm_curve[0], ppm_curve[1], 'k-', lw=2)
         if self.data_type == '2d':
             pl.plot(self.Xmean_ppm, self.Ymean_ppm, 'ko')
+        elif self.data_type == '1d':
+            # plot the PPM sampling only
+            t_epoch_mjd_2d = np.sort(np.tile(self.t_MJD_epoch, 2))
+            ppm_epoch = orb.ppm(t_epoch_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
+                                offsetDE_mas=orb.offset_delta_mas,
+                                horizons_file_seed=argument_dict['horizons_file_seed'])
+            pl.plot(ppm_epoch[0], ppm_epoch[1], marker='o', color='k', mfc='none', ms=5, zorder=-50, ls='none')
+
         plt.annotate('', xy=(np.float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'],
                              np.float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y']),
                      xytext=(0. + argument_dict['arrow_offset_x'], 0. + argument_dict['arrow_offset_y']),
@@ -2848,10 +2857,11 @@ class AstrometricOrbitPlotter():
                 epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
 
             frame_residual_color = '0.8'
-            pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
-                    phi2_model_frame + frame_residual_delta_along_scan, marker='o',
-                    color=frame_residual_color, ms=4, mfc=frame_residual_color,
-                    mec=frame_residual_color, ls='')
+            if argument_dict['orbit_show_frame_data']:
+                pl.plot(phi1_model_frame + frame_residual_alphastar_along_scan,
+                        phi2_model_frame + frame_residual_delta_along_scan, marker='o',
+                        color=frame_residual_color, ms=4, mfc=frame_residual_color,
+                        mec=frame_residual_color, ls='')
             pl.plot(phi1_model_epoch + epoch_residual_alphastar_along_scan,
                     phi2_model_epoch + epoch_residual_delta_along_scan, marker='o', color='k',
                     ms=5, ls='')
@@ -4247,33 +4257,60 @@ def RadialVelocitiesKepler(alpha_mps,beta_mps,delta_mps,theta_rad):
 
 
 def EllipticalRectangularCoordinates(ecc, E_rad):
-# /*
-#  * DOCUMENT
-#  *   EllipticalRectangularCoordinates(ecc,E_rad)
-#  *
-#  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$
-#  *
-#  *
-#  *   - INPUT
-#  *       - omega_rad Longitude of periastron expressed in radian
-#  *       - ecc Eccentricity
-#  *       - Tp_day Time of passage at periastron (julian date-2400000)
-#  *       - P_day Period of the orbit
-#  *       - t_day Date/time of the observations  (julian date-2400000)
-#  *
-#  *    OUTPUT
-#  *       Position on the sky. Needs the Thieles-Innes coef
-#  *
-#  *
-#  *
-#  *  SEE ALSO EccentricAnomaly
-#  */
-  X = np.cos(E_rad) - ecc
-  Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
-  return np.array([X,Y])
+    # /*
+    #  * DOCUMENT
+    #  *   EllipticalRectangularCoordinates(ecc,E_rad)
+    #  *
+    #  *   It computes the ellipses of the orbit for  \f$  i=0\f$  and \f$  \Omega=0\f$
+    #  *
+    #  *
+    #  *   - INPUT
+    #  *       - omega_rad Longitude of periastron expressed in radian
+    #  *       - ecc Eccentricity
+    #  *       - Tp_day Time of passage at periastron (julian date-2400000)
+    #  *       - P_day Period of the orbit
+    #  *       - t_day Date/time of the observations  (julian date-2400000)
+    #  *
+    #  *    OUTPUT
+    #  *       Position on the sky. Needs the Thieles-Innes coef
+    #  *
+    #  *
+    #  *
+    #  *  SEE ALSO EccentricAnomaly
+    #  */
+    X = np.cos(E_rad) - ecc
+    Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
+    return np.array([X,Y])
 
 
-def geometric_elements(thiele_innes_parameters):
+def adjust_omega_OMEGA(omega_rad, OMEGA_rad):
+    """ Return omega and OMEGA in ranges of [0,2pi) and [0,pi)
+
+    Parameters
+    ----------
+    omega_rad
+    OMEGA_rad
+
+    Returns
+    -------
+
+    """
+
+    if OMEGA_rad < 0.:
+        OMEGA_rad += np.pi
+        omega_rad += np.pi
+        if omega_rad > 2 * np.pi:
+            omega_rad -= 2 * np.pi
+    elif omega_rad < 0.:
+        omega_rad += 2 * np.pi
+
+    return omega_rad, OMEGA_rad
+# def adjust_geometric_element_ranges(omega_rad, OMEGA_rad):
+#     """Return vectorised version of adjust_omega_OMEGA."""
+#     return np.vectorize(adjust_omega_OMEGA)
+
+
+def geometric_elements(thiele_innes_parameters, post_process=False):
     """Return geometrical orbit elements a, omega, OMEGA, i.
 
     Parameters
@@ -4296,30 +4333,35 @@ def geometric_elements(thiele_innes_parameters):
     q = A * G - B * F
 
     a_mas = np.sqrt(p + np.sqrt(p ** 2 - q ** 2))
-    # i_rad = math.acos(q/(a_mas**2.))
-    # omega_rad = (math.atan2(B-F,A+G)+math.atan2(-B-F,A-G))/2.;
-    # OMEGA_rad = (math.atan2(B-F,A+G)-math.atan2(-B-F,A-G))/2.;
-
     i_rad = np.arccos(q / (a_mas ** 2.))
+
     omega_rad = (np.arctan2(B - F, A + G) + np.arctan2(-B - F, A - G)) / 2.
     OMEGA_rad = (np.arctan2(B - F, A + G) - np.arctan2(-B - F, A - G)) / 2.
 
     i_deg = np.rad2deg(i_rad)
+    if post_process:
+        # adjust the value ranges
+        index_1 = np.where(OMEGA_rad < 0.)[0]
+        index_2 = np.where((OMEGA_rad >= 0.) & (omega_rad < 0.))[0]
+
+        OMEGA_rad[index_1] += np.pi
+        omega_rad[index_1] += np.pi
+
+        omega_1 = omega_rad[index_1]
+        omega_1[omega_1 > 2 * np.pi] -= 2 * np.pi
+        omega_rad[index_1] = omega_1
+
+        omega_rad[index_2] += 2 * np.pi
+        # assert np.all(OMEGA_rad - np.minimum(OMEGA_rad, np.pi) == 0)
+        # OMEGA_rad = np.minimum(OMEGA_rad, np.pi)
+        # omega_rad = np.minimum(np.maximum(0., omega_rad), 2*np.pi)
+
     omega_deg = np.rad2deg(omega_rad)
     OMEGA_deg = np.rad2deg(OMEGA_rad)
-    # OMEGA_deg = np.rad2deg(np.unwrap(OMEGA_rad))
 
     if np.any(np.isnan(a_mas)):
         index = np.where(np.isnan(a_mas))[0]
         raise RuntimeError('nan detected: {} occurrences'.format(len(index)))
-
-    # if isinstance(omega_deg, (list, tuple, np.ndarray)):
-    #     index = np.where(omega_deg < 0.)[0]
-    #     omega_deg[index] += 180.
-    #
-    # if isinstance(OMEGA_deg, (list, tuple, np.ndarray)):
-    #     index = np.where(OMEGA_deg < 0.)[0]
-    #     OMEGA_deg[index] += 180.
 
     geometric_parameters = np.array([a_mas, omega_deg, OMEGA_deg, i_deg])
     return geometric_parameters
