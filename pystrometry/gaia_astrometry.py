@@ -193,6 +193,23 @@ class GaiaValIad:
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
 
+    def filter_on_epoch_uncertainty(self, filter_threshold=2.5):
+
+        epoch_signal_rms = self.epoch_data.group_by('OB').groups.aggregate(np.std)['da_mas_obs']
+        indx = np.where(epoch_signal_rms > filter_threshold * np.median(epoch_signal_rms))[0]
+
+        # indx = np.where(epoch_signal_rms > filter_threshold * robust_scatter_estimate(epoch_signal_rms))[0]
+
+        epochs_to_exclude = np.unique(self.epoch_data.group_by('OB').groups[indx]['OB'].data)
+        print(epochs_to_exclude)
+        for epoch_to_exclude in epochs_to_exclude:
+            remove_index = np.where(self.epoch_data['OB'] == epoch_to_exclude)[0]
+            # if remove_index:
+            self.n_filtered_frames += len(remove_index)
+            print('Filter on epoch uncertainty cut removed {} frames (of {})'.format(self.n_filtered_frames,
+                                                             self.n_original_frames))
+            self.epoch_data.remove_rows(remove_index)
+
 
 class GaiaLpcIad(GaiaValIad):
     """Class for LPC Data."""
