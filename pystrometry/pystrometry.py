@@ -18,26 +18,27 @@ Notes
 from __future__ import print_function
 
 import copy
-import os
-import numpy as np
-from matplotlib import pyplot as plt
-import pylab as pl
-from astropy import constants as const
-from astropy.table import Table, Column
-import astropy.units as u
-from scipy.interpolate import *
+import logging
 import pdb
+import os
+import pickle
+import sys
+
+from astropy import constants as const
 from astropy.time import Time, TimeDelta
 from astropy.table import vstack as tablevstack
 from astropy.table import hstack as tablehstack
+from astropy.table import Table, Column
 from astroquery.simbad import Simbad
-import sys
+import astropy.units as u
+from matplotlib import pyplot as plt
+import numpy as np
+import pylab as pl
+from scipy.interpolate import *
 if sys.version_info[0] == 3:
     # import urllib.request as urllib
     from urllib.request import urlopen
     from urllib.error import HTTPError
-import pickle
-
 import sympy as sp
 from scipy.optimize import fmin as scipyfmin
 
@@ -961,6 +962,8 @@ class OrbitSystem(object):
 
         # check that t_MJD is sorted and increasing
         if sorted(list(t_MJD)) != list(t_MJD):
+            logging.debug('t_MJD = {}'.format(t_MJD))
+            logging.debug('diff(t_MJD) = {}'.format(np.diff(t_MJD)))
             raise RuntimeError('Please sort the input timestamps first.')
         if t_MJD[0] > t_MJD[-1]:
             raise RuntimeError('Please sort the input timestamps in increasing order.')
@@ -1544,6 +1547,7 @@ class PpmPlotter(object):
                 self.sx_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexX] ** 2.)))
                 self.sy_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (self.T['sigma_da_mas'][tmpIndexY] ** 2.)))
 
+
             if len(outlier_1D_index) != 0:
                 print('MJD of outliers:')
                 for ii in np.unique(outlier_1D_index.astype(np.int)):
@@ -1577,6 +1581,10 @@ class PpmPlotter(object):
             self.epoch_omc_std_X = np.std(self.meanResidualX)
             self.epoch_omc_std_Y = np.std(self.meanResidualY)
             self.epoch_omc_std = np.std([self.meanResidualX, self.meanResidualY])
+
+#         if np.any(np.abs(np.diff(np.sort(self.t_MJD_epoch))) < 1e-9):
+#             logging.debug('self.t_MJD_epoch is not unique!')
+#             logging.debug(self.t_MJD_epoch)
 
 
     def ppm_plot(self, save_plot=0, plot_dir=None, name_seed='', descr=None, omc2D=0, arrowOffsetX=0, arrowOffsetY=0,
@@ -2058,7 +2066,7 @@ class AstrometricOrbitPlotter():
             elif self.data_type == '1d':
                 tmpIndexX = tmpidx
 
-            self.t_MJD_epoch[jj] = np.mean(T['MJD'][tmpIndexX])
+            self.t_MJD_epoch[jj] = np.mean(T['MJD'][tmpIndexX])            
             self.mean_cpsi[jj] = np.mean(T['cpsi'][tmpIndexX])
             self.mean_spsi[jj] = np.mean(T['spsi'][tmpIndexX])
 
@@ -2150,6 +2158,10 @@ class AstrometricOrbitPlotter():
                     1 / (T['sigma_da_mas'][tmpIndexY] ** 2.))
                 self.sy_star_laz[jj] = 1 / np.sqrt(np.sum(1 / (T['sigma_da_mas'][tmpIndexY] ** 2.)));
 
+#         if np.any(np.abs(np.diff(np.sort(self.t_MJD_epoch))) < 1e-9):
+#             logging.debug('self.t_MJD_epoch is not unique!')
+#             logging.debug(self.t_MJD_epoch)
+                
         if len(outlier_1D_index) != 0:
             print('MJD of outliers:')
             for ii in np.unique(outlier_1D_index.astype(np.int)):
@@ -2849,6 +2861,10 @@ class AstrometricOrbitPlotter():
         timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
         t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch   = get_cpsi_spsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
         t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame   = get_cpsi_spsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
+
+#         if np.any(np.abs(np.diff(np.sort(self.t_MJD_epoch))) < 1e-9):
+#             logging.debug('self.t_MJD_epoch is not unique!')
+#             logging.debug(self.t_MJD_epoch)
 
         ppm_epoch = orb.ppm(self.t_MJD_epoch, offsetRA_mas=orb.offset_alphastar_mas,
                             offsetDE_mas=orb.offset_delta_mas,

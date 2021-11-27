@@ -10,6 +10,7 @@ Authors
 """
 
 from collections import OrderedDict
+import logging
 import os
 
 from astropy.table import Table
@@ -189,7 +190,7 @@ class GaiaValIad:
         np.where(np.abs(self.epoch_data[self._obs_uncertainty_field]) > rse_filter_threshold * rse)[
             0]
         self.n_filtered_frames += len(remove_index)
-        print('RSE cut removed {} frames (of {})'.format(self.n_filtered_frames,
+        print('RSE cut removed {} frames (of {})'.format(len(remove_index),
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
 
@@ -210,11 +211,20 @@ class GaiaValIad:
                                                              self.n_original_frames))
             self.epoch_data.remove_rows(remove_index)
 
+    def filter_on_strip(self, strip_threshold=2):
 
-class GaiaLpcIad(GaiaValIad):
-    """Class for LPC Data."""
+        remove_index = np.where(self.epoch_data['strip'] < strip_threshold)[0]
+        self.n_filtered_frames += len(remove_index)
+        print('Filter on strip>={} removed {} frames (of {})'.format(strip_threshold, len(remove_index),
+                                                         self.n_original_frames))
+        self.epoch_data.remove_rows(remove_index)
+                
 
-    _time_field = 'obmt'
+class GaiaLpcParquetIad(GaiaValIad):
+    """Class for LPC Data from parquet dumper."""
+
+#     _time_field = 'obmt'
+    _time_field = 'deltat' # in years or days ...
     _transit_id_field = 'transitId'
     # _fov_transit_id_field = 'OB'
     _obs_uncertainty_field = 'sigma_da_mas'
@@ -224,12 +234,23 @@ class GaiaLpcIad(GaiaValIad):
         """Initialise object from pandas.DataFrame."""
         super().__init__(source_id, epoch_data)
 
+        
+        epoch_df = self.epoch_data.to_pandas()
+        for key in ['w', 'obmt', 'theta']:
+            if epoch_df[key].isnull().any():
+                logging.debug(f'Some of the {key} data are masked.')
+        
         self.epoch_data['spsi_obs'] = np.sin(self.epoch_data['theta'])
         self.epoch_data['cpsi_obs'] = np.cos(self.epoch_data['theta'])
         self.epoch_data['ppfact_obs'] = self.epoch_data['varpiFactorAl']
         self.epoch_data['da_mas'] = self.epoch_data['w']
         self.epoch_data['sigma_da_mas'] = self.epoch_data['wError']
 
+        al_data = self.epoch_data['w'].data
+        if (hasattr(al_data, 'mask')) and (np.all(al_data.mask)):
+            raise ValueError('IAD do not contain valid AL measurements. (all masked)')
+
+        self.epoch_data.sort('obmt')
 
     def set_reference_time(self, reference_time):
         """Set reference time.
@@ -244,12 +265,16 @@ class GaiaLpcIad(GaiaValIad):
         self.t_ref_mjd = reference_time.mjd
         self.reference_time = reference_time
 
-        from agisp.utils import gaiaparameters
-
         #  convert to absolute time in MJD
-        tcb = gaiaparameters.obmt_to_tcb_approximation(self.epoch_data[self._time_field] * gaiaparameters.obmt)
-        self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
-
+        if 0:
+            from agisp.utils import gaiaparameters
+            tcb = gaiaparameters.obmt_to_tcb_approximation(self.epoch_data['obmt'] * gaiaparameters.obmt)
+            self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
+            assert len(np.unique(self.epoch_data['MJD'])) == len(np.unique(self.epoch_data['obmt']))
+        else:
+#             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
+            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
+                
         self.epoch_data['t-t_ref'] = (self.epoch_data['MJD'] - self.t_ref_mjd)/365.25
         self.time_column = 't-t_ref'
 
