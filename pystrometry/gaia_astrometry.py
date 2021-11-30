@@ -15,6 +15,7 @@ import os
 
 from astropy.table import Table
 from astropy.time import Time
+import astropy.units as u
 import numpy as np
 
 from .pystrometry import OrbitSystem, convert_from_angular_to_linear, pjGet_m2, AstrometricOrbitPlotter, MS_kg, MJ_kg
@@ -163,15 +164,20 @@ class GaiaValIad:
 
         # sort by time
         self.epoch_data.sort(self._time_field)
+        self.set_fov_transit_id_field()
 
+    def set_fov_transit_id_field(self):
         # identify focal plane transits
-        unique_transit_ids = np.unique(self.epoch_data[self._transit_id_field])
+#         unique_transit_ids = np.unique(self.epoch_data[self._transit_id_field])  # sorted
+        unique_transit_ids = self.epoch_data.to_pandas()[self._transit_id_field].unique() # not sorted
+        
         self.n_fov_transit = len(unique_transit_ids)
         self.epoch_data[self._fov_transit_id_field] = np.ones(len(self.epoch_data)).astype(int)
         for ob_number, transit_id in enumerate(unique_transit_ids):
             t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
             self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
-
+#         self.epoch_data.sort(self._fov_transit_id_field)
+            
     def __str__(self):
         """Return string describing the instance."""
         return 'GaiaValIad for source_id {} with {} frames)'.format(self.source_id,
@@ -213,9 +219,9 @@ class GaiaValIad:
 
     def filter_on_strip(self, strip_threshold=2):
 
-        remove_index = np.where(self.epoch_data['strip'] < strip_threshold)[0]
+        remove_index = np.where(self.epoch_data['strip'] <= strip_threshold)[0]
         self.n_filtered_frames += len(remove_index)
-        print('Filter on strip>={} removed {} frames (of {})'.format(strip_threshold, len(remove_index),
+        print('Filter on strip>{} removed {} frames (of {})'.format(strip_threshold, len(remove_index),
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
                 
@@ -223,22 +229,71 @@ class GaiaValIad:
 class GaiaLpcParquetIad(GaiaValIad):
     """Class for LPC Data from parquet dumper."""
 
-#     _time_field = 'obmt'
-    _time_field = 'deltat' # in years or days ...
+    _time_field = 'elapsedNanoSecs'
+#     _time_field = 'deltat' # in years 
+    time_column = 't-t_ref' # in years 
     _transit_id_field = 'transitId'
     # _fov_transit_id_field = 'OB'
+    _mjd_field = 'MJD'
     _obs_uncertainty_field = 'sigma_da_mas'
     # scan_angle_definition = 'gaia'
-
+        
+    
     def __init__(self, source_id, epoch_data):
         """Initialise object from pandas.DataFrame."""
-        super().__init__(source_id, epoch_data)
-
+#         super().__init__(source_id, epoch_data)
+        self.source_id = source_id
+        self.epoch_data = epoch_data
+        self.n_filtered_frames = 0
+        self.n_original_frames = len(self.epoch_data)
         
-        epoch_df = self.epoch_data.to_pandas()
+        self.epoch_df = self.epoch_data.to_pandas()
+        self.sort_epochs_by_time(time_column=self._time_field)
+        self.verify_missing_values()
+        self.set_custom_fields()
+        
+    def set_fov_transit_id_field(self):
+        # identify focal plane transits
+        self.epoch_df[self._fov_transit_id_field] = self.epoch_df.groupby(self._transit_id_field, sort=False).ngroup()  
+        self.epoch_df.sort_values(self._fov_transit_id_field, inplace=True)
+        self.epoch_data = Table.from_pandas(self.epoch_df)
+
+#         logging.debug(display(self.epoch_df[[self._transit_id_field, self._time_field, self._fov_transit_id_field, 'sourceId']]))
+#         try: 
+        assert np.all(np.diff(self.epoch_data[self._fov_transit_id_field]) >= 0)
+#         except AssertionError as e:            
+#             logging.warn('\n{}'.format(self.epoch_df[[self._time_field, self._transit_id_field, self._mjd_field, self._fov_transit_id_field]]))
+#             raise RuntimeError(e)
+        
+    def verify_missing_values(self, remove_dubious_transits=True):    
         for key in ['w', 'obmt', 'theta']:
-            if epoch_df[key].isnull().any():
-                logging.debug(f'Some of the {key} data are masked.')
+            if self.epoch_df[key].isnull().any():
+                logging.warn(f'Some of the {key} data are masked.')
+                if key == 'w':
+                    logging.warn(f'Removing {len(self.epoch_df[key].isnull())}/{len(self.epoch_df)} rows where {key} data are masked.')
+                    self.epoch_df = self.epoch_df[self.epoch_df[key].isnull() == False]
+        
+        if len(self.epoch_df) == 0:
+            raise ValueError('IAD do not contain valid AL measurements. (all null)')                            
+        
+        n_unique_times = self.epoch_df[self._time_field].nunique()
+        n_rows_df = len(self.epoch_df)
+        if n_unique_times != n_rows_df:
+            logging.warn(f'Values in time field {self._time_field} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
+            value_counts = self.epoch_df[self._time_field].value_counts()
+            logging.debug('Rows with duplicated timestamps:')
+            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[self._time_field].isin(value_counts[value_counts>1].index)][[self._time_field, self._transit_id_field, 'w', 'strip']]))
+#             logging.debug(f'epoch_data {self._time_field}:\n {epoch_df[self._time_field]}')
+            if remove_dubious_transits:
+                dubious_transit_ids = self.epoch_df[self.epoch_df[self._time_field].isin(value_counts[value_counts>1].index)][self._transit_id_field].values
+                logging.debug(f'Removing data for {len(dubious_transit_ids)} transitIds')
+                self.epoch_df = self.epoch_df[self.epoch_df[self._transit_id_field].isin(dubious_transit_ids) == False]
+                
+    
+#         epoch_df.sort_values(self._time_field, inplace=True)
+        self.epoch_data = Table.from_pandas(self.epoch_df)
+    
+    def set_custom_fields(self):
         
         self.epoch_data['spsi_obs'] = np.sin(self.epoch_data['theta'])
         self.epoch_data['cpsi_obs'] = np.cos(self.epoch_data['theta'])
@@ -250,8 +305,41 @@ class GaiaLpcParquetIad(GaiaValIad):
         if (hasattr(al_data, 'mask')) and (np.all(al_data.mask)):
             raise ValueError('IAD do not contain valid AL measurements. (all masked)')
 
-        self.epoch_data.sort('obmt')
+        self.epoch_df = self.epoch_data.to_pandas()
 
+    def verify_timing(self):
+#         epoch_df = self.epoch_data.to_pandas()
+#         logging.debug(epoch_df[epoch_df[self._mjd_field].diff() <= 0])
+#         logging.debug((epoch_df[self._mjd_field].diff() > 0).all())
+#         assert (self.epoch_df[self._mjd_field].diff()[1:] >= 0).all()
+#         assert (self.epoch_df[self._time_field].diff()[1:] > 0).all()
+        assert (self.epoch_df[self._fov_transit_id_field].diff()[1:] >= 0).all()
+            
+        if np.any(np.diff(self.epoch_data['OB']) < 0):
+            logging.debug(f'_fov_transit_id_field {self._fov_transit_id_field} is not monotonically increasing with time. Fixing it.')
+
+    def sort_epochs_by_time(self, time_column=None, remove_dubious_times=True):   
+        if time_column is None:
+            time_column = self._mjd_field
+            
+        n_unique_times = self.epoch_df[time_column].nunique()
+        n_rows_df = len(self.epoch_df)
+        if n_unique_times != n_rows_df:
+            logging.warn(f'Values in time field {time_column} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
+            value_counts = self.epoch_df[time_column].value_counts()
+            logging.debug('Rows with duplicated timestamps:')
+            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][[time_column, self._time_field, self._transit_id_field, 'w', 'strip']]))
+            if remove_dubious_times:
+                dubious_times = self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][time_column].values
+                logging.debug(f'Removing data for {len(dubious_times)} times')
+                self.epoch_df = self.epoch_df[self.epoch_df[time_column].isin(dubious_times) == False]
+            self.epoch_data = Table.from_pandas(self.epoch_df)
+            
+        self.epoch_data.sort(time_column)
+        self.epoch_df = self.epoch_data.to_pandas()
+        assert np.all(self.epoch_data[time_column].data == self.epoch_df[time_column].values)
+
+            
     def set_reference_time(self, reference_time):
         """Set reference time.
 
@@ -273,12 +361,23 @@ class GaiaLpcParquetIad(GaiaValIad):
             assert len(np.unique(self.epoch_data['MJD'])) == len(np.unique(self.epoch_data['obmt']))
         else:
 #             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
-            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
-                
-        self.epoch_data['t-t_ref'] = (self.epoch_data['MJD'] - self.t_ref_mjd)/365.25
-        self.time_column = 't-t_ref'
+#             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
 
-
+            # public static final double REF_EPOCH_YR = 2010.0;
+            reference_time = Time(2010.0, format='jyear')
+            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
+            self.epoch_df = self.epoch_data.to_pandas()
+        
+        self.sort_epochs_by_time()
+#         self.sort_epochs_by_time(time_column=self._time_field)
+        
+        self.set_fov_transit_id_field()     
+        
+        self.epoch_data[self.time_column] = (self.epoch_data[self._mjd_field] - self.t_ref_mjd)/365.25        
+        self.epoch_df = self.epoch_data.to_pandas()
+        
+        self.verify_timing()
+        
 class GaiaValIadHybrid(GaiaValIad):
     """Class for hybrid IAD that is produced internally in DU437 from a combination of StarObject and ObsConstStar data."""
 
