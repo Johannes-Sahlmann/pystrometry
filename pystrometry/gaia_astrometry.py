@@ -666,7 +666,7 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     else:
         mag_str = ''
 
-        
+    source_id = parameter_dict['sourceId']    
     axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
     name_seed = 'DR4_{}'.format(source_id)
 
