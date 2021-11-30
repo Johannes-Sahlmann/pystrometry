@@ -2408,7 +2408,7 @@ class AstrometricOrbitPlotter():
 
             theta_p = self.model_parameters[p]
             theta_names = theta_p.keys()
-            if self.model_parameters[p]['solution_type'] in ['Acceleration7', 'Acceleration9']:
+            if self.model_parameters[p]['solution_type'] in ['Acceleration7', 'Acceleration9', 'Orbital', 'AstroSpectroSB1', 'ExtrasolarPlanets']:
                 name_seed_2 = argument_dict['name_seed'] + '_{}'.format(self.model_parameters[p]['solution_type'])
             else:
                 name_seed_2 = argument_dict['name_seed'] + '_companion{:d}'.format(p)
@@ -2503,6 +2503,7 @@ class AstrometricOrbitPlotter():
                     try:
                         fig.savefig(figure_file_name, transparent=False, bbox_inches='tight',
                                 pad_inches=0.05)
+                        logging.info(f'Saved figure as {figure_file_name}')
                     except ValueError:
                         print('WARNING: Could not save {}'.format(figure_file_name))
 

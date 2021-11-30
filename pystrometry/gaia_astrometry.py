@@ -18,7 +18,8 @@ from astropy.time import Time
 import astropy.units as u
 import numpy as np
 
-from .pystrometry import OrbitSystem, convert_from_angular_to_linear, pjGet_m2, AstrometricOrbitPlotter, MS_kg, MJ_kg
+from .pystrometry import OrbitSystem, convert_from_angular_to_linear, pjGet_m2, \
+    AstrometricOrbitPlotter, MS_kg, MJ_kg, AstrometricPpmPlotter
 
 def robust_scatter_estimate(data, verbose=True):
     """Return the Robust Scatter Estimate (RSE) es defined for Gaia.
@@ -496,22 +497,37 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 
         model_parameters[planet_index] = attribute_dict
 
+        if 'varpiError' in parameter_dict.keys():
+            ppm_description = ''
+            ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+            ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+            ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+        else:
+            ppm_description = 'default'
+
         if ('sigma_p1_a1_mas' in parameter_dict.keys()) and (parameter_dict['Nplanets'] == 1):
             # temporary: only for single-companion solutions
-            orbit_descr = '$\\alpha={0[p1_a1_mas]:2.{prec}f}\\pm{0[sigma_p1_a1_mas]:2.{prec}f}$ mas (ratio={0[p1_a1_div_sigma_a1_mas]:2.1f})\n'.format(
-                dict(parameter_dict), prec=3)
-            orbit_descr += '$P={0[p1_period_day]:2.{prec}f}\\pm{0[sigma_p1_period_day]:2.{prec}f}$ d\n'.format(
-                dict(parameter_dict), prec=1)
-            orbit_descr += '$e={0[p1_ecc]:2.{prec}f}\\pm{0[sigma_p1_ecc]:2.{prec}f}$\n'.format(
-                dict(parameter_dict), prec=3)
-            orbit_descr += '$i={0[p1_incl_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict),
-                                                                         prec=2)
-            orbit_descr += '$\\omega={0[p1_omega_deg]:2.{prec}f}$ deg\n'.format(
-                dict(parameter_dict), prec=2)
-            orbit_descr += '$\\Omega={0[p1_OMEGA_deg]:2.{prec}f}$ deg\n'.format(
-                dict(parameter_dict), prec=2)
+            # orbit_descr = '$\\alpha={0[p1_a1_mas]:2.{prec}f}\\pm{0[sigma_p1_a1_mas]:2.{prec}f}$ mas (ratio={0[p1_a1_div_sigma_a1_mas]:2.1f})\n'.format(
+            #     dict(parameter_dict), prec=3)
+            # orbit_descr += '$P={0[p1_period_day]:2.{prec}f}\\pm{0[sigma_p1_period_day]:2.{prec}f}$ d\n'.format(
+            #     dict(parameter_dict), prec=1)
+            # orbit_descr += '$e={0[p1_ecc]:2.{prec}f}\\pm{0[sigma_p1_ecc]:2.{prec}f}$\n'.format(
+            #     dict(parameter_dict), prec=3)
+            # orbit_descr += '$i={0[p1_incl_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict),
+            #                                                              prec=2)
+            # orbit_descr += '$\\omega={0[p1_omega_deg]:2.{prec}f}$ deg\n'.format(
+            #     dict(parameter_dict), prec=2)
+            # orbit_descr += '$\\Omega={0[p1_OMEGA_deg]:2.{prec}f}$ deg\n'.format(
+            #     dict(parameter_dict), prec=2)
+            orbit_descr = '$\\alpha={0[p1_a1_mas]:2.{prec}f}\\pm{0[sigma_p1_a1_mas]:2.{prec}f}$ mas (ratio={0[p1_a1_div_sigma_a1_mas]:2.1f})\n'.format(dict(parameter_dict), prec=3)
+            orbit_descr += '$P={0[p1_period_day]:2.{prec}f}\\pm{0[sigma_p1_period_day]:2.{prec}f}$ d\n'.format(dict(parameter_dict), prec=1)
+            orbit_descr += '$e={0[p1_ecc]:2.{prec}f}\\pm{0[sigma_p1_ecc]:2.{prec}f}$\n'.format(dict(parameter_dict), prec=3)
+            orbit_descr += '$i={0[p1_incl_deg]:2.{prec}f}\\pm{0[sigma_p1_incl_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
+            orbit_descr += '$\\omega={0[p1_omega_deg]:2.{prec}f}\\pm{0[sigma_p1_omega_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
+            orbit_descr += '$\\Omega={0[p1_OMEGA_deg]:2.{prec}f}\\pm{0[sigma_p1_OMEGA_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
             orbit_descr += '$M_1={0:2.{prec}f}$ Msun\n'.format(m1_MS, prec=2)
             orbit_descr += '$M_2={0:2.{prec}f}$ Mjup\n'.format(m2_MJ, prec=2)
+
         else:
             orbit_descr = 'default'
         orbit_description[planet_index] = orbit_descr
@@ -557,7 +573,8 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 
     argument_dict = {'plot_dir'             : plot_dir, 'ppm_panel': True,
                      'frame_residual_panel' : True, 'orbit_only_panel': True,
-                     'ppm_description'      : 'default', 'epoch_omc_description': 'default',
+                     'ppm_description'      : ppm_description,
+                     'epoch_omc_description': 'default',
                      'orbit_description'    : orbit_description, 'arrow_offset_x': +100,
                      'arrow_offset_y'       : +100, 'name_seed': name_seed,
                      'scan_angle_definition': iad.scan_angle_definition}
