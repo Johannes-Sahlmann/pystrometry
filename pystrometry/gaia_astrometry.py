@@ -248,14 +248,26 @@ class GaiaLpcParquetIad(GaiaValIad):
         self.n_original_frames = len(self.epoch_data)
         
         self.epoch_df = self.epoch_data.to_pandas()
-        self.sort_epochs_by_time(time_column=self._time_field)
+#         self.sort_epochs_by_time(time_column=self._time_field)
         self.verify_missing_values()
         self.set_custom_fields()
         
     def set_fov_transit_id_field(self):
         # identify focal plane transits
         self.epoch_df[self._fov_transit_id_field] = self.epoch_df.groupby(self._transit_id_field, sort=False).ngroup()  
-        self.epoch_df.sort_values(self._fov_transit_id_field, inplace=True)
+#         self.epoch_df.sort_values(self._fov_transit_id_field, inplace=True)
+        
+        # check whether any of the transits overlap in time 
+        groups = self.epoch_df.groupby(self._fov_transit_id_field)
+        min_max_time = groups.agg([min, max])[self._time_field]
+        transits_overlapping_in_time = (min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]        
+        if np.any(transits_overlapping_in_time):
+            fov_transit_id_to_exclude = transits_overlapping_in_time[transits_overlapping_in_time == True].index
+            logging.debug(fov_transit_id_to_exclude)
+            self.epoch_df = self.epoch_df[self.epoch_df[self._fov_transit_id_field].isin(fov_transit_id_to_exclude) == False]
+#             logging.debug(display((min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]))[self._fov_transit_id_field]
+            
+        
         self.epoch_data = Table.from_pandas(self.epoch_df)
 
 #         logging.debug(display(self.epoch_df[[self._transit_id_field, self._time_field, self._fov_transit_id_field, 'sourceId']]))
@@ -368,7 +380,10 @@ class GaiaLpcParquetIad(GaiaValIad):
             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
             self.epoch_df = self.epoch_data.to_pandas()
         
-        self.sort_epochs_by_time()
+#         self.set_fov_transit_id_field()     
+#         self.sort_epochs_by_time()
+
+        self.sort_epochs_by_time(time_column=self._mjd_field)
 #         self.sort_epochs_by_time(time_column=self._time_field)
         
         self.set_fov_transit_id_field()     
@@ -560,3 +575,103 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 
     return axp
 
+
+def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
+
+    model_parameters = OrderedDict()
+    orbit_description = OrderedDict()
+
+    for planet_index in [0]:
+
+        attribute_dict = {
+            'offset_alphastar_mas': parameter_dict['alphaStarOffset_mas'],
+            'offset_delta_mas': parameter_dict['deltaOffset_mas'],
+            'RA_deg': parameter_dict['ra'],
+            'DE_deg': parameter_dict['dec'],
+            'absolute_plx_mas': parameter_dict['varpi'],
+            'muRA_mas': parameter_dict['pmra'],
+            'muDE_mas': parameter_dict['pmdec'],            
+            'm2_MJ': 0.,
+            'Tref_MJD': iad.t_ref_mjd,
+            'scan_angle_definition': iad.scan_angle_definition,
+        }
+        attribute_dict['solution_type'] = parameter_dict['nss_solution_type']
+            
+    
+        orbit = OrbitSystem(attribute_dict=attribute_dict)
+
+        # set coeffMatrix in orbit object
+        ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
+            np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
+                                   offsetRA_mas=parameter_dict['alphaStarOffset_mas'], offsetDE_mas=parameter_dict['deltaOffset_mas'],
+                                   externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
+
+        model_parameters[planet_index] = attribute_dict
+
+        orbit_descr = '{}  '.format('LPC offsets')
+        orbit_descr += '\nScan angle spread = {:2.1f} deg'.format(np.ptp(np.rad2deg(iad.epoch_data['theta'])))
+
+        ppm_description = ''
+        ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+        ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+        ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+
+        orbit_description[planet_index] = orbit_descr
+
+    plot_dict = {}
+    plot_dict['model_parameters'] = model_parameters
+    plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix} 
+    if hasattr(iad, 'xi'):
+        plot_dict['data_type'] = 'gaia_2d'
+    else:
+        plot_dict['data_type'] = '1d'
+    plot_dict['scan_angle_definition'] = iad.scan_angle_definition
+
+    for key in iad.epoch_data.colnames:
+        if '_obs' in key:
+            new_key = key.replace('_obs', '')
+            if new_key == 'errda_mas':
+                new_key = 'sigma_da_mas'
+            iad.epoch_data[new_key] = iad.epoch_data[key]
+
+    plot_dict['data'] = iad
+
+
+    axp = AstrometricPpmPlotter(plot_dict)
+    axp.set_residuals()
+
+    n_curve = 1500
+    timestamps_curve_2d = np.linspace(np.min(iad.epoch_data['MJD']), np.max(iad.epoch_data['MJD']), n_curve)
+    axp.t_curve_MJD = timestamps_curve_2d
+
+    if 'GMag' in parameter_dict.keys():
+        mag_str = ' $G$={:2.1f}'.format(parameter_dict['GMag'])
+    else:
+        mag_str = ''
+
+        
+    axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
+    name_seed = 'DR4_{}'.format(source_id)
+
+    argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
+             'ppm_description': ppm_description, 'epoch_omc_description': 'default',
+             'orbit_description': orbit_description,
+             'name_seed': name_seed, 'scan_angle_definition': iad.scan_angle_definition}
+
+    argument_dict['save_plot'] = True
+    argument_dict['omc_panel'] = True
+    argument_dict['orbit_only_panel'] = False
+    argument_dict['orbit_timeseries_panel'] = False
+    argument_dict['make_condensed_summary_figure'] = False
+    argument_dict['make_xy_residual_figure'] = False
+    argument_dict['make_1d_overview_figure'] = True
+    argument_dict['arrow_offset_x'] = parameter_dict['pmra']
+    argument_dict['arrow_offset_x'] = parameter_dict['pmdec']
+    
+    argument_dict['excess_noise'] = parameter_dict['excessNoise']
+    argument_dict['merit_function'] = -1#parameter_dict['meritFunction']
+
+    axp.plot(argument_dict=argument_dict)
+    axp.argument_dict = argument_dict
+    
+    return axp
