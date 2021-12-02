@@ -230,8 +230,8 @@ class GaiaValIad:
 class GaiaLpcParquetIad(GaiaValIad):
     """Class for LPC Data from parquet dumper."""
 
-    _time_field = 'elapsedNanoSecs'
-#     _time_field = 'deltat' # in years 
+#     _time_field = 'elapsedNanoSecs'
+    _time_field = 'deltat' # in years 
     time_column = 't-t_ref' # in years 
     _transit_id_field = 'transitId'
     # _fov_transit_id_field = 'OB'
@@ -373,12 +373,13 @@ class GaiaLpcParquetIad(GaiaValIad):
             self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
             assert len(np.unique(self.epoch_data['MJD'])) == len(np.unique(self.epoch_data['obmt']))
         else:
-#             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
+            if 1:
+                self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
 #             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
-
-            # public static final double REF_EPOCH_YR = 2010.0;
-            reference_time = Time(2010.0, format='jyear')
-            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
+            else:
+                # public static final double REF_EPOCH_YR = 2010.0;
+                reference_time = Time(2010.0, format='jyear')
+                self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
             self.epoch_df = self.epoch_data.to_pandas()
         
 #         self.set_fov_transit_id_field()     
