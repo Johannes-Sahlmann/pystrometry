@@ -163,22 +163,40 @@ class GaiaValIad:
         self.n_filtered_frames = 0
         self.n_original_frames = len(self.epoch_data)
 
+        self.epoch_df = self.epoch_data.to_pandas()
+
         # sort by time
         self.epoch_data.sort(self._time_field)
         self.set_fov_transit_id_field()
 
-    def set_fov_transit_id_field(self):
-        # identify focal plane transits
-#         unique_transit_ids = np.unique(self.epoch_data[self._transit_id_field])  # sorted
-        unique_transit_ids = self.epoch_data.to_pandas()[self._transit_id_field].unique() # not sorted
-        
-        self.n_fov_transit = len(unique_transit_ids)
-        self.epoch_data[self._fov_transit_id_field] = np.ones(len(self.epoch_data)).astype(int)
-        for ob_number, transit_id in enumerate(unique_transit_ids):
-            t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
-            self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
-#         self.epoch_data.sort(self._fov_transit_id_field)
-            
+    # def set_fov_transit_id_field(self):
+    #     # identify focal plane transits
+    #     unique_transit_ids = self.epoch_data.to_pandas()[self._transit_id_field].unique() # not sorted
+    #
+    #     self.n_fov_transit = len(unique_transit_ids)
+    #     self.epoch_data[self._fov_transit_id_field] = np.ones(len(self.epoch_data)).astype(int)
+    #     for ob_number, transit_id in enumerate(unique_transit_ids):
+    #         t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
+    #         self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
+
+    def set_fov_transit_id_field(self, eliminate_transits_overlapping_in_time=True):
+        """Identify focal plane transits and number them."""
+        self.epoch_df[self._fov_transit_id_field] = self.epoch_df.groupby(self._transit_id_field,
+                                                                          sort=False).ngroup()
+
+        # check whether any of the transits overlap in time
+        groups = self.epoch_df.groupby(self._fov_transit_id_field)
+        min_max_time = groups.agg([min, max])[self._time_field]
+        transits_overlapping_in_time = (min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]
+        if np.any(transits_overlapping_in_time):
+            fov_transit_id_to_exclude = transits_overlapping_in_time[transits_overlapping_in_time == True].index
+            logging.debug(f'These transit numbers are overlapping in time: {fov_transit_id_to_exclude}')
+            if eliminate_transits_overlapping_in_time:
+                self.epoch_df = self.epoch_df[self.epoch_df[self._fov_transit_id_field].isin(fov_transit_id_to_exclude) == False]
+
+        self.epoch_data = Table.from_pandas(self.epoch_df)
+        assert np.all(np.diff(self.epoch_data[self._fov_transit_id_field]) >= 0)
+
     def __str__(self):
         """Return string describing the instance."""
         return 'GaiaValIad for source_id {} with {} frames)'.format(self.source_id,
@@ -253,31 +271,8 @@ class GaiaLpcParquetIad(GaiaValIad):
         self.verify_missing_values()
         self.set_custom_fields()
         
-    def set_fov_transit_id_field(self):
-        # identify focal plane transits
-        self.epoch_df[self._fov_transit_id_field] = self.epoch_df.groupby(self._transit_id_field, sort=False).ngroup()  
-#         self.epoch_df.sort_values(self._fov_transit_id_field, inplace=True)
-        
-        # check whether any of the transits overlap in time 
-        groups = self.epoch_df.groupby(self._fov_transit_id_field)
-        min_max_time = groups.agg([min, max])[self._time_field]
-        transits_overlapping_in_time = (min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]        
-        if np.any(transits_overlapping_in_time):
-            fov_transit_id_to_exclude = transits_overlapping_in_time[transits_overlapping_in_time == True].index
-            logging.debug(fov_transit_id_to_exclude)
-            self.epoch_df = self.epoch_df[self.epoch_df[self._fov_transit_id_field].isin(fov_transit_id_to_exclude) == False]
-#             logging.debug(display((min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]))[self._fov_transit_id_field]
-            
-        
-        self.epoch_data = Table.from_pandas(self.epoch_df)
 
-#         logging.debug(display(self.epoch_df[[self._transit_id_field, self._time_field, self._fov_transit_id_field, 'sourceId']]))
-#         try: 
-        assert np.all(np.diff(self.epoch_data[self._fov_transit_id_field]) >= 0)
-#         except AssertionError as e:            
-#             logging.warn('\n{}'.format(self.epoch_df[[self._time_field, self._transit_id_field, self._mjd_field, self._fov_transit_id_field]]))
-#             raise RuntimeError(e)
-        
+
     def verify_missing_values(self, remove_dubious_transits=True):    
         for key in ['w', 'obmt', 'theta']:
             if self.epoch_df[key].isnull().any():
