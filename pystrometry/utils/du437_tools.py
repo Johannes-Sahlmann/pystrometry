@@ -8,6 +8,7 @@ Authors
 """
 
 import copy
+import logging
 import os
 
 from astropy.table import Table
@@ -17,8 +18,7 @@ import pandas as pd
 import pylab as pl
 
 from .. import gaia_astrometry, pystrometry
-# from ..pystrometry.utils.du437_tools import geometric_elements_with_uncertainties, correlation_matrix, \
-#     covariance_matrix
+from ..pystrometry import geometric_elements
 
 from uncertainties import unumpy as unp
 from uncertainties import correlated_values_norm
@@ -75,6 +75,57 @@ class NssDataFrame:
                          4: 'sigma_p1_a1_mas', 5: 'sigma_p1_omega_deg', 6: 'sigma_p1_OMEGA_deg', 7: 'sigma_p1_incl_deg'})
             tmp['p1_a1_div_sigma_a1_mas'] = tmp['p1_a1_mas']/tmp['sigma_p1_a1_mas']
 
+            self._obj['sigma_p1_period_day'] = self._obj['period_error']
+            self._obj['sigma_p1_ecc'] = self._obj['eccentricity_error']
+
+            self._obj = pd.concat([self._obj, tmp], axis='columns')
+        else:
+            print('Columns already exist!')
+        return self._obj
+
+    def add_geometric_elements_uncertainty_monte_carlo(self):
+        """ Add GE with uncertainties using Monte Carlo for error propagation."""
+
+        def compute_ge_mc(solution, n_mc=1000):
+
+            cov_matrix = covariance_matrix(solution)[5:9, 5:9]
+
+            # thiele_innes_parameters = np.array(solution[['a_thiele_innes','b_thiele_innes','f_thiele_innes','g_thiele_innes']]).astype(np.float)
+            thiele_innes_parameters = solution[['a_thiele_innes','b_thiele_innes','f_thiele_innes','g_thiele_innes']].astype(np.float)
+            # thiele_innes_parameters_errors = np.array(solution[['a_thiele_innes_error', 'b_thiele_innes_error', 'f_thiele_innes_error', 'g_thiele_innes_error']])
+            # logging.info(thiele_innes_parameters)
+            # logging.info(thiele_innes_parameters_errors)
+            # logging.info(cov_matrix)
+
+            # draw random data accounting for covariances
+            if np.isnan(cov_matrix).any():
+                return None
+            # try:
+            data_mc = np.random.multivariate_normal(thiele_innes_parameters, cov_matrix, size=n_mc)
+            # except np.linalg.LinAlgError as e:
+            #     # logging.info(cov_matrix)
+            #     # logging.warn(f'compute_ge_mc: invalid covariance matrix: {e}')
+            #     return None
+
+            # compute geometric elements for every simulation
+            geometric_parameters = geometric_elements(np.array(data_mc).T, post_process=True)
+            ce_df = pd.DataFrame(geometric_parameters.T, columns=['p1_a1_mas_mc', 'p1_omega_deg_mc', 'p1_OMEGA_deg_mc', 'p1_incl_deg_mc'])
+
+            # compute quantiles
+            df1 = ce_df.quantile([0.16, 0.5, 0.84])
+
+            # construct single_row dataframe with all quantiles
+            df2 = df1.stack().swaplevel()
+            df2.index = df2.index.map('{0[0]}_{0[1]}'.format)
+            df3 = df2.to_frame().T
+            return df3.iloc[0]
+
+
+        if ('p1_a1_mas_mc_0.5' not in self._obj.columns):# and ('sigma_p1_a1_mas' not in self._obj.columns):
+            tmp = self._obj.apply(lambda x: compute_ge_mc(x), axis=1)
+
+            # tmp['sigma_p1_a1_mas_mc'] = tmp['p1_a1_mas_mc_0.84'] - tmp['p1_a1_mas_mc_0.5'] -
+            # tmp['p1_a1_div_sigma_a1_mas_mc'] = tmp['p1_a1_mas_mc_0.5']/tmp['sigma_p1_a1_mas']
             self._obj['sigma_p1_period_day'] = self._obj['period_error']
             self._obj['sigma_p1_ecc'] = self._obj['eccentricity_error']
 
@@ -846,7 +897,7 @@ def geometric_elements_with_uncertainties(thiele_innes_parameters, thiele_innes_
         pass
     else:
         # If either one of them is provided but not the other raise an error
-        raise ValueError("thieles_innes_parameters_erros and correlation_matrix must be" \
+        raise ValueError("thieles_innes_parameters_errors and correlation_matrix must be" \
                           "specified together.")
             
 
