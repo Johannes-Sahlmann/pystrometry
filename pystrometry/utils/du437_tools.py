@@ -53,7 +53,7 @@ class NssDataFrame:
         return self._obj
 
     def add_geometric_elements_unc(self):
-        """ Add GE with uncertainties assuming Gaussian distributions."""
+        """ Add GE with uncertainties assuming Gaussian distributions and linear propagation."""
 
         def compute_ge(corr_vec, a,b,f,g,sa,sb,sf,sg):
             # Extract the submatrix of the correlation matrix corresponding to the thiele innes parameters
@@ -86,19 +86,39 @@ class NssDataFrame:
     def add_geometric_elements_uncertainty_monte_carlo(self):
         """ Add GE with uncertainties using Monte Carlo for error propagation."""
 
+        # determine index in corr_vec corresponding to ABFG
+        parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+        n_params_total = 12
+        parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total), parameter_index_in_bit_index)
+        # iu1 = np.triu_indices(n_params_total, k=+1)
+        iu1 = np.tril_indices(n_params_total, k=-1)
+        a = np.zeros((n_params_total, n_params_total))
+        a[iu1] = 1
+        a[parameter_index_not_in_bit_index, :] = 0
+        a[:, parameter_index_not_in_bit_index] = 0
+        # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+        indices_in_corr_vec = np.where(a[iu1])[0]
+
         def compute_ge_mc(solution, n_mc=1000):
 
-            cov_matrix = covariance_matrix(solution)[5:9, 5:9]
+            parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
+            if 1:
+                # print(len(solution['corr_vec']))
+                # print(solution['corr_vec'])
+                # print(covariance_matrix(solution)[5:9, 5:9])
 
-            # thiele_innes_parameters = np.array(solution[['a_thiele_innes','b_thiele_innes','f_thiele_innes','g_thiele_innes']]).astype(np.float)
-            thiele_innes_parameters = solution[['a_thiele_innes','b_thiele_innes','f_thiele_innes','g_thiele_innes']].astype(np.float)
-            # thiele_innes_parameters_errors = np.array(solution[['a_thiele_innes_error', 'b_thiele_innes_error', 'f_thiele_innes_error', 'g_thiele_innes_error']])
-            # logging.info(thiele_innes_parameters)
-            # logging.info(thiele_innes_parameters_errors)
-            # logging.info(cov_matrix)
+                row = solution.copy()
+                # print(row['corr_vec'])
+                row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+                    # print(row['corr_vec'])
+                cov_matrix = covariance_matrix(row, parameters=parameters)
+                # print(cov_matrix)
+            else:
+                cov_matrix = covariance_matrix(solution)[5:9, 5:9]
+            thiele_innes_parameters = solution[parameters].astype(np.float)
 
             # draw random data accounting for covariances
-            if np.isnan(cov_matrix).any():
+            if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
                 return None
             # try:
             data_mc = np.random.multivariate_normal(thiele_innes_parameters, cov_matrix, size=n_mc)
@@ -134,6 +154,57 @@ class NssDataFrame:
             print('Columns already exist!')
         return self._obj
 
+    def plot_ti2ge_monte_carlo(self, index, n_mc=1000):
+        """Generate figures illustrating the Monte Carlo transformation between ABFG and geometric elements."""
+
+        try:
+            import seaborn as sns
+        except ImportError:
+            logging.warn('Please install seaborn to use this method.')
+            return
+        cov_matrix = covariance_matrix(self._obj.loc[index])[5:9, 5:9]
+
+        thiele_innes_parameters = self._obj.loc[
+            index, ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']].astype(
+            float)
+        data_mc = np.random.multivariate_normal(thiele_innes_parameters, cov_matrix, size=n_mc)
+
+        geometric_parameters = geometric_elements(np.array(data_mc).T, post_process=True)
+        ce_df = pd.DataFrame(geometric_parameters.T,
+                             columns=['p1_a1_mas_mc', 'p1_omega_deg_mc', 'p1_OMEGA_deg_mc',
+                                      'p1_incl_deg_mc'])
+
+        # # compute quantiles
+        # df1 = ce_df.quantile([0.16, 0.5, 0.84])
+        #
+        # # construct single_row dataframe with all quantiles
+        # df2 = df1.stack().swaplevel()
+        # df2.index = df2.index.map('{0[0]}_{0[1]}'.format)
+        # df3 = df2.to_frame().T
+
+
+        df_mc = pd.DataFrame(data_mc, columns=['A', 'B', 'F', 'G'])
+
+        g0 = sns.pairplot(df_mc, corner=True)
+        #     pl.title(f'Input ABFG (N={n_mc})')
+        pl.show()
+
+        g = sns.pairplot(ce_df, corner=True)
+        if 'p1_incl_deg' in self._obj.columns:
+            for ii, key in enumerate(['p1_a1_mas', 'p1_omega_deg', 'p1_OMEGA_deg', 'p1_incl_deg']):
+                g.axes[ii, ii].axvline(x=self._obj.loc[index, f'{key}'], ls='--', linewidth=2, c='k', label='Linear')
+                g.axes[ii, ii].axvline(x=self._obj.loc[index, f'{key}_mc_0.5'], ls='-', linewidth=2, c='k', label='MC median')
+
+            g.axes[0, 0].legend()
+
+            # g.axes[3, 3].axvline(x=self._obj.loc[index, 'p1_incl_deg'], ls='--', linewidth=2, c='red',
+            #                  label='nominal')
+        # if 'p1_incl_deg_mc_0.5' in self._obj.columns:
+        #     g.axes[3, 3].axvline(x=self._obj.loc[index, 'p1_incl_deg_mc_0.5'], ls='-', linewidth=2, c='blue',
+        #                      label='MC median')
+        pl.show()
+
+        return g0, g
 
     def add_companion_mass_estimate(self, m1_MS=1., delta_mag=None):
         """Add m2_MJ column to dataframe."""
@@ -977,7 +1048,7 @@ def correlation_matrix(corr_vec):
 
 def covariance_matrix(input_table, parameters=None):
     """ 
-    Creates the covariance matrix from the corr_vec from the nss_two_body_orbit 
+    Creates the covariance matrix from the nss_two_body_orbit
     table. By default it works for the 12  'Orbital' parameter solution but it can
     easily be adjusted to other solutions by providing the relevant parameters
     (in the same order that they are listed in the Gaia documentation). 
@@ -1007,7 +1078,8 @@ def covariance_matrix(input_table, parameters=None):
     else:
         # Check that the number of parameters provided matches the length of corr_vec
         assert len(parameters) == int((1+np.sqrt(8*len(corr_vec)+1))/2), \
-               'Number of parameters does not match with the expected length of corr_vec'
+               'Number of parameters does not match with the expected length of corr_vec:\n' \
+               'Should be {} but is {}'.format(int((1+np.sqrt(8*len(corr_vec)+1))/2), len(parameters))
 
     size = len(parameters)
 

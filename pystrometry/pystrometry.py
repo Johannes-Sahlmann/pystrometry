@@ -3876,7 +3876,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     n_rv = len(rv)
 
     if orbit_system is not None:
-
+        # orbit_system = copy.deepcopy(orbit_system)plot_ti2ge_monte_carlo
         # fit systemic velocity
         if estimate_systemic_velocity:
             rv_mps = orbit_system.compute_radial_velocity(np.array(rv['MJD']))
@@ -3892,12 +3892,14 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             print('Systemic velocity {:2.3f} +/- {:2.3f} km/s'.format(gamma_kmps,
                                                                       res.p_normalised_uncertainty[0]))
             rv['rv_model_kmps'] = rv_kmps + gamma_kmps
+            rv['rv_model_mps'] = rv['rv_model_kmps'] *1e3
             orbit_system.gamma_ms = gamma_mps
         else:
             rv['rv_model_{}'.format(basic_unit)] = orbit_system.compute_radial_velocity(np.array(rv['MJD']))/conversion_factor
             gamma_mps = None
         # plot RV orbit of primary
         time_offset_day = rv['MJD'][0] - orbit_system.Tp_day
+        # print(orbit_system.gamma_ms)
         orbit_system.plot_rv_orbit(time_offset_day=time_offset_day, n_orbit=n_orbit,
                                    n_curve=10000, axis=axes[0][0], rv_unit=basic_unit)
         if plot_parameters_ensemble is not None:
@@ -4592,6 +4594,55 @@ def astrom_signal(t_day, psi_deg, ecc, P_day, Tp_day, TIC):
     return phi
 
 
+def compute_abfg_linear_coefficients(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC, scan_angle_definition='hipparcos'):
+    """Return linear coefficients corresponding to the Thiele-Innes parameters ABFG.
+
+    Parameters
+    ----------
+    t_day
+    spsi
+    cpsi
+    ecc
+    P_day
+    T0_day
+    TIC
+
+    Returns
+    -------
+     : ndarray
+
+    """
+
+    # compute eccentric anomaly
+    E_rad = eccentric_anomaly(ecc, t_day, T0_day, P_day)
+
+    # compute orbit projected on the sky
+    if np.all(ecc == 0):
+        X = np.cos(E_rad)
+        Y = np.sin(E_rad)
+    else:
+        X = np.cos(E_rad)-ecc
+        Y = np.sqrt(1.-ecc**2)*np.sin(E_rad)
+
+    # see Equation 8 in Sahlmann+2011
+    if scan_angle_definition == 'hipparcos':
+#         phi = (TIC[0]*spsi + TIC[1]*cpsi)*X + (TIC[2]*spsi + TIC[3]*cpsi)*Y
+        coeff_a = spsi * X
+        coeff_b = cpsi * X
+        coeff_f = spsi * Y
+        coeff_g = cpsi * Y
+    elif scan_angle_definition == 'gaia':
+        coeff_a = cpsi * X
+        coeff_b = spsi * X
+        coeff_f = cpsi * Y
+        coeff_g = spsi * Y
+          #         A            B                   F           G
+#         phi = (TIC[0]*cpsi + TIC[1]*spsi)*X + (TIC[2]*cpsi + TIC[3]*spsi)*Y
+
+    return np.array([coeff_a, coeff_b, coeff_f, coeff_g])
+
+
+
 def astrom_signalFast(t_day, spsi, cpsi, ecc, P_day, T0_day, TIC, scan_angle_definition='hipparcos'):
     """Return astrometric orbit signal.
 
@@ -4873,11 +4924,12 @@ def get_parallax_factors(ra_deg, dec_deg, time_jd, horizons_file_seed=None, verb
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=0, i_deg=45, T0_day = 0, plx_mas = 25, t_MJD='', spsi='', cpsi='', verbose=0):
+def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=0, i_deg=45, T0_day = 0,
+                   plx_mas = 25, t_MJD='', spsi='', cpsi='', verbose=0, return_tic=False, scan_angle_definition='hipparcos'):
 # /* DOCUMENT ARV -- simulate fast 1D astrometry for planet detection limits
 #    written: J. Sahlmann   18 May 2015   ESAC
 # */
-    m2_MS = m2_MJ * MJ2MS
+#     m2_MS = m2_MJ * MJ2MS
     d_pc  = 1./ (plx_mas/1000.)
     #**************ASTROMETRY********************************************************
     M = Ggrav * (m2_MJ * MJ_kg)**3. / ( m1_MS*MS_kg + m2_MJ*MJ_kg )**2. # mass term for the barycentric orbit of the primary mass
@@ -4885,7 +4937,9 @@ def pjGetOrbitFast(P_day=100, ecc=0, m1_MS=1, m2_MJ = 1, omega_deg=0, OMEGA_deg=
     a_rad = np.arctan2(a_m,d_pc*pc_m)
     a_mas = a_rad * rad2mas # semimajor axis in mas
     TIC     = thiele_innes_constants([a_mas   , omega_deg     , OMEGA_deg, i_deg]) #Thiele-Innes constants
-    phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC)
+    phi1 = astrom_signalFast(t_MJD,spsi,cpsi,ecc,P_day,T0_day,TIC, scan_angle_definition=scan_angle_definition)
+    if return_tic:
+        return phi1, TIC
     return phi1
 
 
