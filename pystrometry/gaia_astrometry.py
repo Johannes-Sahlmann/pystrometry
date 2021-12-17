@@ -263,6 +263,12 @@ class GaiaLpcParquetIad(GaiaValIad):
 #         super().__init__(source_id, epoch_data)
         self.source_id = source_id
         self.epoch_data = epoch_data
+        # temporary unit fix
+        self.epoch_data['alpha'] = self.epoch_data['ra']
+        self.epoch_data['delta'] = self.epoch_data['dec']
+        self.epoch_data['ra'] = np.rad2deg(self.epoch_data['alpha'])
+        self.epoch_data['dec'] = np.rad2deg(self.epoch_data['delta'])
+
         self.n_filtered_frames = 0
         self.n_original_frames = len(self.epoch_data)
         
@@ -495,9 +501,9 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 
         if 'varpiError' in parameter_dict.keys():
             ppm_description = ''
-            ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
-            ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
-            ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+            ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+            ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+            ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
         else:
             ppm_description = 'default'
 
@@ -625,9 +631,9 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
         orbit_descr += '\nScan angle spread = {:2.1f} deg'.format(np.ptp(np.rad2deg(iad.epoch_data['theta'])))
 
         ppm_description = ''
-        ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
-        ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
-        ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=2)
+        ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+        ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+        ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
 
         orbit_description[planet_index] = orbit_descr
 
@@ -686,5 +692,6 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
 
     axp.plot(argument_dict=argument_dict)
     axp.argument_dict = argument_dict
-    
+    axp.parameter_dict = parameter_dict
+    axp.attribute_dict = attribute_dict
     return axp
