@@ -190,8 +190,9 @@ class GaiaValIad:
         transits_overlapping_in_time = (min_max_time.shift(-1, fill_value=0)['min'] < min_max_time['max'])[:-1]
         if np.any(transits_overlapping_in_time):
             fov_transit_id_to_exclude = transits_overlapping_in_time[transits_overlapping_in_time == True].index
-            logging.debug(f'These transit numbers are overlapping in time: {fov_transit_id_to_exclude}')
+            logging.warning(f'These transit numbers are overlapping in time: {fov_transit_id_to_exclude}')
             if eliminate_transits_overlapping_in_time:
+                logging.warning(f'Removing {len(fov_transit_id_to_exclude)} transits')
                 self.epoch_df = self.epoch_df[self.epoch_df[self._fov_transit_id_field].isin(fov_transit_id_to_exclude) == False]
 
         self.epoch_data = Table.from_pandas(self.epoch_df)
@@ -208,48 +209,68 @@ class GaiaValIad:
         return cls(source_id,
                    Table.from_pandas(df.query('{}==@source_id'.format(df_source_id_field))))
 
-    def filter_on_frame_uncertainty(self, rse_filter_threshold=10):
+    def filter_on_frame_uncertainty(self, filter='rse', absolute_filter_threshold=None, rse_filter_threshold=10):
 
-        rse = robust_scatter_estimate(self.epoch_data[self._obs_uncertainty_field])
-        remove_index = \
-        np.where(np.abs(self.epoch_data[self._obs_uncertainty_field]) > rse_filter_threshold * rse)[
-            0]
+        if filter=='rse':
+            rse = robust_scatter_estimate(self.epoch_data[self._obs_uncertainty_field])
+            remove_index = \
+            np.where(np.abs(self.epoch_data[self._obs_uncertainty_field]) > rse_filter_threshold * rse)[
+                0]
+        elif filter=='simple':
+            remove_index = np.where(np.abs(self.epoch_data[self._obs_uncertainty_field]) > absolute_filter_threshold)[0]
+
         self.n_filtered_frames += len(remove_index)
-        print('RSE cut removed {} frames (of {})'.format(len(remove_index),
+        logging.info('{} uncertainty cut removed {} frames (of {})'.format(filter, len(remove_index),
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
+        self.epoch_df = self.epoch_data.to_pandas()
 
     def filter_on_epoch_uncertainty(self, filter_threshold=2.5):
 
-        epoch_signal_rms = self.epoch_data.group_by('OB').groups.aggregate(np.std)['da_mas_obs']
+        epoch_signal_rms = self.epoch_data.group_by(self._fov_transit_id_field).groups.aggregate(np.std)['da_mas']
         indx = np.where(epoch_signal_rms > filter_threshold * np.median(epoch_signal_rms))[0]
 
         # indx = np.where(epoch_signal_rms > filter_threshold * robust_scatter_estimate(epoch_signal_rms))[0]
 
-        epochs_to_exclude = np.unique(self.epoch_data.group_by('OB').groups[indx]['OB'].data)
+        epochs_to_exclude = np.unique(self.epoch_data.group_by(self._fov_transit_id_field).groups[indx][self._fov_transit_id_field].data)
         print(epochs_to_exclude)
         for epoch_to_exclude in epochs_to_exclude:
-            remove_index = np.where(self.epoch_data['OB'] == epoch_to_exclude)[0]
+            remove_index = np.where(self.epoch_data[self._fov_transit_id_field] == epoch_to_exclude)[0]
             # if remove_index:
             self.n_filtered_frames += len(remove_index)
-            print('Filter on epoch uncertainty cut removed {} frames (of {})'.format(self.n_filtered_frames,
+            logging.info('Filter on epoch uncertainty cut removed {} frames (of {})'.format(self.n_filtered_frames,
                                                              self.n_original_frames))
             self.epoch_data.remove_rows(remove_index)
+        self.epoch_df = self.epoch_data.to_pandas()
 
     def filter_on_strip(self, strip_threshold=2):
 
         remove_index = np.where(self.epoch_data['strip'] <= strip_threshold)[0]
         self.n_filtered_frames += len(remove_index)
-        print('Filter on strip>{} removed {} frames (of {})'.format(strip_threshold, len(remove_index),
+        logging.info('Filter on strip>{} removed {} frames (of {})'.format(strip_threshold, len(remove_index),
                                                          self.n_original_frames))
         self.epoch_data.remove_rows(remove_index)
-                
+        self.epoch_df = self.epoch_data.to_pandas()
+
+    def to_miksga_csv(self, out_dir, source_id='all', return_df=False):
+        """Export timeseries to csv."""
+        csvdf = self.epoch_df.copy()
+        rename_dict = {'source_id': 'sourceId', 't_min_t0_yr': 'T-T0_yr', 'transitid': 'transitId'}
+        csvdf.rename(columns=rename_dict, inplace=True)
+        columns = 'sourceId,T-T0_yr,cpsi_obs,spsi_obs,ppfact_obs,tcpsi_obs,tspsi_obs,da_mas_obs,errda_mas_obs,transitId'.split(',')
+        if return_df:
+            return csvdf[columns]
+        else:
+            outfile = os.path.join(out_dir, f'{source_id}_epoch_data_selection.csv')
+            csvdf[columns].to_csv(outfile)
+            logging.info(f'wrote {outfile}')
+
 
 class GaiaLpcParquetIad(GaiaValIad):
     """Class for LPC Data from parquet dumper."""
 
-#     _time_field = 'elapsedNanoSecs'
-    _time_field = 'deltat' # in years 
+    _time_field = 'elapsedNanoSecs'
+    # _time_field = 'deltat' # in years
     time_column = 't-t_ref' # in years 
     _transit_id_field = 'transitId'
     # _fov_transit_id_field = 'OB'
@@ -282,7 +303,7 @@ class GaiaLpcParquetIad(GaiaValIad):
     def verify_missing_values(self, remove_dubious_transits=True):    
         for key in ['w', 'obmt', 'theta']:
             if self.epoch_df[key].isnull().any():
-                logging.warn(f'Some of the {key} data are masked.')
+                logging.warning(f'Some of the {key} data are masked.')
                 if key == 'w':
                     logging.warn(f'Removing {len(self.epoch_df[key].isnull())}/{len(self.epoch_df)} rows where {key} data are masked.')
                     self.epoch_df = self.epoch_df[self.epoch_df[key].isnull() == False]
@@ -293,10 +314,11 @@ class GaiaLpcParquetIad(GaiaValIad):
         n_unique_times = self.epoch_df[self._time_field].nunique()
         n_rows_df = len(self.epoch_df)
         if n_unique_times != n_rows_df:
-            logging.warn(f'Values in time field {self._time_field} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
+            logging.warning(f'Values in time field {self._time_field} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
             value_counts = self.epoch_df[self._time_field].value_counts()
             logging.debug('Rows with duplicated timestamps:')
             logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[self._time_field].isin(value_counts[value_counts>1].index)][[self._time_field, self._transit_id_field, 'w', 'strip']]))
+            # 1/0
 #             logging.debug(f'epoch_data {self._time_field}:\n {epoch_df[self._time_field]}')
             if remove_dubious_transits:
                 dubious_transit_ids = self.epoch_df[self.epoch_df[self._time_field].isin(value_counts[value_counts>1].index)][self._transit_id_field].values
@@ -329,7 +351,7 @@ class GaiaLpcParquetIad(GaiaValIad):
 #         assert (self.epoch_df[self._time_field].diff()[1:] > 0).all()
         assert (self.epoch_df[self._fov_transit_id_field].diff()[1:] >= 0).all()
             
-        if np.any(np.diff(self.epoch_data['OB']) < 0):
+        if np.any(np.diff(self.epoch_data[self._fov_transit_id_field]) < 0):
             logging.debug(f'_fov_transit_id_field {self._fov_transit_id_field} is not monotonically increasing with time. Fixing it.')
 
     def sort_epochs_by_time(self, time_column=None, remove_dubious_times=True):   
@@ -339,10 +361,10 @@ class GaiaLpcParquetIad(GaiaValIad):
         n_unique_times = self.epoch_df[time_column].nunique()
         n_rows_df = len(self.epoch_df)
         if n_unique_times != n_rows_df:
-            logging.warn(f'Values in time field {time_column} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
+            logging.warning(f'Values in time field {time_column} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
             value_counts = self.epoch_df[time_column].value_counts()
             logging.debug('Rows with duplicated timestamps:')
-            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][[time_column, self._time_field, self._transit_id_field, 'w', 'strip']]))
+            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)].sort_values(time_column)[[time_column, self._time_field, self._transit_id_field, 'w', 'strip']]))
             if remove_dubious_times:
                 dubious_times = self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][time_column].values
                 logging.debug(f'Removing data for {len(dubious_times)} times')
@@ -374,10 +396,10 @@ class GaiaLpcParquetIad(GaiaValIad):
             self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
             assert len(np.unique(self.epoch_data['MJD'])) == len(np.unique(self.epoch_data['obmt']))
         else:
-            if 1:
+            if self._time_field == 'deltat':
                 self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
 #             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
-            else:
+            elif self._time_field == 'elapsedNanoSecs':
                 # public static final double REF_EPOCH_YR = 2010.0;
                 reference_time = Time(2010.0, format='jyear')
                 self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
@@ -417,6 +439,7 @@ class GaiaValIadHybrid(GaiaValIad):
         self.time_column = 't-t_ref'
         self.t_ref_mjd = reference_time.mjd
         self.reference_time = reference_time
+
 
 
 def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
@@ -590,6 +613,7 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     argument_dict['excess_noise'] = parameter_dict['excessNoise_mas']
     argument_dict['merit_function'] = parameter_dict['meritFunction']
 
+    axp.argument_dict = argument_dict
     axp.plot(argument_dict=argument_dict)
 
     return axp

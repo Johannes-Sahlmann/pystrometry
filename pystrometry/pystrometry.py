@@ -259,7 +259,7 @@ class OrbitSystem(object):
         mismatch = [key for key in attribute_dict.keys()
                     if key not in default_dict.keys()]
         if mismatch:
-            raise KeyError('Key{0} {1} {2} absent in default OrbitClass'
+            logging.warn('Key{0} {1} {2} absent in default OrbitClass. These will be ignored.'
                            .format('s' if len(mismatch) > 1 else '',
                                    mismatch,
                                    'are' if len(mismatch) > 1 else 'is'))
@@ -319,7 +319,7 @@ class OrbitSystem(object):
         description += "Secondary mass = {:4.3f} Msol \t = {:4.3f} Mjup \t = {:4.3f} MEarth\n".format(self.m2_MS, self.m2_MJ, self.m2_MJ * MJ_kg / ME_kg)
         description += "Mass ratio q=m2/m1 = {:4.6f}\n".format(self.m2_MS / self.m1_MS)
 
-        description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}\n'.format(self.a_barycentre_angular(), self.a_relative_angular())
+        description += 'a1_mas    = {:2.3f}, a_rel_mas = {:2.3f}, a_rel_au = {:2.3f}\n'.format(self.a_barycentre_angular(), self.a_relative_angular(), self.a_relative_linear()/AU_m)
         if self.delta_mag is not None:
             description += 'alpha_mas = {:2.3f}, delta_mag = {:2.3f}\n'.format(self.alpha_mas, self.delta_mag)
             description += 'fract.lum beta = {:2.4f}, lum.ratio=L2/L1 = {:2.4f}\n'.format(fractional_luminosity(0, self.delta_mag), luminosity_ratio(fractional_luminosity(0, self.delta_mag)))
@@ -2724,7 +2724,7 @@ class AstrometricOrbitPlotter():
 
 
 
-    def insert_orbit_epoch_residuals_plot(self, orb, argument_dict, direction='x', ax=None):
+    def insert_orbit_epoch_residuals_plot(self, orb, argument_dict, direction='x', ax=None, time_unit='relative', ms=10):
         """
 
         Parameters
@@ -2742,9 +2742,14 @@ class AstrometricOrbitPlotter():
         if ax is None:
             ax = pl.gca()
 
+        if time_unit == 'relative':
+            epoch_time = self.t_MJD_epoch - orb.Tref_MJD
+        else:
+            epoch_time = Time(self.t_MJD_epoch, format='mjd').to_value(time_unit)
+
         if direction=='x':
-            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX, 'ko')
-            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualX,
+            ax.plot(epoch_time, self.meanResidualX, 'ko', ms=ms)
+            ax.errorbar(epoch_time, self.meanResidualX,
                                 yerr=self.errResidualX, fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             ax.set_ylabel('O-C (mas)')
@@ -2753,8 +2758,8 @@ class AstrometricOrbitPlotter():
                         verticalalignment='top', transform=ax.transAxes)
 
         elif direction=='y':
-            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY, 'ko')
-            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.meanResidualY,
+            ax.plot(epoch_time, self.meanResidualY, 'ko')
+            ax.errorbar(epoch_time, self.meanResidualY,
                                 yerr=self.errResidualY, fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
@@ -2797,7 +2802,7 @@ class AstrometricOrbitPlotter():
         elif self.data_type == '2d':
 
             if direction=='x':
-                tmp_index =  self.xi
+                tmp_index = self.xi
             elif direction=='y':
                 tmp_index = self.yi
 
@@ -2921,7 +2926,7 @@ class AstrometricOrbitPlotter():
 
         return orb
 
-    def insert_orbit_plot(self, orb, argument_dict):
+    def insert_orbit_plot(self, orb, argument_dict, orbit_curve_color='0.5', orbit_curve_lw=1.5):
         """Add orbit to current figure.
 
         Returns
@@ -2930,51 +2935,6 @@ class AstrometricOrbitPlotter():
         """
         orb = self.compute_model_astrometry(orb, argument_dict)
 
-        # timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(self.t_curve_MJD, scan_angle_definition=argument_dict['scan_angle_definition'])
-        # t_epoch_MJD, cpsi_epoch, spsi_epoch, xi_epoch, yi_epoch   = get_cpsi_spsi_for_2Dastrometry(self.t_MJD_epoch, scan_angle_definition=argument_dict['scan_angle_definition'])
-        # t_frame_mjd, cpsi_frame, spsi_frame, xi_frame, yi_frame   = get_cpsi_spsi_for_2Dastrometry(np.array(self.data.epoch_data['MJD']), scan_angle_definition=argument_dict['scan_angle_definition'])
-        #
-        # if orb.solution_type in ['Acceleration7', 'Acceleration9']:
-        #     orbit_curve = orb.astrometric_acceleration(timestamps_1D, spsi_curve, cpsi_curve)
-        #     phi1_curve = orbit_curve[xi_curve]
-        #     phi2_curve = orbit_curve[yi_curve]
-        #
-        #     orbit_epoch = orb.astrometric_acceleration(t_epoch_MJD, spsi_epoch, cpsi_epoch)
-        #     phi1_model_epoch = orbit_epoch[xi_epoch]
-        #     phi2_model_epoch = orbit_epoch[yi_epoch]
-        #
-        #     orbit_frame = orb.astrometric_acceleration(t_frame_mjd, spsi_frame, cpsi_frame)
-        #     phi1_model_frame = orbit_frame[xi_frame]
-        #     phi2_model_frame = orbit_frame[yi_frame]
-        #
-        # else:
-        # #     actual orbit
-        #
-        #     if self.relative_orbit:
-        #         orbit_curve = orb.relative_orbit_fast(timestamps_1D, spsi_curve, cpsi_curve, shift_omega_by_pi=True,
-        #                                                  coordinate_system=self.relative_coordinate_system)
-        #     else:
-        #         orbit_curve = orb.photocenter_orbit(timestamps_1D, spsi_curve, cpsi_curve)
-        #     phi1_curve = orbit_curve[xi_curve]
-        #     phi2_curve = orbit_curve[yi_curve]
-        #
-        #     if self.relative_orbit:
-        #         orbit_epoch = orb.relative_orbit_fast(t_epoch_MJD, spsi_epoch, cpsi_epoch, shift_omega_by_pi=True,
-        #                                                  coordinate_system=self.relative_coordinate_system)
-        #     else:
-        #         orbit_epoch = orb.photocenter_orbit(t_epoch_MJD, spsi_epoch, cpsi_epoch)
-        #     phi1_model_epoch = orbit_epoch[xi_epoch]
-        #     phi2_model_epoch = orbit_epoch[yi_epoch]
-        #
-        #     if self.relative_orbit:
-        #         orbit_frame = orb.relative_orbit_fast(t_frame_mjd, spsi_frame, cpsi_frame, shift_omega_by_pi=True,
-        #                                                  coordinate_system=self.relative_coordinate_system)
-        #     else:
-        #         orbit_frame = orb.photocenter_orbit(t_frame_mjd, spsi_frame, cpsi_frame)
-        #     phi1_model_frame = orbit_frame[xi_frame]
-        #     phi2_model_frame = orbit_frame[yi_frame]
-
-        # show periastron
         if orb.solution_type not in ['Acceleration7', 'Acceleration9']:
             t_periastron_mjd, cpsi_periastron, spsi_periastron, xi_periastron, yi_periastron = get_cpsi_spsi_for_2Dastrometry(orb.Tp_day, scan_angle_definition=argument_dict['scan_angle_definition'])
             if self.relative_orbit:
@@ -2991,7 +2951,7 @@ class AstrometricOrbitPlotter():
 
 
 
-        pl.plot(orb.phi1_curve, orb.phi2_curve, ls='-', lw=1.5, color='0.5')
+        pl.plot(orb.phi1_curve, orb.phi2_curve, ls='-', lw=orbit_curve_lw, color=orbit_curve_color)
         pl.plot(orb.phi1_model_epoch, orb.phi2_model_epoch, marker='o', color='0.7', ms=5, mfc='none', ls='')
 
         if self.data_type in ['1d', 'gaia_2d']:
@@ -3045,7 +3005,7 @@ class AstrometricOrbitPlotter():
                         'k--', color='0.7', zorder=-50)
 
         # show origin
-        pl.plot(0, 0, 'kx')
+        pl.plot(0, 0, marker='x', ms=10, mew=3, zorder=-48, color=orbit_curve_color)
 
         if argument_dict['tmp_orbit_description'] is not None:
             pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',
@@ -3835,7 +3795,8 @@ class DetectionLimit(object):
 
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
-                 data_colour='k', include_degenerate_orbit=False, plot_parameters_ensemble=None):
+                 data_colour='k', include_degenerate_orbit=False, plot_parameters_ensemble=None,
+                 show_residuals=True):
     """
 
     Parameters
@@ -3852,9 +3813,9 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     """
     rv['jyear'] = [Time(rv['MJD'][i], format='mjd').jyear for i in range(len(rv))]
 
-    n_rows = 2
+    n_rows = 2 if show_residuals else 1
     n_columns = 1
-    fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_rows * 3.5, n_columns * 5.5),
+    fig, axes = pl.subplots(n_rows, n_columns, sharex=True, figsize=(n_columns * 7, n_rows * 3.5),
                             facecolor='w', edgecolor='k', squeeze=False)
 
     if 'rv_mps' in rv.colnames:
@@ -3864,6 +3825,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
         basic_unit = 'kmps'
         conversion_factor = 1e3
 
+    logging.info(basic_unit)
     unit_string = {'mps': 'm/s', 'kmps': 'km/s'}
 
     # fig.suptitle(self.title)
@@ -3876,9 +3838,11 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     n_rv = len(rv)
 
     if orbit_system is not None:
-        # orbit_system = copy.deepcopy(orbit_system)plot_ti2ge_monte_carlo
+        orbit_system = copy.deepcopy(orbit_system)
+        # logging.info(orbit_system.gamma_ms)
         # fit systemic velocity
         if estimate_systemic_velocity:
+            logging.info('Estimating systemic velocity from RV data and orbit model.')
             rv_mps = orbit_system.compute_radial_velocity(np.array(rv['MJD']))
             rv_kmps = rv_mps / 1000.
             onesvec = np.ones(n_rv)
@@ -3889,22 +3853,23 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             res.fit()
             gamma_kmps = np.float(res.p)
             gamma_mps = gamma_kmps*1e3
-            print('Systemic velocity {:2.3f} +/- {:2.3f} km/s'.format(gamma_kmps,
-                                                                      res.p_normalised_uncertainty[0]))
+            orbit_system.gamma_ms += gamma_mps
+            logging.info('Systemic velocity {:2.3f} +/- {:2.3f} {}'.format(orbit_system.gamma_ms,
+                                                                      res.p_normalised_uncertainty[0], basic_unit))
             rv['rv_model_kmps'] = rv_kmps + gamma_kmps
             rv['rv_model_mps'] = rv['rv_model_kmps'] *1e3
-            orbit_system.gamma_ms = gamma_mps
+            # orbit_system.gamma_ms = gamma_mps
         else:
             rv['rv_model_{}'.format(basic_unit)] = orbit_system.compute_radial_velocity(np.array(rv['MJD']))/conversion_factor
             gamma_mps = None
         # plot RV orbit of primary
         time_offset_day = rv['MJD'][0] - orbit_system.Tp_day
-        # print(orbit_system.gamma_ms)
+
         orbit_system.plot_rv_orbit(time_offset_day=time_offset_day, n_orbit=n_orbit,
-                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit)
+                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit, line_width=2)
         if plot_parameters_ensemble is not None:
             n_curve = 500
-            n_ensemble = len(plot_parameters_ensemble['offset_alphastar_mas'])
+            n_ensemble = len(plot_parameters_ensemble)
 
             # array to store RVs
             rv_ensemble = np.zeros((n_ensemble, n_curve))
@@ -3914,22 +3879,14 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             t_plot_ensemble_mjd = orbit_system.get_t_plot(time_offset_day=time_offset_day,
                                                           n_orbit=n_orbit, n_curve=n_curve,
                                                           format='mjd')
-
-            for key in ['m2_MS', 'm_tot_ms', 'P_year', 'a1_mas', 'arel_mas', 'arel_AU']:
-                if key in plot_parameters_ensemble.keys():
-                    plot_parameters_ensemble.pop(key)
-                plot_parameters_ensemble['Tref_MJD'] = np.ones(n_ensemble)*orbit_system.Tref_MJD
             for index_ensemble in range(n_ensemble):
                 tmp_system = OrbitSystem({key: samples[index_ensemble] for key, samples in plot_parameters_ensemble.items()})
-                rv_ensemble[index_ensemble, :] = tmp_system.compute_radial_velocity(t_plot_ensemble_mjd)/1e3
+                tmp_system.gamma_ms = orbit_system.gamma_ms
+                # tmp_system.Tref_MJD = orbit_system.Tref_MJD
+                rv_ensemble[index_ensemble, :] = tmp_system.compute_radial_velocity(t_plot_ensemble_mjd)/conversion_factor
             axes[0][0].fill_between(t_plot_ensemble_jyear, np.percentile(rv_ensemble, 15.865, axis=0),
                             np.percentile(rv_ensemble, 84.134, axis=0), color='0.7')
-            # 1/0
-            # orbit_system_ensemble = [OrbitSystem({})]
-            # for key,
-            # rv_mps = (self.compute_radial_velocity(t_day))
 
-            # 1/0
         if include_degenerate_orbit:
             orbit_system_degenerate = copy.deepcopy(orbit_system)
             orbit_system_degenerate.omega_deg += 180.
@@ -3943,20 +3900,22 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
                          '$\Sigma_\\mathrm{{O-C}}$={:2.3f} {}'.format(orbit_system.gamma_ms/1e3, len(rv), np.std(residuals), unit_string[basic_unit])
 
         # plot systemic velocity
+        logging.info(orbit_system.gamma_ms / conversion_factor)
         axes[0][0].axhline(y=orbit_system.gamma_ms / conversion_factor, color='0.5', ls=':', zorder=-50)
 
-        axes[1][0].plot(rv['jyear'], residuals, 'ko', label='_', mfc=data_colour)
-        axes[1][0].errorbar(rv['jyear'], residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+        if show_residuals:
+            axes[1][0].plot(rv['jyear'], residuals, 'ko', label='_', mfc=data_colour)
+            axes[1][0].errorbar(rv['jyear'], residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
 
-        axes[1][0].text(0.01, 0.99, rv_description, horizontalalignment='left',
-                verticalalignment='top', transform=axes[1][0].transAxes)
+            axes[1][0].text(0.01, 0.99, rv_description, horizontalalignment='left',
+                    verticalalignment='top', transform=axes[1][0].transAxes)
+            axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
+            axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
 
     axes[-1][0].set_xlabel('Time (Julian year)')
     # pl.legend()
     axes[0][0].set_ylabel('RV ({})'.format(unit_string[basic_unit]))
-    axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
-    axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
-    axes[1][0].set_xlabel('Time (Julian year)')
+    # axes[1][0].set_xlabel('Time (Julian year)')
 
     labels = axes[-1][0].get_xticklabels()
     plt.setp(labels, rotation=30)

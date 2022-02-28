@@ -45,11 +45,23 @@ class NssDataFrame:
         """Set _obj attribute and validate input dataframe."""
         self._obj = pandas_obj
 
-    def add_geometric_elements(self):
-        self._obj = pd.concat([self._obj, self._obj.apply(lambda x: pystrometry.geometric_elements(np.array(
-            [x['a_thiele_innes'], x['b_thiele_innes'], x['f_thiele_innes'], x['g_thiele_innes']])),
-                 axis=1, result_type='expand').rename(
-            columns={0: 'p1_a1_mas', 1: 'p1_omega_deg', 2: 'p1_OMEGA_deg', 3: 'p1_incl_deg'})], axis='columns')
+    def add_geometric_elements(self, post_process=True):
+        # self._obj = pd.concat([self._obj, self._obj.apply(lambda x: pystrometry.geometric_elements(np.array(
+        #     [x['a_thiele_innes'], x['b_thiele_innes'], x['f_thiele_innes'], x['g_thiele_innes']])),
+        #          axis=1, result_type='expand').rename(
+        #     columns={0: 'p1_a1_mas', 1: 'p1_omega_deg', 2: 'p1_OMEGA_deg', 3: 'p1_incl_deg'})], axis='columns')
+
+        thiele_innes_parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
+        thiele_innes_array = self._obj[thiele_innes_parameters].to_numpy().T
+        geometric_parameters = geometric_elements(thiele_innes_array, post_process=post_process)
+        # logging.debug(self._obj['source_id'].info())
+        # concat converts source_id field from int64 to float64 (because some GE rows are NaN). avoid this
+        self._obj[['p1_a1_mas', 'p1_omega_deg', 'p1_OMEGA_deg', 'p1_incl_deg']] = geometric_parameters.T
+        # ge_df = pd.DataFrame(geometric_parameters.T, columns=['p1_a1_mas', 'p1_omega_deg', 'p1_OMEGA_deg', 'p1_incl_deg'])
+        # self._obj = pd.concat([self._obj, ge_df], axis='columns')
+        # logging.debug(self._obj['source_id'].info())
+        if 'period' in self._obj.columns:
+            self._obj.loc[:, 'p1_period_day'] = self._obj.loc[:, 'period']
         return self._obj
 
     def add_geometric_elements_unc(self):
@@ -68,6 +80,7 @@ class NssDataFrame:
             return np.concatenate((ge1, ge1_err))
 
         if ('p1_a1_mas' not in self._obj.columns) and ('sigma_p1_a1_mas' not in self._obj.columns):
+        # if ('sigma_p1_a1_mas' not in self._obj.columns):
             tmp = self._obj.apply(lambda x: compute_ge(x['corr_vec'], x['a_thiele_innes'], x['b_thiele_innes'], x['f_thiele_innes'], x['g_thiele_innes'],
                                                        x['a_thiele_innes_error'], x['b_thiele_innes_error'], x['f_thiele_innes_error'], x['g_thiele_innes_error']),
                                   axis=1, result_type='expand').rename(
@@ -75,7 +88,9 @@ class NssDataFrame:
                          4: 'sigma_p1_a1_mas', 5: 'sigma_p1_omega_deg', 6: 'sigma_p1_OMEGA_deg', 7: 'sigma_p1_incl_deg'})
             tmp['p1_a1_div_sigma_a1_mas'] = tmp['p1_a1_mas']/tmp['sigma_p1_a1_mas']
 
-            self._obj['sigma_p1_period_day'] = self._obj['period_error']
+            if 'period' in self._obj.columns:
+                self._obj.loc[:, 'p1_period_day'] = self._obj.loc[:, 'period']
+                self._obj['sigma_p1_period_day'] = self._obj['period_error']
             self._obj['sigma_p1_ecc'] = self._obj['eccentricity_error']
 
             self._obj = pd.concat([self._obj, tmp], axis='columns')
@@ -83,7 +98,276 @@ class NssDataFrame:
             print('Columns already exist!')
         return self._obj
 
+
+    filled_solution_parameters = {'Orbital': ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                              'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']}
+    filled_solution_parameters['ExtrasolarPlanets'] = filled_solution_parameters['Orbital']
+    filled_solution_parameters['AstroSpectroSB1'] = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                              'f_thiele_innes', 'g_thiele_innes', 'c_thiele_innes', 'h_thiele_innes',
+                              'center_of_mass_velocity', 'eccentricity', 'period', 't_periastron']
+
+
+
+    @staticmethod
+    def get_indices_in_corr_vec(parameters=None):
+        if parameters == ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']:
+            parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+            n_params_total = 12
+            parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total),
+                                                            parameter_index_in_bit_index)
+            # iu1 = np.triu_indices(n_params_total, k=+1)
+            iu1 = np.tril_indices(n_params_total, k=-1)
+            a = np.zeros((n_params_total, n_params_total))
+            a[iu1] = 1
+            a[parameter_index_not_in_bit_index, :] = 0
+            a[:, parameter_index_not_in_bit_index] = 0
+            # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+            indices_in_corr_vec = np.where(a[iu1])[0]
+
+        return indices_in_corr_vec
+
+
+    @staticmethod
+    def draw_monte_carlo_solution_parameters(row, n_mc=1000, parameters=None, indices_in_corr_vec=None):
+        """ Return dataframe with MC samples for an individual solution."""
+
+        if parameters is None:
+            # sample all parameters
+            parameters = NssDataFrame.filled_solution_parameters[row['nss_solution_type']]
+
+        # bin(df.loc[83, 'bit_index'])
+        elif parameters == ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']:
+
+            if 0:
+                # determine index in corr_vec corresponding to ABFG
+                parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+                n_params_total = 12
+                parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total),
+                                                                parameter_index_in_bit_index)
+                # iu1 = np.triu_indices(n_params_total, k=+1)
+                iu1 = np.tril_indices(n_params_total, k=-1)
+                a = np.zeros((n_params_total, n_params_total))
+                a[iu1] = 1
+                a[parameter_index_not_in_bit_index, :] = 0
+                a[:, parameter_index_not_in_bit_index] = 0
+                # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+                indices_in_corr_vec = np.where(a[iu1])[0]
+
+                # row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+                # logging.debug(index)
+                # logging.debug(self._obj['corr_vec'].info())
+                # logging.debug(self._obj.loc[index, 'corr_vec'][indices_in_corr_vec])
+
+            row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+
+
+        cov_matrix = covariance_matrix(row, parameters=parameters)
+        solution_parameters = row[parameters].astype(np.float)
+
+        # draw random data accounting for covariances
+        if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
+            return None
+        # try:
+        np.random.seed(row['source_id']%10000)
+        data_mc = np.random.multivariate_normal(solution_parameters, cov_matrix, size=n_mc)
+
+        df = pd.DataFrame(data_mc, columns=parameters)
+        return df
+
+    @staticmethod
+    def compute_monte_carlo_resampled_quantiles(row, n_mc=1000, parameters=['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes'],
+                                                indices_in_corr_vec=None):
+        """Use row input to resample parameters according to covariance matrix and return quantiles.
+
+        Parameters
+        ----------
+        row
+        n_mc
+        parameters
+
+        Returns
+        -------
+
+        """
+
+        mcdf = NssDataFrame.draw_monte_carlo_solution_parameters(row, n_mc, parameters, indices_in_corr_vec)
+        if mcdf is None:
+            return None
+        mcdf = mcdf.nssmc.add_geometric_elements()
+        # mcdf = mcdf.nssmc.add_companion_mass_estimate(m1_MS=m1_MS, sigma_m1_MS=sigma_m1_MS)
+        mcdf_quantiles = mcdf.nssmc.get_quantiles()
+        return mcdf_quantiles.iloc[0]
+
+
+
+    # def sample_solution_parameters_monte_carlo2(self, index, n_mc=1000, parameters=None):
+    #     """ Return dataframe with MC samples for an individual solution."""
+    #     # logging.debug(f'Call to sample_solution_parameters_monte_carlo with index={index}')
+    #
+    #     row = self._obj.loc[index]
+    #
+    #     # bin(df.loc[83, 'bit_index'])
+    #     if parameters == ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']:
+    #
+    #         # determine index in corr_vec corresponding to ABFG
+    #         parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+    #         n_params_total = 12
+    #         parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total),
+    #                                                         parameter_index_in_bit_index)
+    #         # iu1 = np.triu_indices(n_params_total, k=+1)
+    #         iu1 = np.tril_indices(n_params_total, k=-1)
+    #         a = np.zeros((n_params_total, n_params_total))
+    #         a[iu1] = 1
+    #         a[parameter_index_not_in_bit_index, :] = 0
+    #         a[:, parameter_index_not_in_bit_index] = 0
+    #         # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+    #         indices_in_corr_vec = np.where(a[iu1])[0]
+    #
+    #         # row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+    #         # logging.debug(index)
+    #         # logging.debug(self._obj['corr_vec'].info())
+    #         # logging.debug(self._obj.loc[index, 'corr_vec'][indices_in_corr_vec])
+    #
+    #         row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+    #
+    #
+    #     else:
+    #
+    #         if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
+    #             parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+    #                           'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']
+    #         if self._obj.loc[index, 'nss_solution_type'] in ['AstroSpectroSB1']:
+    #             parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+    #                           'f_thiele_innes', 'g_thiele_innes', 'c_thiele_innes', 'h_thiele_innes',
+    #                           'center_of_mass_velocity', 'eccentricity', 'period', 't_periastron']
+    #
+    #     #
+    #     # # determine index in corr_vec corresponding to ABFG
+    #     # parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+    #     # n_params_total = 12
+    #     # parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total), parameter_index_in_bit_index)
+    #     # # iu1 = np.triu_indices(n_params_total, k=+1)
+    #     # iu1 = np.tril_indices(n_params_total, k=-1)
+    #     # a = np.zeros((n_params_total, n_params_total))
+    #     # a[iu1] = 1
+    #     # a[parameter_index_not_in_bit_index, :] = 0
+    #     # a[:, parameter_index_not_in_bit_index] = 0
+    #     # # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+    #     # indices_in_corr_vec = np.where(a[iu1])[0]
+    #     #
+    #     # def compute_ge_mc(solution, n_mc=1000):
+    #     #
+    #     #     parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
+    #     #     if 1:
+    #     #         # print(len(solution['corr_vec']))
+    #     #         # print(solution['corr_vec'])
+    #     #         # print(covariance_matrix(solution)[5:9, 5:9])
+    #     #
+    #     #         row = solution.copy()
+    #     #         # print(row['corr_vec'])
+    #     #         row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+    #     #             # print(row['corr_vec'])
+    #     #         cov_matrix = covariance_matrix(row, parameters=parameters)
+    #     #         # print(cov_matrix)
+    #     #     else:
+    #     cov_matrix = covariance_matrix(row, parameters=parameters)
+    #     # solution_parameters = self._obj.loc[index, parameters].astype(np.float)
+    #     solution_parameters = row[parameters].astype(np.float)
+    #
+    #     # draw random data accounting for covariances
+    #     if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
+    #         return None
+    #     # try:
+    #     np.random.seed(index)
+    #     data_mc = np.random.multivariate_normal(solution_parameters, cov_matrix, size=n_mc)
+    #
+    #     df = pd.DataFrame(data_mc, columns=parameters)
+    #     return df
+
+
+    def sample_solution_parameters_monte_carlo(self, index, n_mc=1000):
+        """ Return dataframe with MC samples for an individual solution."""
+        # logging.debug(f'Call to sample_solution_parameters_monte_carlo with index={index}')
+
+        if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
+            parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                          'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']
+        if self._obj.loc[index, 'nss_solution_type'] in ['AstroSpectroSB1']:
+            parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                          'f_thiele_innes', 'g_thiele_innes', 'c_thiele_innes', 'h_thiele_innes',
+                          'center_of_mass_velocity', 'eccentricity', 'period', 't_periastron']
+
+        #
+        # # determine index in corr_vec corresponding to ABFG
+        # parameter_index_in_bit_index = np.array([5, 6, 7, 8])
+        # n_params_total = 12
+        # parameter_index_not_in_bit_index = np.setdiff1d(np.arange(n_params_total), parameter_index_in_bit_index)
+        # # iu1 = np.triu_indices(n_params_total, k=+1)
+        # iu1 = np.tril_indices(n_params_total, k=-1)
+        # a = np.zeros((n_params_total, n_params_total))
+        # a[iu1] = 1
+        # a[parameter_index_not_in_bit_index, :] = 0
+        # a[:, parameter_index_not_in_bit_index] = 0
+        # # indices_in_corr_vec = np.where(a[iu1].flatten())[0]
+        # indices_in_corr_vec = np.where(a[iu1])[0]
+        #
+        # def compute_ge_mc(solution, n_mc=1000):
+        #
+        #     parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
+        #     if 1:
+        #         # print(len(solution['corr_vec']))
+        #         # print(solution['corr_vec'])
+        #         # print(covariance_matrix(solution)[5:9, 5:9])
+        #
+        #         row = solution.copy()
+        #         # print(row['corr_vec'])
+        #         row['corr_vec'] = row['corr_vec'][indices_in_corr_vec]
+        #             # print(row['corr_vec'])
+        #         cov_matrix = covariance_matrix(row, parameters=parameters)
+        #         # print(cov_matrix)
+        #     else:
+        cov_matrix = covariance_matrix(self._obj.loc[index], parameters=parameters)
+        solution_parameters = self._obj.loc[index, parameters].astype(np.float)
+
+        # draw random data accounting for covariances
+        if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
+            return None
+        # try:
+        np.random.seed(index)
+        data_mc = np.random.multivariate_normal(solution_parameters, cov_matrix, size=n_mc)
+
+        df = pd.DataFrame(data_mc, columns=parameters)
+        return df
+
+    # def compute_monte_carlo_resampled_quantiles(self, index, n_mc=1000, parameters=['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']):
+    #
+    #     # logging.debug(f'compute_monte_carlo_resampled_quantiles called with index={index}')
+    #
+    #     mcdf = self.sample_solution_parameters_monte_carlo2(index, n_mc, parameters=parameters)
+    #     mcdf = mcdf.nssmc.add_geometric_elements()
+    #     # mcdf = mcdf.nssmc.add_companion_mass_estimate(m1_MS=m1_MS, sigma_m1_MS=sigma_m1_MS)
+    #     mcdf_quantiles = mcdf.nssmc.get_quantiles()
+    #     # logging.debug(mcdf_quantiles)
+    #     # 1/0
+    #     return mcdf_quantiles.iloc[0]
+
+
+
     def add_geometric_elements_uncertainty_monte_carlo(self):
+        """ Add GE with uncertainties using Monte Carlo for error propagation."""
+
+        parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
+        indices_in_corr_vec = NssDataFrame.get_indices_in_corr_vec(parameters)
+        tmp = self._obj.apply(NssDataFrame.compute_monte_carlo_resampled_quantiles, axis=1,
+                              indices_in_corr_vec=indices_in_corr_vec)
+        self._obj = pd.concat([self._obj, tmp], axis='columns')
+        self._obj['significance_mc'] = self._obj['p1_a1_mas_mc_0.5']/self._obj['p1_a1_mas_mc_sigma_mean']
+        self._obj['cos(inclination)'] = np.cos(np.deg2rad(self._obj['p1_incl_deg']))
+        self._obj['cos(inclination)_mc'] = np.cos(np.deg2rad(self._obj['p1_incl_deg_mc_0.5']))
+
+        return self._obj
+
+    def add_geometric_elements_uncertainty_monte_carlo_deprecated(self):
         """ Add GE with uncertainties using Monte Carlo for error propagation."""
 
         # determine index in corr_vec corresponding to ABFG
@@ -100,6 +384,7 @@ class NssDataFrame:
         indices_in_corr_vec = np.where(a[iu1])[0]
 
         def compute_ge_mc(solution, n_mc=1000):
+            # logging.info('compute_ge_mc called with source={}'.format(solution['source_id']))
 
             parameters = ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']
             if 1:
@@ -162,11 +447,20 @@ class NssDataFrame:
         except ImportError:
             logging.warn('Please install seaborn to use this method.')
             return
-        cov_matrix = covariance_matrix(self._obj.loc[index])[5:9, 5:9]
+        if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
+            parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                          'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']
+        if self._obj.loc[index, 'nss_solution_type'] in ['AstroSpectroSB1']:
+            parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
+                          'f_thiele_innes', 'g_thiele_innes', 'c_thiele_innes', 'h_thiele_innes',
+                          'center_of_mass_velocity', 'eccentricity', 'period', 't_periastron']
+
+        cov_matrix = covariance_matrix(self._obj.loc[index], parameters=parameters)[5:9, 5:9]
 
         thiele_innes_parameters = self._obj.loc[
             index, ['a_thiele_innes', 'b_thiele_innes', 'f_thiele_innes', 'g_thiele_innes']].astype(
             float)
+        np.random.seed(index)
         data_mc = np.random.multivariate_normal(thiele_innes_parameters, cov_matrix, size=n_mc)
 
         geometric_parameters = geometric_elements(np.array(data_mc).T, post_process=True)
@@ -215,6 +509,7 @@ class NssDataFrame:
         a_m = pystrometry.convert_from_angular_to_linear(self._obj['p1_a1_mas'], self._obj['parallax'])
         m2_kg = pystrometry.pjGet_m2(m1_MS * pystrometry.MS_kg, a_m, self._obj['period'])
         self._obj['m2_MJ'] = m2_kg / pystrometry.MJ_kg
+        self._obj['m2_MS'] = m2_kg / pystrometry.MS_kg
 
         return self._obj
 
@@ -226,7 +521,7 @@ class NssDataFrame:
         self._obj['bp_rp'] = self._obj['phot_bp_mean_mag'] - self._obj['phot_rp_mean_mag']
         return self._obj
 
-    def plot_cmd(self, label=None, title=None):
+    def plot_cmd(self, label=None, title=None, ax=None):
         """Plot colour magnitude diagram."""
 
         if 'absolute_phot_g_mean_mag' not in self._obj.columns:
@@ -242,7 +537,8 @@ class NssDataFrame:
             return 5.5 + 3 * x
 
         # fig = pl.figure()
-        ax = pl.gca()
+        if ax is None:
+            ax = pl.gca()
 
         self._obj.plot('bp_rp', 'absolute_phot_g_mean_mag', kind='scatter', ax=ax, c='k', label=label)  # , c='parallax'
         pl.title('{} ({} sources)'.format(title, len(self._obj)))
@@ -254,6 +550,73 @@ class NssDataFrame:
         pl.ylabel('$M_G$')
 
         pl.show()
+        # return ax
+
+@pd.api.extensions.register_dataframe_accessor("nssmc")
+class NssMonteCarloDataFrame(NssDataFrame):
+    """Class to hold data used in Monte Carlo sampling of NSS solution."""
+
+    def add_companion_mass_estimate(self, m1_MS=1., sigma_m1_MS=0, delta_mag=None):
+        """Add m2_MJ column to dataframe."""
+
+        if 'p1_a1_mas' not in self._obj.columns:
+            self.add_geometric_elements()
+
+        n_mc = len(self._obj)
+        m1_MS = np.ones(n_mc) * m1_MS
+        if sigma_m1_MS != 0:
+            np.random.seed(1234)
+            m1_MS += np.random.normal(0, sigma_m1_MS, n_mc)
+
+        self._obj['m1_MS'] = m1_MS
+
+        a_m = pystrometry.convert_from_angular_to_linear(self._obj['p1_a1_mas'], self._obj['parallax'])
+        m2_kg = pystrometry.pjGet_m2(self._obj['m1_MS'] * pystrometry.MS_kg, a_m, self._obj['period'])
+        self._obj['m2_MJ'] = m2_kg / pystrometry.MJ_kg
+        self._obj['m2_MS'] = m2_kg / pystrometry.MS_kg
+
+        return self._obj
+
+
+    def get_quantiles(self, quantiles=[0.16, 0.5, 0.84]):
+        # compute quantiles
+        df1 = self._obj.quantile(quantiles)
+
+        # construct single_row dataframe with all quantiles
+        df2 = df1.stack().swaplevel()
+        df2.index = df2.index.map('{0[0]}_mc_{0[1]}'.format)
+        df3 = df2.to_frame().T
+
+        keys = self._obj.columns
+        for key in keys:
+            df3[f'{key}_mc_sigma_upper'] = df3[f'{key}_mc_{quantiles[2]}'] - df3[f'{key}_mc_{quantiles[1]}']
+            df3[f'{key}_mc_sigma_lower'] = df3[f'{key}_mc_{quantiles[1]}'] - df3[f'{key}_mc_{quantiles[0]}']
+            df3[f'{key}_mc_sigma_mean'] = df3[[f'{key}_mc_sigma_upper', f'{key}_mc_sigma_lower']].mean(axis=1)
+        return df3
+
+
+def bfp_latex(x, key, prec=2):
+    """Return formatted latex string showing median and upper/lower confidence interval"""
+    value = x[f'{key}_mc_0.5']
+    upper = x[f'{key}_mc_sigma_upper']
+    lower = -1*x[f'{key}_mc_sigma_lower']
+    s = f'{{{value:2.{prec}f}}}^{{{upper:+2.{prec}f}}}_{{{lower:+2.{prec}f}}}'
+    return s
+
+def parameter_with_error_latex(x, key, prec=2, suffix=None, prefix=None, include_dollar=True):
+    """Return formatted latex string showing parameter with simple error"""
+    value = x[f'{key}']
+    if suffix is not None:
+        uncertainty = x[f'{key}{suffix}']
+    elif prefix is not None:
+        uncertainty = x[f'{prefix}{key}']
+
+    s = f'{{{value:2.{prec}f}}}\pm{{{uncertainty:2.{prec}f}}}'
+    if include_dollar:
+        s = '$'+s+'$'
+    return s
+
+
 
 
 def apply_elimination_cuts(table, selection_cuts, parameter_mapping):
@@ -1034,7 +1397,7 @@ def correlation_matrix(corr_vec):
     """
 
     size = int((1+np.sqrt(8*len(corr_vec)+1))/2)
-
+    # logging.debug(f'correlation_matrix size is {size}')
     corr_mat = np.ones([size, size], dtype=float)
 
     # Fill in lower triangle with corr_vec
