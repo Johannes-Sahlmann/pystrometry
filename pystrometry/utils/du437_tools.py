@@ -289,7 +289,7 @@ class NssDataFrame:
         """ Return dataframe with MC samples for an individual solution."""
         # logging.debug(f'Call to sample_solution_parameters_monte_carlo with index={index}')
 
-        if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
+        if ('Orbital' in self._obj.loc[index, 'nss_solution_type']) or (self._obj.loc[index, 'nss_solution_type'] in ['ExtrasolarPlanets']):
             parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
                           'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']
         if self._obj.loc[index, 'nss_solution_type'] in ['AstroSpectroSB1']:
@@ -447,7 +447,9 @@ class NssDataFrame:
         except ImportError:
             logging.warn('Please install seaborn to use this method.')
             return
-        if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
+        if ('Orbital' in self._obj.loc[index, 'nss_solution_type']) or \
+                (self._obj.loc[index, 'nss_solution_type'] in ['ExtrasolarPlanets']):
+        # if self._obj.loc[index, 'nss_solution_type'] in ['Orbital', 'ExtrasolarPlanets']:
             parameters = ['ra', 'dec', 'parallax', 'pmra', 'pmdec', 'a_thiele_innes', 'b_thiele_innes',
                           'f_thiele_innes', 'g_thiele_innes', 'eccentricity', 'period', 't_periastron']
         if self._obj.loc[index, 'nss_solution_type'] in ['AstroSpectroSB1']:
@@ -510,6 +512,7 @@ class NssDataFrame:
         m2_kg = pystrometry.pjGet_m2(m1_MS * pystrometry.MS_kg, a_m, self._obj['period'])
         self._obj['m2_MJ'] = m2_kg / pystrometry.MJ_kg
         self._obj['m2_MS'] = m2_kg / pystrometry.MS_kg
+        self._obj['m1_MS'] = m1_MS
 
         return self._obj
 

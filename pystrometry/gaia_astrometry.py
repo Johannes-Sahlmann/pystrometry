@@ -305,7 +305,7 @@ class GaiaLpcParquetIad(GaiaValIad):
             if self.epoch_df[key].isnull().any():
                 logging.warning(f'Some of the {key} data are masked.')
                 if key == 'w':
-                    logging.warn(f'Removing {len(self.epoch_df[key].isnull())}/{len(self.epoch_df)} rows where {key} data are masked.')
+                    logging.warning(f'Removing {len(self.epoch_df[key].isnull())}/{len(self.epoch_df)} rows where {key} data are masked.')
                     self.epoch_df = self.epoch_df[self.epoch_df[key].isnull() == False]
         
         if len(self.epoch_df) == 0:

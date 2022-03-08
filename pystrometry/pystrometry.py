@@ -2364,6 +2364,7 @@ class AstrometricOrbitPlotter():
                             'make_xy_residual_figure': False,
                             'make_ppm_figure': False,
                             'plot_dir': os.getcwd(),
+                            'time_unit': 'relative',
                             }
 
             for key, value in default_argument_dict.items():
@@ -2492,9 +2493,13 @@ class AstrometricOrbitPlotter():
                 self.insert_orbit_epoch_residuals_plot(orb, argument_dict)
                 pl.subplot(n_rows, n_columns, panel_index_offset+4)
                 self.insert_orbit_frame_residuals_plot(orb, argument_dict, direction='x')
-                pl.xlabel('MJD - {:3.1f}'.format(orb.Tref_MJD))
+                if argument_dict['time_unit'] == 'jyear':
+                    xlabel = 'Time (Julian Year)'
+                else:
+                    xlabel = 'MJD - {:3.1f}'.format(orb.Tref_MJD)
+                pl.xlabel(xlabel)
 
-                # fig.tight_layout(h_pad=0.0)
+                fig.tight_layout(h_pad=0.1, w_pad=0.1)
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
@@ -2502,10 +2507,10 @@ class AstrometricOrbitPlotter():
                                                             name_seed_2.replace('.', 'p')))
                     try:
                         fig.savefig(figure_file_name, transparent=False, bbox_inches='tight',
-                                pad_inches=0.05)
+                                pad_inches=0.05, dpi=300)
                         logging.info(f'Saved figure as {figure_file_name}')
                     except ValueError:
-                        print('WARNING: Could not save {}'.format(figure_file_name))
+                        logging.info('WARNING: Could not save {}'.format(figure_file_name))
 
             ##################################################
             # TRIPLE PANEL FIGURE (PPM + ORBIT + EPOCH RESIDUALS)
@@ -2683,11 +2688,18 @@ class AstrometricOrbitPlotter():
         if ax is None:
             ax = pl.gca()
 
+        time_unit = argument_dict['time_unit']
+        if time_unit == 'relative':
+            epoch_time = self.t_MJD_epoch - orb.Tref_MJD
+        else:
+            epoch_time = Time(self.t_MJD_epoch, format='mjd').to_value(time_unit)
+
+
         ax.axhline(y=0, color='0.5', ls=':', zorder=-50)
 
         if direction=='x':
-            ax.plot(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, 'ko')
-            ax.errorbar(self.t_MJD_epoch - orb.Tref_MJD, self.Xmean_orb, yerr=self.errResidualX,
+            ax.plot(epoch_time, self.Xmean_orb, 'ko', ms=6)
+            ax.errorbar(epoch_time, self.Xmean_orb, yerr=self.errResidualX,
                                 fmt='none', ecolor='k')
             if argument_dict['orbit_signal_description'] is not None:
                 pl.text(0.01, 0.99, argument_dict['orbit_signal_description'], horizontalalignment='left',
@@ -2724,7 +2736,7 @@ class AstrometricOrbitPlotter():
 
 
 
-    def insert_orbit_epoch_residuals_plot(self, orb, argument_dict, direction='x', ax=None, time_unit='relative', ms=10):
+    def insert_orbit_epoch_residuals_plot(self, orb, argument_dict, direction='x', ax=None, time_unit='relative', ms=6):
         """
 
         Parameters
@@ -2741,6 +2753,10 @@ class AstrometricOrbitPlotter():
 
         if ax is None:
             ax = pl.gca()
+
+        if 'time_unit' in argument_dict.keys():
+            time_unit = argument_dict['time_unit']
+
 
         if time_unit == 'relative':
             epoch_time = self.t_MJD_epoch - orb.Tref_MJD
@@ -2764,7 +2780,7 @@ class AstrometricOrbitPlotter():
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
 
-    def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None):
+    def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None, mark_outliers=False):
         """
 
         Parameters
@@ -2782,17 +2798,23 @@ class AstrometricOrbitPlotter():
         if ax is None:
             ax = pl.gca()
 
+        time_unit = argument_dict['time_unit']
+        if time_unit == 'relative':
+            epoch_time = self.data.epoch_data['MJD'] - orb.Tref_MJD
+        else:
+            epoch_time = Time(self.data.epoch_data['MJD'], format='mjd').to_value(time_unit)
+
         if self.data_type == '1d':
-            ax.plot(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, 'ko', mfc='k', ms=4)
-            ax.errorbar(self.data.epoch_data['MJD'] - orb.Tref_MJD, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt='none', ecolor='k')
+            ax.plot(epoch_time, self.residuals, 'ko', mfc='k', ms=4)
+            ax.errorbar(epoch_time, self.residuals, yerr=self.data.epoch_data['sigma_da_mas'], fmt='none', ecolor='k')
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
             # 1/0
-            if len(self.outlier_1D_index) != 0:
-                ax.plot(self.data.epoch_data['MJD'][self.outlier_1D_index] - orb.Tref_MJD, self.residuals[self.outlier_1D_index], 'ko', mfc='b',
+            if mark_outliers and (len(self.outlier_1D_index) != 0):
+                ax.plot(epoch_time[self.outlier_1D_index], self.residuals[self.outlier_1D_index], 'ko', mfc='b',
                         ms=4)
                 # 1/0
-                ax.errorbar(np.array(self.data.epoch_data['MJD'])[self.outlier_1D_index] - orb.Tref_MJD, self.residuals[self.outlier_1D_index],
+                ax.errorbar(epoch_time[self.outlier_1D_index], self.residuals[self.outlier_1D_index],
                             yerr=np.array(self.data.epoch_data['sigma_da_mas'])[self.outlier_1D_index], fmt='none', ecolor='b')
 
             if argument_dict['frame_omc_description'] is not None:
@@ -2811,7 +2833,7 @@ class AstrometricOrbitPlotter():
             mfc = mec
             marker='.'
             alpha = 0.5
-            ax.plot(self.data.epoch_data['MJD'][tmp_index] - orb.Tref_MJD, self.residuals[tmp_index], mec=mec, mfc=mfc, marker=marker, ls='none', alpha=alpha)
+            ax.plot(epoch_time[tmp_index], self.residuals[tmp_index], mec=mec, mfc=mfc, marker=marker, ls='none', alpha=alpha)
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
         ax.set_ylabel('Frame O-C (mas)')
