@@ -243,6 +243,15 @@ class GaiaValIad:
             self.epoch_data.remove_rows(remove_index)
         self.epoch_df = self.epoch_data.to_pandas()
 
+    def filter_on_df_index(self, index_keep):
+        """Keep only frames that are in index_keep."""
+        n_current_frames = len(self.epoch_df)
+        n_index_reject = n_current_frames - len(index_keep)
+        self.n_filtered_frames += n_index_reject
+        self.epoch_df = self.epoch_df.loc[index_keep]
+        self.epoch_data = Table.from_pandas(self.epoch_df)
+        logging.info('Filter on df index removed {} frames (of {})'.format(n_index_reject, n_current_frames))
+
     def filter_on_strip(self, strip_threshold=2):
 
         remove_index = np.where(self.epoch_data['strip'] <= strip_threshold)[0]
@@ -295,7 +304,7 @@ class GaiaLpcParquetIad(GaiaValIad):
         
         self.epoch_df = self.epoch_data.to_pandas()
 #         self.sort_epochs_by_time(time_column=self._time_field)
-        self.verify_missing_values()
+#         self.verify_missing_values()
         self.set_custom_fields()
         
 
@@ -308,8 +317,8 @@ class GaiaLpcParquetIad(GaiaValIad):
                     logging.warning(f'Removing {len(self.epoch_df[key].isnull())}/{len(self.epoch_df)} rows where {key} data are masked.')
                     self.epoch_df = self.epoch_df[self.epoch_df[key].isnull() == False]
         
-        if len(self.epoch_df) == 0:
-            raise ValueError('IAD do not contain valid AL measurements. (all null)')                            
+        # if len(self.epoch_df) == 0:
+        #     raise ValueError('IAD do not contain valid AL measurements. (all null)')
         
         n_unique_times = self.epoch_df[self._time_field].nunique()
         n_rows_df = len(self.epoch_df)
@@ -339,7 +348,7 @@ class GaiaLpcParquetIad(GaiaValIad):
 
         al_data = self.epoch_data['w'].data
         if (hasattr(al_data, 'mask')) and (np.all(al_data.mask)):
-            raise ValueError('IAD do not contain valid AL measurements. (all masked)')
+            logging.warning('IAD do not contain valid AL measurements. (all masked)')
 
         self.epoch_df = self.epoch_data.to_pandas()
 
@@ -403,7 +412,7 @@ class GaiaLpcParquetIad(GaiaValIad):
                 # public static final double REF_EPOCH_YR = 2010.0;
                 reference_time = Time(2010.0, format='jyear')
                 self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
-            self.epoch_df = self.epoch_data.to_pandas()
+        self.epoch_df = self.epoch_data.to_pandas()
         
 #         self.set_fov_transit_id_field()     
 #         self.sort_epochs_by_time()
@@ -694,7 +703,8 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
 
     source_id = parameter_dict['sourceId']    
     axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
-    name_seed = 'DR4_{}'.format(source_id)
+
+    name_seed = parameter_dict.get('name_seed', 'DR4_{}'.format(source_id))
 
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
              'ppm_description': ppm_description, 'epoch_omc_description': 'default',

@@ -2412,7 +2412,7 @@ class AstrometricOrbitPlotter():
             if self.model_parameters[p]['solution_type'] in ['Acceleration7', 'Acceleration9', 'Orbital', 'AstroSpectroSB1', 'ExtrasolarPlanets']:
                 name_seed_2 = argument_dict['name_seed'] + '_{}'.format(self.model_parameters[p]['solution_type'])
             else:
-                name_seed_2 = argument_dict['name_seed'] + '_companion{:d}'.format(p)
+                name_seed_2 = argument_dict['name_seed'] + '_{:d}'.format(p)
 
             if 'm2_MS' in theta_names:
                 theta_p['m2_MJ'] = theta_p['m2_MS'] * MS_kg / MJ_kg
@@ -2503,7 +2503,7 @@ class AstrometricOrbitPlotter():
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
-                                                        'orbit_1d_summary_{}.png'.format(
+                                                        '1d_summary_{}.png'.format(
                                                             name_seed_2.replace('.', 'p')))
                     try:
                         fig.savefig(figure_file_name, transparent=False, bbox_inches='tight',
