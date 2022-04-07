@@ -259,7 +259,7 @@ class OrbitSystem(object):
         mismatch = [key for key in attribute_dict.keys()
                     if key not in default_dict.keys()]
         if mismatch:
-            logging.warn('Key{0} {1} {2} absent in default OrbitClass. These will be ignored.'
+            logging.debug('Key{0} {1} {2} absent in default OrbitClass. These will be ignored.'
                            .format('s' if len(mismatch) > 1 else '',
                                    mismatch,
                                    'are' if len(mismatch) > 1 else 'is'))
@@ -728,7 +728,7 @@ class OrbitSystem(object):
 
         return rv_ms
 
-    def get_t_plot(self, time_offset_day=0., n_curve=100, n_orbit=1, format='jyear'):
+    def get_t_plot(self, time_offset_day=0., n_curve=100, n_orbit=1, format='jyear', time_span_day=None):
         """Return an array of times to use for plotting the timeseries
 
         Parameters
@@ -740,7 +740,11 @@ class OrbitSystem(object):
 
         """
 
-        t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
+        if n_orbit is not None:
+            t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
+        elif time_span_day is not None:
+            logging.debug(f'Timespan of {time_span_day} days corresponds to {time_span_day/self.P_day} orbits')
+            t_day = np.linspace(0, time_span_day, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
         t_plot = getattr(Time(t_day, format='mjd'), format)
         return t_plot
 
@@ -853,6 +857,27 @@ class OrbitSystem(object):
                                  scan_angle_definition=self.scan_angle_definition)
         return phi1
 
+
+    def photocenter_orbit_model_2d(self, n_curve=100, time_span_day=1000):
+        """Return model orbit in 2D coordinates.
+
+        Parameters
+        ----------
+        n_orbit
+        n_samples
+
+        Returns
+        -------
+
+        """
+
+        t_plot_mjd = self.get_t_plot(n_curve=n_curve, n_orbit=None, time_span_day=time_span_day, format='mjd')
+        timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(t_plot_mjd)
+        orbit_curve = self.photocenter_orbit(timestamps_1D, spsi_curve, cpsi_curve)
+        phi1_curve = orbit_curve[xi_curve]
+        phi2_curve = orbit_curve[yi_curve]
+
+        return phi1_curve, phi2_curve
 
     def photocenter_orbit(self, t_MJD, spsi, cpsi):
         """Return the photocenter displacement at the input times.
@@ -2969,7 +2994,7 @@ class AstrometricOrbitPlotter():
             phi1_model_periastron = orbit_periastron[xi_periastron]
             phi2_model_periastron = orbit_periastron[yi_periastron]
             pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
-            pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5')
+            pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5', zorder=10)
 
 
 
@@ -3027,7 +3052,7 @@ class AstrometricOrbitPlotter():
                         'k--', color='0.7', zorder=-50)
 
         # show origin
-        pl.plot(0, 0, marker='x', ms=10, mew=3, zorder=-48, color=orbit_curve_color)
+        pl.plot(0, 0, marker='x', ms=10, mew=3, zorder=48, color=orbit_curve_color)
 
         if argument_dict['tmp_orbit_description'] is not None:
             pl.text(0.01, 0.99, argument_dict['tmp_orbit_description'], horizontalalignment='left',

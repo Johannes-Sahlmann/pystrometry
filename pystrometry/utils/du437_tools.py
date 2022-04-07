@@ -536,8 +536,11 @@ class NssDataFrame:
         colour_cutoff = 3.5
         x = np.linspace(-1, colour_cutoff, 100)
 
+        # def cutoff(x):
+        #     return 5.5 + 3 * x
+
         def cutoff(x):
-            return 5.5 + 3 * x
+            return 6 + 3 * x
 
         # fig = pl.figure()
         if ax is None:
