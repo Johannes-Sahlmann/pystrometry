@@ -879,6 +879,30 @@ class OrbitSystem(object):
 
         return phi1_curve, phi2_curve
 
+    def ppm_model_2d(self, n_curve=100, time_span_day=1000):
+        """Return model orbit in 2D coordinates.
+
+        Parameters
+        ----------
+        n_orbit
+        n_samples
+
+        Returns
+        -------
+
+        """
+
+        t_plot_mjd = self.get_t_plot(n_curve=n_curve, n_orbit=None, time_span_day=time_span_day, format='mjd')
+        timestamps_1D, cpsi_curve, spsi_curve, xi_curve, yi_curve = get_cpsi_spsi_for_2Dastrometry(t_plot_mjd)
+        ppm_curve = self.ppm(t_plot_mjd)
+        # orbit_curve = self.photocenter_orbit(timestamps_1D, spsi_curve, cpsi_curve)
+        # phi1_curve = orbit_curve[xi_curve]
+        # phi2_curve = orbit_curve[yi_curve]
+
+        return ppm_curve
+
+
+
     def photocenter_orbit(self, t_MJD, spsi, cpsi):
         """Return the photocenter displacement at the input times.
 
