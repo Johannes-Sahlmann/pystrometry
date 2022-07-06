@@ -156,6 +156,10 @@ class GaiaValIad:
     _fov_transit_id_field = 'OB'
     _obs_uncertainty_field = 'errda_mas_obs'
     scan_angle_definition = 'gaia'
+    _time_field = 'relative_time_year'
+    _mjd_field = 'MJD'
+    time_column = 't-t_ref' # in years
+
 
     def __init__(self, source_id, epoch_data):
         self.source_id = source_id
@@ -178,6 +182,45 @@ class GaiaValIad:
     #     for ob_number, transit_id in enumerate(unique_transit_ids):
     #         t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
     #         self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
+
+    def set_reference_time(self, reference_time):
+        """Set reference time.
+
+        Parameters
+        ----------
+        reference_time : astropy.time
+            Reference time used in calculations.
+
+        """
+
+        self.t_ref_mjd = reference_time.mjd
+        self.reference_time = reference_time
+
+        #  convert to absolute time in MJD
+        if self._time_field == 'deltat':
+            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
+#             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
+        elif self._time_field == 'elapsedNanoSecs':
+            # public static final double REF_EPOCH_YR = 2010.0;
+            reference_time = Time(2010.0, format='jyear')
+            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
+        elif self._time_field == 'relative_time_year':
+            self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.year.to(u.day) + reference_time.jd, format='jd').mjd
+        self.epoch_df = self.epoch_data.to_pandas()
+
+#         self.set_fov_transit_id_field()
+#         self.sort_epochs_by_time()
+
+        self.sort_epochs_by_time(time_column=self._mjd_field)
+#         self.sort_epochs_by_time(time_column=self._time_field)
+
+        self.set_fov_transit_id_field()
+
+        self.epoch_data[self.time_column] = (self.epoch_data[self._mjd_field] - self.t_ref_mjd)/365.25
+        self.epoch_df = self.epoch_data.to_pandas()
+
+        self.verify_timing()
+
 
     def set_fov_transit_id_field(self, eliminate_transits_overlapping_in_time=True):
         """Identify focal plane transits and number them."""
@@ -202,6 +245,27 @@ class GaiaValIad:
         """Return string describing the instance."""
         return 'GaiaValIad for source_id {} with {} frames)'.format(self.source_id,
                                                                     len(self.epoch_data))
+    def sort_epochs_by_time(self, time_column=None, remove_dubious_times=True):
+        if time_column is None:
+            time_column = self._mjd_field
+
+        n_unique_times = self.epoch_df[time_column].nunique()
+        n_rows_df = len(self.epoch_df)
+        if n_unique_times != n_rows_df:
+            logging.warning(f'Values in time field {time_column} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
+            value_counts = self.epoch_df[time_column].value_counts()
+            logging.debug('Rows with duplicated timestamps:')
+            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)].sort_values(time_column)[[time_column, self._time_field, self._transit_id_field, 'w', 'strip']]))
+            if remove_dubious_times:
+                dubious_times = self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][time_column].values
+                logging.debug(f'Removing data for {len(dubious_times)} times')
+                self.epoch_df = self.epoch_df[self.epoch_df[time_column].isin(dubious_times) == False]
+            self.epoch_data = Table.from_pandas(self.epoch_df)
+
+        self.epoch_data.sort(time_column)
+        self.epoch_df = self.epoch_data.to_pandas()
+        assert np.all(self.epoch_data[time_column].data == self.epoch_df[time_column].values)
+
 
     @classmethod
     def from_dataframe(cls, df, source_id, df_source_id_field='source_id'):
@@ -274,16 +338,27 @@ class GaiaValIad:
             csvdf[columns].to_csv(outfile)
             logging.info(f'wrote {outfile}')
 
+    def verify_timing(self):
+#         epoch_df = self.epoch_data.to_pandas()
+#         logging.debug(epoch_df[epoch_df[self._mjd_field].diff() <= 0])
+#         logging.debug((epoch_df[self._mjd_field].diff() > 0).all())
+#         assert (self.epoch_df[self._mjd_field].diff()[1:] >= 0).all()
+#         assert (self.epoch_df[self._time_field].diff()[1:] > 0).all()
+        assert (self.epoch_df[self._fov_transit_id_field].diff()[1:] >= 0).all()
+
+        if np.any(np.diff(self.epoch_data[self._fov_transit_id_field]) < 0):
+            logging.debug(f'_fov_transit_id_field {self._fov_transit_id_field} is not monotonically increasing with time. Fixing it.')
+
 
 class GaiaLpcParquetIad(GaiaValIad):
     """Class for LPC Data from parquet dumper."""
 
     _time_field = 'elapsedNanoSecs'
     # _time_field = 'deltat' # in years
-    time_column = 't-t_ref' # in years 
+    # time_column = 't-t_ref' # in years
     _transit_id_field = 'transitId'
     # _fov_transit_id_field = 'OB'
-    _mjd_field = 'MJD'
+
     _obs_uncertainty_field = 'sigma_da_mas'
     # scan_angle_definition = 'gaia'
         
@@ -352,81 +427,10 @@ class GaiaLpcParquetIad(GaiaValIad):
 
         self.epoch_df = self.epoch_data.to_pandas()
 
-    def verify_timing(self):
-#         epoch_df = self.epoch_data.to_pandas()
-#         logging.debug(epoch_df[epoch_df[self._mjd_field].diff() <= 0])
-#         logging.debug((epoch_df[self._mjd_field].diff() > 0).all())
-#         assert (self.epoch_df[self._mjd_field].diff()[1:] >= 0).all()
-#         assert (self.epoch_df[self._time_field].diff()[1:] > 0).all()
-        assert (self.epoch_df[self._fov_transit_id_field].diff()[1:] >= 0).all()
-            
-        if np.any(np.diff(self.epoch_data[self._fov_transit_id_field]) < 0):
-            logging.debug(f'_fov_transit_id_field {self._fov_transit_id_field} is not monotonically increasing with time. Fixing it.')
 
-    def sort_epochs_by_time(self, time_column=None, remove_dubious_times=True):   
-        if time_column is None:
-            time_column = self._mjd_field
-            
-        n_unique_times = self.epoch_df[time_column].nunique()
-        n_rows_df = len(self.epoch_df)
-        if n_unique_times != n_rows_df:
-            logging.warning(f'Values in time field {time_column} are not unique. There are {n_rows_df-n_unique_times}/{n_rows_df} duplicates.')
-            value_counts = self.epoch_df[time_column].value_counts()
-            logging.debug('Rows with duplicated timestamps:')
-            logging.debug('\n{}'.format(self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)].sort_values(time_column)[[time_column, self._time_field, self._transit_id_field, 'w', 'strip']]))
-            if remove_dubious_times:
-                dubious_times = self.epoch_df[self.epoch_df[time_column].isin(value_counts[value_counts>1].index)][time_column].values
-                logging.debug(f'Removing data for {len(dubious_times)} times')
-                self.epoch_df = self.epoch_df[self.epoch_df[time_column].isin(dubious_times) == False]
-            self.epoch_data = Table.from_pandas(self.epoch_df)
-            
-        self.epoch_data.sort(time_column)
-        self.epoch_df = self.epoch_data.to_pandas()
-        assert np.all(self.epoch_data[time_column].data == self.epoch_df[time_column].values)
 
             
-    def set_reference_time(self, reference_time):
-        """Set reference time.
 
-        Parameters
-        ----------
-        reference_time : astropy.time
-            Reference time used in calculations.
-
-        """
-
-        self.t_ref_mjd = reference_time.mjd
-        self.reference_time = reference_time
-
-        #  convert to absolute time in MJD
-        if 0:
-            from agisp.utils import gaiaparameters
-            tcb = gaiaparameters.obmt_to_tcb_approximation(self.epoch_data['obmt'] * gaiaparameters.obmt)
-            self.epoch_data['MJD'] = Time(tcb, format='tcb_ns_2010', scale='tcb').mjd
-            assert len(np.unique(self.epoch_data['MJD'])) == len(np.unique(self.epoch_data['obmt']))
-        else:
-            if self._time_field == 'deltat':
-                self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * 365.25 + reference_time.jd, format='jd').mjd
-#             self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] + reference_time.jd, format='jd').mjd
-            elif self._time_field == 'elapsedNanoSecs':
-                # public static final double REF_EPOCH_YR = 2010.0;
-                reference_time = Time(2010.0, format='jyear')
-                self.epoch_data['MJD'] = Time(self.epoch_data[self._time_field] * u.nanosecond.to(u.day) + reference_time.jd, format='jd').mjd
-        self.epoch_df = self.epoch_data.to_pandas()
-        
-#         self.set_fov_transit_id_field()     
-#         self.sort_epochs_by_time()
-
-        self.sort_epochs_by_time(time_column=self._mjd_field)
-#         self.sort_epochs_by_time(time_column=self._time_field)
-        
-        self.set_fov_transit_id_field()     
-        
-        self.epoch_data[self.time_column] = (self.epoch_data[self._mjd_field] - self.t_ref_mjd)/365.25        
-        self.epoch_df = self.epoch_data.to_pandas()
-        
-        self.verify_timing()
-        
 class GaiaValIadHybrid(GaiaValIad):
     """Class for hybrid IAD that is produced internally in DU437 from a combination of StarObject and ObsConstStar data."""
 
@@ -481,8 +485,12 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     model_parameters = OrderedDict()
     orbit_description = OrderedDict()
 
+    # let's be tolerant in terms of variable naming
+    parameter_dict = add_astrometric_parameter_equivalent_names(parameter_dict)
+
+
     # loop over every companion in system
-    for planet_index in np.arange(parameter_dict['Nplanets']):
+    for planet_index in np.arange(parameter_dict.get('Nplanets', 1)):
         planet_number = planet_index + 1
         alpha_mas = parameter_dict['p{}_a1_mas'.format(planet_number)]
         absolute_parallax_mas = parameter_dict['plx_mas']
@@ -491,10 +499,10 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         m2_kg = pjGet_m2(m1_MS * MS_kg, a_m, P_day)
         m2_MJ = m2_kg / MJ_kg
 
-        # dictionary
+        # create dictionary that defines the OrbitSystem
         attribute_dict = {
-            'offset_alphastar_mas': parameter_dict['alphaStarOffset_mas'],
-            'offset_delta_mas': parameter_dict['deltaOffset_mas'],
+            'offset_alphastar_mas': parameter_dict.get('alphaStarOffset_mas', 0),
+            'offset_delta_mas': parameter_dict.get('deltaOffset_mas', 0),
             'RA_deg': parameter_dict['alpha0_deg'],
             'DE_deg': parameter_dict['delta0_deg'],
             'absolute_plx_mas': parameter_dict['plx_mas'],
@@ -506,12 +514,12 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
             'OMEGA_deg': parameter_dict['p{}_OMEGA_deg'.format(planet_number)],
             'i_deg': parameter_dict['p{}_incl_deg'.format(planet_number)],
             'a_mas': parameter_dict['p{}_a1_mas'.format(planet_number)],
-            'Tp_day': iad.t_ref_mjd + parameter_dict['p{}_Tp_day-T0'.format(planet_number)],
+            'Tp_day': iad.t_ref_mjd + parameter_dict['p{}_Tp_day-T0'.format(planet_number)],  # this is in MJD
             'm1_MS': m1_MS,
             'm2_MJ': m2_MJ,
             'Tref_MJD': iad.t_ref_mjd,
             'scan_angle_definition': iad.scan_angle_definition,
-            'solution_type': parameter_dict['nss_solution_type']
+            'solution_type': parameter_dict.get('nss_solution_type', '')
         }
 
         if degenerate_orbit:
@@ -524,8 +532,8 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
             # set coeffMatrix in orbit object
             ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
                 np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
-                                       offsetRA_mas=parameter_dict['alphaStarOffset_mas'],
-                                       offsetDE_mas=parameter_dict['deltaOffset_mas'],
+                                       offsetRA_mas=attribute_dict['offset_alphastar_mas'],
+                                       offsetDE_mas=attribute_dict['offset_delta_mas'],
                                        externalParallaxFactors=iad.epoch_data['ppfact_obs'],
                                        verbose=True)
 
@@ -619,56 +627,97 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     argument_dict['make_condensed_summary_figure'] = False
     argument_dict['make_xy_residual_figure'] = False
     argument_dict['make_1d_overview_figure'] = True
-    argument_dict['excess_noise'] = parameter_dict['excessNoise_mas']
-    argument_dict['merit_function'] = parameter_dict['meritFunction']
+    argument_dict['excess_noise'] = parameter_dict.get('excessNoise_mas', 0.)
+    argument_dict['merit_function'] = parameter_dict.get('meritFunction', 0.)
 
     axp.argument_dict = argument_dict
     axp.plot(argument_dict=argument_dict)
 
     return axp
 
+# small helper dictionary to become tolerant against different variable naming, e.g.
+# internal DPAC naming versus Gaia archive naming
+astrometric_parameter_name_equivalences = {'varpi': 'parallax',
+                                           'plx_mas': 'parallax',
+                                           'alpha0_deg': 'ra',
+                                           'delta0_deg': 'dec',
+                                           'sourceId': 'source_id',
+                                           'muAlphaStar_masPyr': 'pmra',
+                                           'muDelta_masPyr': 'pmdec',
+                                           'varpiError': 'parallax_error',
+                                           'pmraError': 'pmra_error',
+                                           'pmdecError': 'pmdec_error',
+                                           'p1_ecc': 'eccentricity',
+                                           'p1_Tp_day-T0': 't_periastron',
+                                           }
+
+
+def add_astrometric_parameter_equivalent_names(input_dictionary):
+    """Modify input_dictionary by adding equivalent keys."""
+    for key, equivalent_key in astrometric_parameter_name_equivalences.items():
+        if (key not in input_dictionary.keys()) and (equivalent_key in input_dictionary.keys()):
+            input_dictionary[key] = input_dictionary[equivalent_key]
+        if (key in input_dictionary.keys()) and (equivalent_key not in input_dictionary.keys()):
+            input_dictionary[equivalent_key] = input_dictionary[key]
+
+    return input_dictionary
+
 
 def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
+    """Make a 4-panel plot displaying the on-sky parallax+proper motion and residuals.
 
+    Parameters
+    ----------
+    parameter_dict : dict
+        Parameters of the astrometric model, e.g. parallax, proper motion
+    iad :
+        Epoch astrometry data for plotting.
+    plot_dir : str
+        Directory to store figure.
+
+    """
     model_parameters = OrderedDict()
     orbit_description = OrderedDict()
 
-    for planet_index in [0]:
+    planet_index = 0
 
-        attribute_dict = {
-            'offset_alphastar_mas': parameter_dict['alphaStarOffset_mas'],
-            'offset_delta_mas': parameter_dict['deltaOffset_mas'],
-            'RA_deg': parameter_dict['ra'],
-            'DE_deg': parameter_dict['dec'],
-            'absolute_plx_mas': parameter_dict['varpi'],
-            'muRA_mas': parameter_dict['pmra'],
-            'muDE_mas': parameter_dict['pmdec'],            
-            'm2_MJ': 0.,
-            'Tref_MJD': iad.t_ref_mjd,
-            'scan_angle_definition': iad.scan_angle_definition,
-        }
-        attribute_dict['solution_type'] = parameter_dict['nss_solution_type']
-            
-    
-        orbit = OrbitSystem(attribute_dict=attribute_dict)
+    # let's be tolerant in terms of variable naming
+    parameter_dict = add_astrometric_parameter_equivalent_names(parameter_dict)
 
-        # set coeffMatrix in orbit object
-        ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
-            np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
-                                   offsetRA_mas=parameter_dict['alphaStarOffset_mas'], offsetDE_mas=parameter_dict['deltaOffset_mas'],
-                                   externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
+    attribute_dict = {
+        'offset_alphastar_mas': parameter_dict.get('alphaStarOffset_mas', 0),
+        'offset_delta_mas': parameter_dict.get('deltaOffset_mas', 0),
+        'RA_deg': parameter_dict['ra'],
+        'DE_deg': parameter_dict['dec'],
+        'absolute_plx_mas': parameter_dict.get('parallax'),
+        'muRA_mas': parameter_dict['pmra'],
+        'muDE_mas': parameter_dict['pmdec'],
+        'm2_MJ': 0.,
+        'Tref_MJD': iad.t_ref_mjd,
+        'scan_angle_definition': iad.scan_angle_definition,
+    }
+    attribute_dict['solution_type'] = parameter_dict.get('nss_solution_type', '')
 
-        model_parameters[planet_index] = attribute_dict
+    # logging.debug(attribute_dict)
+    orbit = OrbitSystem(attribute_dict=attribute_dict)
 
-        orbit_descr = '{}  '.format('LPC offsets')
-        orbit_descr += '\nScan angle spread = {:2.1f} deg'.format(np.ptp(np.rad2deg(iad.epoch_data['theta'])))
+    # set coeffMatrix in orbit object
+    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
+        np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
+                               offsetRA_mas=attribute_dict['offset_alphastar_mas'], offsetDE_mas=attribute_dict['offset_delta_mas'],
+                               externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
 
-        ppm_description = ''
-        ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
-        ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
-        ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    model_parameters[planet_index] = attribute_dict
 
-        orbit_description[planet_index] = orbit_descr
+    orbit_descr = '{}  '.format('Scan-direction projected residuals added to model.')
+    # orbit_descr += '\nScan angle spread = {:2.1f} deg'.format(np.ptp(np.rad2deg(iad.epoch_data['theta'])))
+
+    ppm_description = ''
+    ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+
+    orbit_description[planet_index] = orbit_descr
 
     plot_dict = {}
     plot_dict['model_parameters'] = model_parameters
@@ -721,8 +770,8 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     argument_dict['arrow_offset_x'] = parameter_dict['pmra']
     argument_dict['arrow_offset_x'] = parameter_dict['pmdec']
     
-    argument_dict['excess_noise'] = parameter_dict['excessNoise']
-    argument_dict['merit_function'] = -1#parameter_dict['meritFunction']
+    argument_dict['excess_noise'] = parameter_dict.get('excessNoise', 0)
+    argument_dict['merit_function'] = parameter_dict.get('meritFunction', -1)
 
     axp.plot(argument_dict=argument_dict)
     axp.argument_dict = argument_dict

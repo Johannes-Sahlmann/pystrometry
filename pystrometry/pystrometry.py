@@ -1168,7 +1168,7 @@ class OrbitSystem(object):
         if show_orientation:
             # arrow_index_1 = np.int(N_curve/3.3)
             arrow_index_1 = 3*np.int(N_curve/5)
-            arrow_index_2 = arrow_index_1 + 10
+            arrow_index_2 = arrow_index_1 + 1
             length_factor = 1
             arrow_factor = 2
 
@@ -2414,7 +2414,9 @@ class AstrometricOrbitPlotter():
                             'make_ppm_figure': False,
                             'plot_dir': os.getcwd(),
                             'time_unit': 'relative',
-                            }
+                            'figure_format': 'png',
+                            'figure_transparent': True,
+                                     }
 
             for key, value in default_argument_dict.items():
                 if key not in argument_dict.keys():
@@ -2552,10 +2554,10 @@ class AstrometricOrbitPlotter():
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
-                                                        '1d_summary_{}.png'.format(
-                                                            name_seed_2.replace('.', 'p')))
+                                                        '1d_summary_{}.{}'.format(
+                                                            name_seed_2.replace('.', 'p'), argument_dict['figure_format']))
                     try:
-                        fig.savefig(figure_file_name, transparent=False, bbox_inches='tight',
+                        fig.savefig(figure_file_name, transparent=argument_dict['figure_transparent'], bbox_inches='tight',
                                 pad_inches=0.05, dpi=300)
                         logging.info(f'Saved figure as {figure_file_name}')
                     except ValueError:
@@ -3036,6 +3038,10 @@ class AstrometricOrbitPlotter():
                 frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
                 epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
                 epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
+                # import pandas as pd
+                # tmp_df = pd.DataFrame(np.array([self.t_MJD_epoch, orb.phi1_model_epoch+epoch_residual_alphastar_along_scan, orb.phi2_model_epoch+epoch_residual_delta_along_scan]).T, columns=['MJD', 'epoch_orbit_alphastar_mas', 'epoch_orbit_delta_mas'])
+                # tmp_df.to_csv('/Users/jsahlmann/orbit_epoch_averages.csv', index=False)
+                # logging.debug(tmp_df)
 
             frame_residual_color = '0.8'
             if argument_dict['orbit_show_frame_data']:
@@ -4332,6 +4338,9 @@ def semimajor_axis_relative_linear(m1_MS, m2_MJ, P_day):
     a_m_relative : `float`
         The physical semi-major axis of the secondary, in meters.
     """
+    if m2_MJ == 0:
+        return 0
+
     a_rel_m = ((Ggrav * (m1_MS * MS_kg + m2_MJ * MJ_kg)
                 / 4. / (np.pi**2.)
                 * (P_day * day2sec)**2.)**(1./3.))
