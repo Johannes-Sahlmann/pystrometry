@@ -493,7 +493,7 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     for planet_index in np.arange(parameter_dict.get('Nplanets', 1)):
         planet_number = planet_index + 1
         alpha_mas = parameter_dict['p{}_a1_mas'.format(planet_number)]
-        absolute_parallax_mas = parameter_dict['plx_mas']
+        absolute_parallax_mas = parameter_dict.get('parallax')
         a_m = convert_from_angular_to_linear(alpha_mas, absolute_parallax_mas)
         P_day = parameter_dict['p{}_period_day'.format(planet_number)]
         m2_kg = pjGet_m2(m1_MS * MS_kg, a_m, P_day)
@@ -503,9 +503,9 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         attribute_dict = {
             'offset_alphastar_mas': parameter_dict.get('alphaStarOffset_mas', 0),
             'offset_delta_mas': parameter_dict.get('deltaOffset_mas', 0),
-            'RA_deg': parameter_dict['alpha0_deg'],
-            'DE_deg': parameter_dict['delta0_deg'],
-            'absolute_plx_mas': parameter_dict['plx_mas'],
+            'RA_deg': parameter_dict['ra'],
+            'DE_deg': parameter_dict['dec'],
+            'absolute_plx_mas': parameter_dict.get('parallax'),
             'muRA_mas': parameter_dict['muAlphaStar_masPyr'],
             'muDE_mas': parameter_dict['muDelta_masPyr'],
             'P_day': parameter_dict['p{}_period_day'.format(planet_number)],
@@ -639,8 +639,13 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 # internal DPAC naming versus Gaia archive naming
 astrometric_parameter_name_equivalences = {'varpi': 'parallax',
                                            'plx_mas': 'parallax',
+                                           'plx_mas': 'absolute_plx_mas',
+                                           'absolute_plx_mas': 'parallax',
+                                           # '': 'parallax',
                                            'alpha0_deg': 'ra',
                                            'delta0_deg': 'dec',
+                                           'alpha0_deg': 'RA_deg',
+                                           'delta0_deg': 'DE_deg',
                                            'sourceId': 'source_id',
                                            'muAlphaStar_masPyr': 'pmra',
                                            'muDelta_masPyr': 'pmdec',
@@ -649,6 +654,8 @@ astrometric_parameter_name_equivalences = {'varpi': 'parallax',
                                            'pmdecError': 'pmdec_error',
                                            'p1_ecc': 'eccentricity',
                                            'p1_Tp_day-T0': 't_periastron',
+                                           'alphaStarOffset_mas': 'offset_alphastar_mas',
+                                           'deltaOffset_mas': 'offset_delta_mas',
                                            }
 
 
@@ -712,10 +719,15 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     orbit_descr = '{}  '.format('Scan-direction projected residuals added to model.')
     # orbit_descr += '\nScan angle spread = {:2.1f} deg'.format(np.ptp(np.rad2deg(iad.epoch_data['theta'])))
 
+    # set defaults for uncertainties
+    parameter_dict['parallax_error'] = parameter_dict.get('parallax_error', 0)
+    parameter_dict['pmra_error'] = parameter_dict.get('pmra_error', 0)
+    parameter_dict['pmdec_error'] = parameter_dict.get('pmdec_error', 0)
+
     ppm_description = ''
-    ppm_description += '$\\varpi={0[varpi]:2.{prec}f}\\pm{0[varpiError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
-    ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmraError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
-    ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdecError]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    ppm_description += '$\\varpi={0[parallax]:2.{prec}f}\\pm{0[parallax_error]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    ppm_description += '$\mu_\\mathrm{{ra^\\star}}={0[pmra]:2.{prec}f}\\pm{0[pmra_error]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
+    ppm_description += '$\mu_\\mathrm{{dec}}={0[pmdec]:2.{prec}f}\\pm{0[pmdec_error]:2.{prec}f}$ mas\n'.format(parameter_dict, prec=3)
 
     orbit_description[planet_index] = orbit_descr
 
@@ -750,10 +762,11 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     else:
         mag_str = ''
 
-    source_id = parameter_dict['sourceId']    
-    axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
+    source_id = np.int64(parameter_dict['sourceId'])
+    # axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
+    axp.title = 'Gaia {} ({})'.format(source_id, mag_str)
 
-    name_seed = parameter_dict.get('name_seed', 'DR4_{}'.format(source_id))
+    name_seed = parameter_dict.get('name_seed', 'Gaia_{}'.format(source_id))
 
     argument_dict = {'plot_dir': plot_dir, 'ppm_panel': True, 'frame_residual_panel': True,
              'ppm_description': ppm_description, 'epoch_omc_description': 'default',
