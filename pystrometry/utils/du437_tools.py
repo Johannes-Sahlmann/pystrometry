@@ -508,6 +508,11 @@ class NssDataFrame:
         if 'p1_a1_mas' not in self._obj.columns:
             self.add_geometric_elements()
 
+        if m1_MS is None:
+            assert 'm1_MS' in self._obj.columns
+            logging.info('using column m1_MS values to compute companion mass')
+            m1_MS = self._obj['m1_MS']
+
         a_m = pystrometry.convert_from_angular_to_linear(self._obj['p1_a1_mas'], self._obj['parallax'])
         m2_kg = pystrometry.pjGet_m2(m1_MS * pystrometry.MS_kg, a_m, self._obj['period'])
         self._obj['m2_MJ'] = m2_kg / pystrometry.MJ_kg
@@ -524,7 +529,7 @@ class NssDataFrame:
         self._obj['bp_rp'] = self._obj['phot_bp_mean_mag'] - self._obj['phot_rp_mean_mag']
         return self._obj
 
-    def plot_cmd(self, label=None, title=None, ax=None):
+    def plot_cmd(self, label=None, title=None, ax=None, show_cutoff=False, **kwargs):
         """Plot colour magnitude diagram."""
 
         if 'absolute_phot_g_mean_mag' not in self._obj.columns:
@@ -532,25 +537,24 @@ class NssDataFrame:
         if 'bp_rp' not in self._obj.columns:
             self.add_colour()
 
-
-        colour_cutoff = 3.5
-        x = np.linspace(-1, colour_cutoff, 100)
-
-        # def cutoff(x):
-        #     return 5.5 + 3 * x
-
-        def cutoff(x):
-            return 6 + 3 * x
-
         # fig = pl.figure()
         if ax is None:
             ax = pl.gca()
 
-        self._obj.plot('bp_rp', 'absolute_phot_g_mean_mag', kind='scatter', ax=ax, c='k', label=label)  # , c='parallax'
+        self._obj.plot('bp_rp', 'absolute_phot_g_mean_mag', kind='scatter', ax=ax, label=label, **kwargs)  # , c='parallax'
         pl.title('{} ({} sources)'.format(title, len(self._obj)))
         ax.invert_yaxis()
-        pl.plot(x, cutoff(x), 'k-')
-        pl.plot([colour_cutoff, colour_cutoff], [cutoff(colour_cutoff), 0], 'k-')
+        if show_cutoff:
+            colour_cutoff = 3.5
+            x = np.linspace(-1, colour_cutoff, 100)
+
+            # def cutoff(x):
+            #     return 5.5 + 3 * x
+
+            def cutoff(x):
+                return 6 + 3 * x
+            pl.plot(x, cutoff(x), 'k-')
+            pl.plot([colour_cutoff, colour_cutoff], [cutoff(colour_cutoff), 0], 'k-')
 
         pl.xlabel('$G_\mathrm{BP}-G_\mathrm{RP}$')
         pl.ylabel('$M_G$')
