@@ -1022,6 +1022,8 @@ class OrbitSystem(object):
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:
+            logging.debug(t_MJD)
+            logging.debug(t_JD)
             parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed,
                                         verbose=verbose, instrument=instrument, overwrite=False)
 
@@ -2705,6 +2707,7 @@ class AstrometricOrbitPlotter():
 
         """
 
+        logging.debug(orb.Tref_MJD)
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
 
         ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,

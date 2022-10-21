@@ -183,7 +183,7 @@ class GaiaValIad:
     #         t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
     #         self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
 
-    def set_reference_time(self, reference_time):
+    def set_reference_time(self, reference_time, **kwargs):
         """Set reference time.
 
         Parameters
@@ -211,7 +211,7 @@ class GaiaValIad:
 #         self.set_fov_transit_id_field()
 #         self.sort_epochs_by_time()
 
-        self.sort_epochs_by_time(time_column=self._mjd_field)
+        self.sort_epochs_by_time(time_column=self._mjd_field, **kwargs)
 #         self.sort_epochs_by_time(time_column=self._time_field)
 
         self.set_fov_transit_id_field()
