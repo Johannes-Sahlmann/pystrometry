@@ -1022,8 +1022,8 @@ class OrbitSystem(object):
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:
-            logging.debug(t_MJD)
-            logging.debug(t_JD)
+            # logging.debug(t_MJD)
+            # logging.debug(t_JD)
             parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed,
                                         verbose=verbose, instrument=instrument, overwrite=False)
 
@@ -2104,16 +2104,21 @@ class AstrometricOrbitPlotter():
 
         outlier_1D_index = np.array([])
 
+        logging.debug(f"self.data_type={self.data_type}")
         if self.data_type == 'gaia_2d':
             self.xi = self.data.xi
             self.yi = self.data.yi
+
 
         for jj, epoch in enumerate(self.medi):
             tmpidx = np.where(T['OB'] == epoch)[0]
 
             if '2d' in self.data_type:
-                tmpIndexX = np.intersect1d(self.xi, tmpidx)
-                tmpIndexY = np.intersect1d(self.yi, tmpidx)
+                # tmpIndexX = np.intersect1d(self.xi, tmpidx)
+                # tmpIndexY = np.intersect1d(self.yi, tmpidx)
+                tmpIndexX = np.intersect1d(self.data.xi, tmpidx)
+                logging.debug(f"tmpIndexX= {tmpIndexX}")
+                tmpIndexY = np.intersect1d(self.data.yi, tmpidx)
             elif self.data_type == '1d':
                 tmpIndexX = tmpidx
 
@@ -2707,7 +2712,7 @@ class AstrometricOrbitPlotter():
 
         """
 
-        logging.debug(orb.Tref_MJD)
+        # logging.debug(orb.Tref_MJD)
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
 
         ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
@@ -2878,9 +2883,9 @@ class AstrometricOrbitPlotter():
         elif self.data_type == '2d':
 
             if direction=='x':
-                tmp_index = self.xi
+                tmp_index = self.data.xi
             elif direction=='y':
-                tmp_index = self.yi
+                tmp_index = self.data.yi
 
             # mfc = 'none'
             mec= '0.4'
@@ -3080,8 +3085,8 @@ class AstrometricOrbitPlotter():
             pl.plot(self.Xmean_orb, self.Ymean_orb, 'ko', ms=8)
             pl.errorbar(self.Xmean_orb, self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
                         fmt='none', ecolor='0.6', zorder=-49)
-            for j in range(len(phi1_model_epoch)):
-                pl.plot([self.Xmean_orb[j], phi1_model_epoch[j]], [self.Ymean_orb[j], phi2_model_epoch[j]],
+            for j in range(len(orb.phi1_model_epoch)):
+                pl.plot([self.Xmean_orb[j], orb.phi1_model_epoch[j]], [self.Ymean_orb[j], orb.phi2_model_epoch[j]],
                         'k--', color='0.7', zorder=-50)
 
         # show origin

@@ -577,10 +577,15 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     plot_dict = {}
     plot_dict['model_parameters'] = model_parameters
     plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix}
-    if hasattr(iad, 'xi'):
-        plot_dict['data_type'] = 'gaia_2d'
+    if 'data_type' in parameter_dict.keys():
+        plot_dict['data_type'] = parameter_dict['data_type']
     else:
-        plot_dict['data_type'] = '1d'
+        if hasattr(iad, 'xi'):
+            plot_dict['data_type'] = 'gaia_2d'
+        else:
+            plot_dict['data_type'] = '1d'
+    logging.debug(f"plot_dict['data_type'] = {plot_dict['data_type']}")
+
     plot_dict['scan_angle_definition'] = iad.scan_angle_definition
 
     for key in iad.epoch_data.colnames:
@@ -733,11 +738,17 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
 
     plot_dict = {}
     plot_dict['model_parameters'] = model_parameters
-    plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix} 
-    if hasattr(iad, 'xi'):
-        plot_dict['data_type'] = 'gaia_2d'
+    plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix}
+
+    if 'data_type' in parameter_dict.keys():
+        plot_dict['data_type'] = parameter_dict['data_type']
     else:
-        plot_dict['data_type'] = '1d'
+        if hasattr(iad, 'xi'):
+            plot_dict['data_type'] = 'gaia_2d'
+        else:
+            plot_dict['data_type'] = '1d'
+
+    logging.debug(f"plot_dict['data_type'] = {plot_dict['data_type']}")
     plot_dict['scan_angle_definition'] = iad.scan_angle_definition
 
     for key in iad.epoch_data.colnames:
