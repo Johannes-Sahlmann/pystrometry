@@ -751,7 +751,7 @@ class OrbitSystem(object):
 
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
                       line_style='-', line_width=1, rv_unit='kmps', time_offset_day=0.,
-                      gamma_mps=None, axis=None, plot_parameters_ensemble=None):
+                      gamma_mps=None, axis=None, plot_parameters_ensemble=None, phased=False):
         """Plot the radial velocity orbit of the primary
 
         Returns
@@ -770,7 +770,12 @@ class OrbitSystem(object):
         else:
             rv_factor = 1.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
-        t_plot = Time(t_day, format='mjd').jyear
+        if phased:
+            # t_plot = Time(t_day, format='mjd').jyear
+            t_plot = ((t_day - self.Tp_day) % self.P_day) / self.P_day
+        else:
+            t_plot = Time(t_day, format='mjd').jyear
+
         if component=='primary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
@@ -3881,7 +3886,7 @@ class DetectionLimit(object):
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
                  data_colour='k', include_degenerate_orbit=False, plot_parameters_ensemble=None,
-                 show_residuals=True):
+                 show_residuals=True, phased=False):
     """
 
     Parameters
@@ -3916,8 +3921,14 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     # fig.suptitle(self.title)
 
     # pl.subplot(2,1,1)
-    axes[0][0].plot(rv['jyear'], rv['rv_{}'.format(basic_unit)], 'ko', label='_', mfc=data_colour)
-    axes[0][0].errorbar(rv['jyear'], rv['rv_{}'.format(basic_unit)], yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+    if (phased and (orbit_system is not None)):
+        t_plot_data = ((rv['MJD'] - orbit_system.Tp_day)%orbit_system.P_day) / orbit_system.P_day
+    else:
+        t_plot_data = rv['jyear']
+
+
+    axes[0][0].plot(t_plot_data, rv['rv_{}'.format(basic_unit)], 'ko', label='_', mfc=data_colour)
+    axes[0][0].errorbar(t_plot_data, rv['rv_{}'.format(basic_unit)], yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
 
 
     n_rv = len(rv)
@@ -3949,9 +3960,11 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             gamma_mps = None
         # plot RV orbit of primary
         time_offset_day = rv['MJD'][0] - orbit_system.Tp_day
+        time_offset_day = 0
+        print(f"time_offset_day = {time_offset_day}")
 
         orbit_system.plot_rv_orbit(time_offset_day=time_offset_day, n_orbit=n_orbit,
-                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit, line_width=2)
+                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit, line_width=2, phased=phased)
         if plot_parameters_ensemble is not None:
             n_curve = 500
             n_ensemble = len(plot_parameters_ensemble)
@@ -3978,7 +3991,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             orbit_system_degenerate.OMEGA_deg += 180.
             orbit_system_degenerate.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day,
                                        n_orbit=n_orbit, n_curve=1000, axis=axes[0][0],
-                                       rv_unit=basic_unit, line_style='--')
+                                       rv_unit=basic_unit, line_style='--', phased=phased)
 
         residuals = rv['rv_{}'.format(basic_unit)] - rv['rv_model_{}'.format(basic_unit)]
         rv_description = '$\\gamma={:2.3f}$ km/s\n$N_\\mathrm{{RV}}={}$\n' \
@@ -3989,15 +4002,18 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
         axes[0][0].axhline(y=orbit_system.gamma_ms / conversion_factor, color='0.5', ls=':', zorder=-50)
 
         if show_residuals:
-            axes[1][0].plot(rv['jyear'], residuals, 'ko', label='_', mfc=data_colour)
-            axes[1][0].errorbar(rv['jyear'], residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+            axes[1][0].plot(t_plot_data, residuals, 'ko', label='_', mfc=data_colour)
+            axes[1][0].errorbar(t_plot_data, residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
 
             axes[1][0].text(0.01, 0.99, rv_description, horizontalalignment='left',
                     verticalalignment='top', transform=axes[1][0].transAxes)
             axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
             axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
 
-    axes[-1][0].set_xlabel('Time (Julian year)')
+    if phased:
+        axes[-1][0].set_xlabel('Orbital phase')
+    else:
+        axes[-1][0].set_xlabel('Time (Julian year)')
     # pl.legend()
     axes[0][0].set_ylabel('RV ({})'.format(unit_string[basic_unit]))
     # axes[1][0].set_xlabel('Time (Julian year)')
