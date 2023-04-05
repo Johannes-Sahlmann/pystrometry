@@ -615,8 +615,10 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         name_seed = 'DR3_{}_{}'.format(iad.source_id,
                                        mapping_dr3id_to_starname[iad.source_id].replace('/', '-'))
     else:
-        axp.title = 'Gaia DR3 {} ({})'.format(iad.source_id, mag_str)
-        name_seed = 'DR3_{}'.format(iad.source_id)
+        # axp.title = 'Gaia DR3 {} ({})'.format(iad.source_id, mag_str)
+        # name_seed = 'DR3_{}'.format(iad.source_id)
+        axp.title = '{} ({})'.format(iad.source_id, mag_str)
+        name_seed = '{}'.format(iad.source_id)
 
     argument_dict = {'plot_dir'             : plot_dir, 'ppm_panel': True,
                      'frame_residual_panel' : True, 'orbit_only_panel': True,
@@ -630,8 +632,13 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     argument_dict['omc_panel'] = True
     argument_dict['orbit_only_panel'] = False
     argument_dict['make_condensed_summary_figure'] = False
-    argument_dict['make_xy_residual_figure'] = False
-    argument_dict['make_1d_overview_figure'] = True
+    for key in ['make_xy_residual_figure', 'make_1d_overview_figure']:
+
+        if key in parameter_dict.keys():
+            argument_dict[key] = parameter_dict[key]
+
+        # argument_dict['make_xy_residual_figure'] = True
+        # argument_dict['make_1d_overview_figure'] = False
     argument_dict['excess_noise'] = parameter_dict.get('excessNoise_mas', 0.)
     argument_dict['merit_function'] = parameter_dict.get('meritFunction', 0.)
 

@@ -2350,49 +2350,65 @@ class AstrometricOrbitPlotter():
             # alphastar_reference_frame = orb.phi1_model_frame
             # delta_reference_frame = orb.phi2_model_frame
 
-        if self.scan_angle_definition == 'hipparcos':
-            frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-            frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
-            epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
-            epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
-        elif self.scan_angle_definition == 'gaia':
-            frame_residual_alphastar_along_scan = self.data.epoch_data['spsi'] * self.residuals
-            frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-            epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
-            epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
+        if self.data_type == '2d':
+            pl.plot(orb.ppm_epoch[0], orb.ppm_epoch[1], marker='o', mfc='w', ls='', ms=5)
+            # self.insert_ppm_plot(orb, argument_dict)
+            # orb = self.compute_model_astrometry(orb, argument_dict)
+            # self.plot_residuals_on_sky(orb, argument_dict,
+            #                            alphastar_reference_epoch=orb.ppm_epoch[0],
+            #                            delta_reference_epoch=orb.ppm_epoch[1])
+            pl.errorbar(self.Xmean_ppm, self.Ymean_ppm, xerr=self.errResidualX, yerr=self.errResidualY, fmt='none', ecolor='k')
+            x1 = orb.ppm_epoch[0]
+            x2 = self.Xmean_ppm
+            y1 = orb.ppm_epoch[1]
+            y2 = self.Ymean_ppm
+            pl.plot([x1, x2], [y1, y2], ls='--', lw=1, color='0.7')
+            # pass
+        else:
 
-        frame_residual_color = '0.8'
-        # if argument_dict['orbit_show_frame_data']:
-        if 0:
-            pl.plot(alphastar_reference_frame + frame_residual_alphastar_along_scan,
-                    delta_reference_frame + frame_residual_delta_along_scan, marker='o',
-                    color=frame_residual_color, ms=4, mfc=frame_residual_color,
-                    mec=frame_residual_color, ls='')
-        pl.plot(alphastar_reference_epoch + epoch_residual_alphastar_along_scan,
-                delta_reference_epoch + epoch_residual_delta_along_scan, marker='o', color='k', ms=3, mfc='k',
-                ls='')
-
-        # plot epoch-level error-bars
-        for jj in range(len(self.meanResidualX)):
             if self.scan_angle_definition == 'hipparcos':
-                x1 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                x2 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-                y1 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                y2 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
+                frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
             elif self.scan_angle_definition == 'gaia':
-                x1 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                x2 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-                y1 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                y2 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-            pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
+                frame_residual_alphastar_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
+
+            frame_residual_color = '0.8'
+            # if argument_dict['orbit_show_frame_data']:
+            if 0:
+                pl.plot(alphastar_reference_frame + frame_residual_alphastar_along_scan,
+                        delta_reference_frame + frame_residual_delta_along_scan, marker='o',
+                        color=frame_residual_color, ms=4, mfc=frame_residual_color,
+                        mec=frame_residual_color, ls='')
+            pl.plot(alphastar_reference_epoch + epoch_residual_alphastar_along_scan,
+                    delta_reference_epoch + epoch_residual_delta_along_scan, marker='o', color='k', ms=3, mfc='k',
+                    ls='')
+
+            # plot epoch-level error-bars
+            for jj in range(len(self.meanResidualX)):
+                if self.scan_angle_definition == 'hipparcos':
+                    x1 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                elif self.scan_angle_definition == 'gaia':
+                    x1 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
 
     def plot(self, argument_dict=None):
         """Make the astrometric orbit plots.
@@ -2698,7 +2714,7 @@ class AstrometricOrbitPlotter():
                         figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                'orbit_time_{}.png'.format(name_seed_2.replace('.', 'p')))
                     fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
-
+                    logging.info(f'Saved figure as {figure_file_name}')
 
             # if argument_dict['make_relative_orbit_figure']:
 
