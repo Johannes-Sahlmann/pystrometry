@@ -721,7 +721,7 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     orbit = OrbitSystem(attribute_dict=attribute_dict)
 
     # set coeffMatrix in orbit object
-    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
+    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'].values, psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
                                offsetRA_mas=attribute_dict['offset_alphastar_mas'], offsetDE_mas=attribute_dict['offset_delta_mas'],
                                externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
@@ -758,7 +758,8 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     logging.debug(f"plot_dict['data_type'] = {plot_dict['data_type']}")
     plot_dict['scan_angle_definition'] = iad.scan_angle_definition
 
-    for key in iad.epoch_data.colnames:
+    # for key in iad.epoch_data.colnames:
+    for key in iad.epoch_data.columns:
         if '_obs' in key:
             new_key = key.replace('_obs', '')
             if new_key == 'errda_mas':
