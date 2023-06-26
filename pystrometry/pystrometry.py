@@ -1746,7 +1746,7 @@ class PpmPlotter(object):
 
             # arrowOffsetY = 0.
         #         plt.annotate('', xy=(self.p[3][0], self.p[4][0]+arrowOffsetY), xytext=(0, 0+arrowOffsetY), arrowprops=dict(arrowstyle="->",facecolor='black'), size=30 )
-        plt.annotate('', xy=(np.float(self.p[3]) + arrowOffsetX, np.float(self.p[4]) + arrowOffsetY),
+        plt.annotate('', xy=(float(self.p[3]) + arrowOffsetX, float(self.p[4]) + arrowOffsetY),
                      xytext=(0. + arrowOffsetX, 0. + arrowOffsetY), arrowprops=dict(arrowstyle="->", facecolor='black'),
                      size=30)
 
@@ -2539,7 +2539,8 @@ class AstrometricOrbitPlotter():
                 panel_index_offset = 2 if argument_dict['orbit_timeseries_panel'] else 0
                 orbit_panel_index = (3,5) if argument_dict['orbit_timeseries_panel'] else 3
                 n_columns = 2
-                fig = pl.figure(figsize=(14, 9), facecolor='w', edgecolor='k')
+                fig = pl.figure(figsize=(12, 7), facecolor='w', edgecolor='k')
+                # fig = pl.figure(figsize=(14, 9), facecolor='w', edgecolor='k')
                 pl.clf()
 
                 # PPM panel
@@ -2578,7 +2579,7 @@ class AstrometricOrbitPlotter():
                     xlabel = 'MJD - {:3.1f}'.format(orb.Tref_MJD)
                 pl.xlabel(xlabel)
 
-                fig.tight_layout(h_pad=0.1, w_pad=0.1)
+                fig.tight_layout(h_pad=0.1, w_pad=0.5)
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
@@ -2640,7 +2641,7 @@ class AstrometricOrbitPlotter():
             ##################################################
             #  ORBIT only
             if argument_dict['orbit_only_panel']:
-                fig = pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+                fig = pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
                 pl.clf()
 
                 self.insert_orbit_plot(orb, argument_dict)
@@ -2655,6 +2656,7 @@ class AstrometricOrbitPlotter():
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_only_{}.pdf'.format(name_seed_2.replace('.', 'p')))
                     fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                    logging.info(f'Saved figure as {figure_file_name}')
             ##################################################
 
 
@@ -2673,7 +2675,7 @@ class AstrometricOrbitPlotter():
                 else:
                     n_rows = 2
 
-                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, sharey=False, figsize=(n_columns*4.0, n_rows*2.5), facecolor='w',
+                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, sharey=True, figsize=(n_columns*3.0, n_rows*2.), facecolor='w',
                                         edgecolor='k', squeeze=False)
 
                 self.insert_orbit_timeseries_plot(orb, argument_dict, ax=axes[0][0])
@@ -2702,7 +2704,7 @@ class AstrometricOrbitPlotter():
 
                 # if self.title is None:
                 #     fig.tight_layout(pad=0.0)
-                # plt.tight_layout()
+                plt.tight_layout()
                 # pl.subplots_adjust(right=1.5)
                 pl.show()
                 if argument_dict['save_plot']:
@@ -2751,8 +2753,8 @@ class AstrometricOrbitPlotter():
                                 horizons_file_seed=argument_dict['horizons_file_seed'])
             pl.plot(curve_offset_x + ppm_epoch[0], curve_offset_y + ppm_epoch[1], marker='o', color='k', mfc='w', ms=4, zorder=10, ls='none')
 
-        plt.annotate('', xy=(np.float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'] + curve_offset_x,
-                             np.float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y'] + curve_offset_y),
+        plt.annotate('', xy=(float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'] + curve_offset_x,
+                             float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y'] + curve_offset_y),
                      xytext=(curve_offset_x + argument_dict['arrow_offset_x'], curve_offset_y + argument_dict['arrow_offset_y']),
                      arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
 
@@ -2860,6 +2862,8 @@ class AstrometricOrbitPlotter():
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
 
+
+
     def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None, mark_outliers=False):
         """
 
@@ -2916,7 +2920,8 @@ class AstrometricOrbitPlotter():
             ax.plot(epoch_time[tmp_index], self.residuals[tmp_index], mec=mec, mfc=mfc, marker=marker, ls='none', alpha=alpha)
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
-        ax.set_ylabel('Frame O-C (mas)')
+        if (self.data_type != '2d') or (direction!='y'):
+            ax.set_ylabel('Frame O-C (mas)')
 
 
     def insert_epoch_residual_plot(self, orb, argument_dict):
@@ -3046,10 +3051,11 @@ class AstrometricOrbitPlotter():
             else:
                 orbit_periastron = orb.photocenter_orbit(t_periastron_mjd, spsi_periastron, cpsi_periastron)
 
-            phi1_model_periastron = orbit_periastron[xi_periastron]
-            phi2_model_periastron = orbit_periastron[yi_periastron]
-            pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
-            pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5', zorder=10)
+            phi1_model_periastron = orbit_periastron[xi_periastron[0]]
+            phi2_model_periastron = orbit_periastron[yi_periastron[0]]
+            if phi1_model_periastron != 0:
+                pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
+                pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5', zorder=10)
 
 
 
@@ -3963,7 +3969,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             LHS = np.mat(np.array(rv['rv_kmps']) - rv_kmps)
             res = linearfit.LinearFit(LHS, np.diag(weight), C)
             res.fit()
-            gamma_kmps = np.float(res.p)
+            gamma_kmps = float(res.p)
             gamma_mps = gamma_kmps*1e3
             orbit_system.gamma_ms += gamma_mps
             logging.info('Systemic velocity {:2.3f} +/- {:2.3f} {}'.format(orbit_system.gamma_ms,
@@ -5144,8 +5150,8 @@ class ImagingAstrometryData(object):
             pt = Table.read(outFile,format='ascii.basic',delimiter=',')
 
         self.simbad_object_parameters = pt
-        self.RA_deg  = np.float(self.simbad_object_parameters['RA_d'])
-        self.Dec_deg = np.float(self.simbad_object_parameters['DEC_d'])
+        self.RA_deg  = float(self.simbad_object_parameters['RA_d'])
+        self.Dec_deg = float(self.simbad_object_parameters['DEC_d'])
 
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
 

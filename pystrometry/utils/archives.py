@@ -8,8 +8,9 @@ Authors
 import logging
 import os
 from astropy.table import Table
+import astropy.units as u
 from astroquery.gaia import Gaia, TapPlus
-
+from astropy.time import Time
 import pandas as pd
 
 
@@ -141,6 +142,71 @@ def query_dpcg(connection, out_dir, tag='dpcgdata', query=None, reference_time=N
         logging.info(f'Read {len(dpcg_df)} rows from {out_file}')
     return dpcg_df
 
+
+def query_dpcg_epochastrometry(connection, out_dir, tag='dpcgdata', query=None, reference_time=None,
+               selected_source_id_string=None, overwrite=False):
+    """This query already applies the CU4 DU432 pre-processing filter.
+
+    :param connection:
+    :param out_dir:
+    :param tag:
+    :param query:
+    :param reference_time:
+    :param selected_source_id_string:
+    :param overwrite:
+    :return:
+    """
+
+    out_file = os.path.join(out_dir, f'dpcg_{tag}.parquet')
+
+    if overwrite or (os.path.isfile(out_file) is False):
+        assert connection.closed == 0
+
+        # reference_time = Time(nss_all['ref_epoch'][0], format='jyear')
+        ref_epoch_jd = reference_time.jd
+        # selected_source_id_string = ','.join(selected_source_id_array.astype(str))
+
+        tcb_ref_epoch_jd = Time(2010.0, format='jyear', scale='tcb').jd
+
+        if query is None:
+            query = f"""
+            select
+            sourceid as source_id,
+            -- DR3 position reference epoch: 2016-01-01T12:00:00.000000000 (TCB) =  JD 2457389.0 (update at 3 placed below when changed)
+            ((t).obstime - {ref_epoch_jd})/365.25 as t_min_t0_yr,
+            ((t).obstime - {tcb_ref_epoch_jd})*{u.day.to(u.nanosecond)} as obsTimeTcb,
+            ((t).scanposangle) as scanPosAngle,
+            cos( (t).scanposangle) as cpsi_obs,
+            sin( (t).scanposangle) as spsi_obs,
+            (t).varpifactoral as parallaxFactorAl,
+            ((t).obstime - {ref_epoch_jd})/365.25*cos( (t).scanposangle) as tcpsi_obs,
+            ((t).obstime - {ref_epoch_jd})/365.25*sin( (t).scanposangle) as tspsi_obs,
+            (t).centroidposal as centroidPosAl,
+            (t).centroidposerroral as centroidPosErrorAl,
+            -- remove last 4 bits as these were added by CU4 to encode ccd number
+            (t).transitid/16 as transitid,
+            -- convert last 4 bits of CU4 transitid into number
+            ( (t).transitid - (t).transitid/16*16 ) as ccdnumber,
+            (astromsource).alpha as ra0,	
+            (astromsource).delta as dec0,	
+            array_length(transits,1) as num_obs_for_src
+
+            -- from mdb_gaia_starobject_088
+            -- join lateral unnest(transits) t on true
+            from mdb_gaia_starobject_088 so
+            join dr3_ops_cs36_mv.dgdreq58_rejected_cu4transitids_astro transrej using (sourceid)
+            join lateral unnest(filter_transits(transits,rejected_cu4transitids_astro)) as t on true
+            -- provide source id list (comma separated)
+            where sourceid in ({selected_source_id_string})
+            """
+
+        dpcg_df = pd.read_sql(query, connection)
+        dpcg_df.to_parquet(out_file)
+        logging.info(f'Wrote {len(dpcg_df)} rows to {out_file}')
+    else:
+        dpcg_df = pd.read_parquet(out_file)
+        logging.info(f'Read {len(dpcg_df)} rows from {out_file}')
+    return dpcg_df
 
 
 

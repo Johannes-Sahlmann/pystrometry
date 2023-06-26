@@ -521,14 +521,14 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
             'scan_angle_definition': iad.scan_angle_definition,
             'solution_type': parameter_dict.get('nss_solution_type', '')
         }
-
+        # print(iad.scan_angle_definition)
         if degenerate_orbit:
             attribute_dict['omega_deg'] += 180.
             attribute_dict['OMEGA_deg'] += 180.
 
         if planet_index == 0:
             orbit = OrbitSystem(attribute_dict=attribute_dict)
-
+            print(orbit)
             # set coeffMatrix in orbit object
             ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
                 np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
@@ -632,7 +632,8 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     argument_dict['omc_panel'] = True
     argument_dict['orbit_only_panel'] = False
     argument_dict['make_condensed_summary_figure'] = False
-    for key in ['make_xy_residual_figure', 'make_1d_overview_figure']:
+    for key in ['make_xy_residual_figure', 'make_1d_overview_figure', 'orbit_only_panel', 'orbit_description',
+                'epoch_omc_description', 'orbit_signal_description', 'frame_residual_panel', 'ppm_description']:
 
         if key in parameter_dict.keys():
             argument_dict[key] = parameter_dict[key]
