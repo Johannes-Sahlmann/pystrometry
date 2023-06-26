@@ -183,7 +183,7 @@ class GaiaValIad:
     #         t_index = np.where(self.epoch_data[self._transit_id_field] == transit_id)[0]
     #         self.epoch_data[self._fov_transit_id_field][t_index] = ob_number + 1
 
-    def set_reference_time(self, reference_time):
+    def set_reference_time(self, reference_time, **kwargs):
         """Set reference time.
 
         Parameters
@@ -211,7 +211,7 @@ class GaiaValIad:
 #         self.set_fov_transit_id_field()
 #         self.sort_epochs_by_time()
 
-        self.sort_epochs_by_time(time_column=self._mjd_field)
+        self.sort_epochs_by_time(time_column=self._mjd_field, **kwargs)
 #         self.sort_epochs_by_time(time_column=self._time_field)
 
         self.set_fov_transit_id_field()
@@ -521,14 +521,14 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
             'scan_angle_definition': iad.scan_angle_definition,
             'solution_type': parameter_dict.get('nss_solution_type', '')
         }
-
+        # print(iad.scan_angle_definition)
         if degenerate_orbit:
             attribute_dict['omega_deg'] += 180.
             attribute_dict['OMEGA_deg'] += 180.
 
         if planet_index == 0:
             orbit = OrbitSystem(attribute_dict=attribute_dict)
-
+            print(orbit)
             # set coeffMatrix in orbit object
             ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
                 np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
@@ -577,10 +577,15 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     plot_dict = {}
     plot_dict['model_parameters'] = model_parameters
     plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix}
-    if hasattr(iad, 'xi'):
-        plot_dict['data_type'] = 'gaia_2d'
+    if 'data_type' in parameter_dict.keys():
+        plot_dict['data_type'] = parameter_dict['data_type']
     else:
-        plot_dict['data_type'] = '1d'
+        if hasattr(iad, 'xi'):
+            plot_dict['data_type'] = 'gaia_2d'
+        else:
+            plot_dict['data_type'] = '1d'
+    logging.debug(f"plot_dict['data_type'] = {plot_dict['data_type']}")
+
     plot_dict['scan_angle_definition'] = iad.scan_angle_definition
 
     for key in iad.epoch_data.colnames:
@@ -610,8 +615,10 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         name_seed = 'DR3_{}_{}'.format(iad.source_id,
                                        mapping_dr3id_to_starname[iad.source_id].replace('/', '-'))
     else:
-        axp.title = 'Gaia DR3 {} ({})'.format(iad.source_id, mag_str)
-        name_seed = 'DR3_{}'.format(iad.source_id)
+        # axp.title = 'Gaia DR3 {} ({})'.format(iad.source_id, mag_str)
+        # name_seed = 'DR3_{}'.format(iad.source_id)
+        axp.title = '{} ({})'.format(iad.source_id, mag_str)
+        name_seed = '{}'.format(iad.source_id)
 
     argument_dict = {'plot_dir'             : plot_dir, 'ppm_panel': True,
                      'frame_residual_panel' : True, 'orbit_only_panel': True,
@@ -625,8 +632,14 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
     argument_dict['omc_panel'] = True
     argument_dict['orbit_only_panel'] = False
     argument_dict['make_condensed_summary_figure'] = False
-    argument_dict['make_xy_residual_figure'] = False
-    argument_dict['make_1d_overview_figure'] = True
+    for key in ['make_xy_residual_figure', 'make_1d_overview_figure', 'orbit_only_panel', 'orbit_description',
+                'epoch_omc_description', 'orbit_signal_description', 'frame_residual_panel', 'ppm_description']:
+
+        if key in parameter_dict.keys():
+            argument_dict[key] = parameter_dict[key]
+
+        # argument_dict['make_xy_residual_figure'] = True
+        # argument_dict['make_1d_overview_figure'] = False
     argument_dict['excess_noise'] = parameter_dict.get('excessNoise_mas', 0.)
     argument_dict['merit_function'] = parameter_dict.get('meritFunction', 0.)
 
@@ -709,7 +722,7 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
     orbit = OrbitSystem(attribute_dict=attribute_dict)
 
     # set coeffMatrix in orbit object
-    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'], psi_deg=np.rad2deg(
+    ppm_signal_mas = orbit.ppm(iad.epoch_data['MJD'].values, psi_deg=np.rad2deg(
         np.arctan2(iad.epoch_data['spsi_obs'], iad.epoch_data['cpsi_obs'])),
                                offsetRA_mas=attribute_dict['offset_alphastar_mas'], offsetDE_mas=attribute_dict['offset_delta_mas'],
                                externalParallaxFactors=iad.epoch_data['ppfact_obs'], verbose=True)
@@ -733,14 +746,21 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
 
     plot_dict = {}
     plot_dict['model_parameters'] = model_parameters
-    plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix} 
-    if hasattr(iad, 'xi'):
-        plot_dict['data_type'] = 'gaia_2d'
+    plot_dict['linear_coefficients'] = {'matrix': orbit.coeffMatrix}
+
+    if 'data_type' in parameter_dict.keys():
+        plot_dict['data_type'] = parameter_dict['data_type']
     else:
-        plot_dict['data_type'] = '1d'
+        if hasattr(iad, 'xi'):
+            plot_dict['data_type'] = 'gaia_2d'
+        else:
+            plot_dict['data_type'] = '1d'
+
+    logging.debug(f"plot_dict['data_type'] = {plot_dict['data_type']}")
     plot_dict['scan_angle_definition'] = iad.scan_angle_definition
 
-    for key in iad.epoch_data.colnames:
+    # for key in iad.epoch_data.colnames:
+    for key in iad.epoch_data.columns:
         if '_obs' in key:
             new_key = key.replace('_obs', '')
             if new_key == 'errda_mas':

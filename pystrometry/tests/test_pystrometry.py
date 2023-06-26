@@ -174,7 +174,7 @@ def test_orbit_computation(verbose=False):
         if verbose:
             print(orbit)
 
-        # seconf modified orbit
+        # second modified orbit
         attribute_dict2 = copy.deepcopy(attribute_dict)
         attribute_dict3 = copy.deepcopy(attribute_dict)
         attribute_dict2['OMEGA_deg'] += 180.

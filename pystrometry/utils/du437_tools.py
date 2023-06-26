@@ -478,6 +478,7 @@ class NssDataFrame:
         # df2.index = df2.index.map('{0[0]}_{0[1]}'.format)
         # df3 = df2.to_frame().T
 
+        self.add_geometric_elements_uncertainty_monte_carlo()
 
         df_mc = pd.DataFrame(data_mc, columns=['A', 'B', 'F', 'G'])
 

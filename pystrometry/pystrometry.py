@@ -751,7 +751,7 @@ class OrbitSystem(object):
 
     def plot_rv_orbit(self, component='primary', n_curve=100, n_orbit=1, line_color='k',
                       line_style='-', line_width=1, rv_unit='kmps', time_offset_day=0.,
-                      gamma_mps=None, axis=None, plot_parameters_ensemble=None):
+                      gamma_mps=None, axis=None, plot_parameters_ensemble=None, phased=False):
         """Plot the radial velocity orbit of the primary
 
         Returns
@@ -770,7 +770,12 @@ class OrbitSystem(object):
         else:
             rv_factor = 1.
         t_day = np.linspace(0, self.P_day * n_orbit, n_curve) - self.P_day/2 + self.Tp_day + time_offset_day
-        t_plot = Time(t_day, format='mjd').jyear
+        if phased:
+            # t_plot = Time(t_day, format='mjd').jyear
+            t_plot = ((t_day - self.Tp_day) % self.P_day) / self.P_day
+        else:
+            t_plot = Time(t_day, format='mjd').jyear
+
         if component=='primary':
             rv_mps = (self.compute_radial_velocity(t_day, component=component)) * rv_factor
             axis.plot(t_plot, rv_mps, ls=line_style, color=line_color, lw=line_width)
@@ -1022,6 +1027,8 @@ class OrbitSystem(object):
         if externalParallaxFactors is not None:
             parf = externalParallaxFactors
         else:
+            # logging.debug(t_MJD)
+            # logging.debug(t_JD)
             parf = get_parallax_factors(self.RA_deg, self.DE_deg, t_JD, horizons_file_seed=horizons_file_seed,
                                         verbose=verbose, instrument=instrument, overwrite=False)
 
@@ -1739,7 +1746,7 @@ class PpmPlotter(object):
 
             # arrowOffsetY = 0.
         #         plt.annotate('', xy=(self.p[3][0], self.p[4][0]+arrowOffsetY), xytext=(0, 0+arrowOffsetY), arrowprops=dict(arrowstyle="->",facecolor='black'), size=30 )
-        plt.annotate('', xy=(np.float(self.p[3]) + arrowOffsetX, np.float(self.p[4]) + arrowOffsetY),
+        plt.annotate('', xy=(float(self.p[3]) + arrowOffsetX, float(self.p[4]) + arrowOffsetY),
                      xytext=(0. + arrowOffsetX, 0. + arrowOffsetY), arrowprops=dict(arrowstyle="->", facecolor='black'),
                      size=30)
 
@@ -2102,16 +2109,21 @@ class AstrometricOrbitPlotter():
 
         outlier_1D_index = np.array([])
 
+        logging.debug(f"self.data_type={self.data_type}")
         if self.data_type == 'gaia_2d':
             self.xi = self.data.xi
             self.yi = self.data.yi
+
 
         for jj, epoch in enumerate(self.medi):
             tmpidx = np.where(T['OB'] == epoch)[0]
 
             if '2d' in self.data_type:
-                tmpIndexX = np.intersect1d(self.xi, tmpidx)
-                tmpIndexY = np.intersect1d(self.yi, tmpidx)
+                # tmpIndexX = np.intersect1d(self.xi, tmpidx)
+                # tmpIndexY = np.intersect1d(self.yi, tmpidx)
+                tmpIndexX = np.intersect1d(self.data.xi, tmpidx)
+                logging.debug(f"tmpIndexX= {tmpIndexX}")
+                tmpIndexY = np.intersect1d(self.data.yi, tmpidx)
             elif self.data_type == '1d':
                 tmpIndexX = tmpidx
 
@@ -2338,49 +2350,65 @@ class AstrometricOrbitPlotter():
             # alphastar_reference_frame = orb.phi1_model_frame
             # delta_reference_frame = orb.phi2_model_frame
 
-        if self.scan_angle_definition == 'hipparcos':
-            frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-            frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
-            epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
-            epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
-        elif self.scan_angle_definition == 'gaia':
-            frame_residual_alphastar_along_scan = self.data.epoch_data['spsi'] * self.residuals
-            frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
-            epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
-            epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
+        if self.data_type == '2d':
+            pl.plot(orb.ppm_epoch[0], orb.ppm_epoch[1], marker='o', mfc='w', ls='', ms=5)
+            # self.insert_ppm_plot(orb, argument_dict)
+            # orb = self.compute_model_astrometry(orb, argument_dict)
+            # self.plot_residuals_on_sky(orb, argument_dict,
+            #                            alphastar_reference_epoch=orb.ppm_epoch[0],
+            #                            delta_reference_epoch=orb.ppm_epoch[1])
+            pl.errorbar(self.Xmean_ppm, self.Ymean_ppm, xerr=self.errResidualX, yerr=self.errResidualY, fmt='none', ecolor='k')
+            x1 = orb.ppm_epoch[0]
+            x2 = self.Xmean_ppm
+            y1 = orb.ppm_epoch[1]
+            y2 = self.Ymean_ppm
+            pl.plot([x1, x2], [y1, y2], ls='--', lw=1, color='0.7')
+            # pass
+        else:
 
-        frame_residual_color = '0.8'
-        # if argument_dict['orbit_show_frame_data']:
-        if 0:
-            pl.plot(alphastar_reference_frame + frame_residual_alphastar_along_scan,
-                    delta_reference_frame + frame_residual_delta_along_scan, marker='o',
-                    color=frame_residual_color, ms=4, mfc=frame_residual_color,
-                    mec=frame_residual_color, ls='')
-        pl.plot(alphastar_reference_epoch + epoch_residual_alphastar_along_scan,
-                delta_reference_epoch + epoch_residual_delta_along_scan, marker='o', color='k', ms=3, mfc='k',
-                ls='')
-
-        # plot epoch-level error-bars
-        for jj in range(len(self.meanResidualX)):
             if self.scan_angle_definition == 'hipparcos':
-                x1 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                x2 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-                y1 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                y2 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
+                frame_residual_alphastar_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_cpsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_spsi * self.meanResidualX
             elif self.scan_angle_definition == 'gaia':
-                x1 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                x2 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-                y1 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] + self.errResidualX[jj])
-                y2 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
-                            self.meanResidualX[jj] - self.errResidualX[jj])
-            pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
+                frame_residual_alphastar_along_scan = self.data.epoch_data['spsi'] * self.residuals
+                frame_residual_delta_along_scan = self.data.epoch_data['cpsi'] * self.residuals
+                epoch_residual_alphastar_along_scan = self.mean_spsi * self.meanResidualX
+                epoch_residual_delta_along_scan = self.mean_cpsi * self.meanResidualX
+
+            frame_residual_color = '0.8'
+            # if argument_dict['orbit_show_frame_data']:
+            if 0:
+                pl.plot(alphastar_reference_frame + frame_residual_alphastar_along_scan,
+                        delta_reference_frame + frame_residual_delta_along_scan, marker='o',
+                        color=frame_residual_color, ms=4, mfc=frame_residual_color,
+                        mec=frame_residual_color, ls='')
+            pl.plot(alphastar_reference_epoch + epoch_residual_alphastar_along_scan,
+                    delta_reference_epoch + epoch_residual_delta_along_scan, marker='o', color='k', ms=3, mfc='k',
+                    ls='')
+
+            # plot epoch-level error-bars
+            for jj in range(len(self.meanResidualX)):
+                if self.scan_angle_definition == 'hipparcos':
+                    x1 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = alphastar_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = delta_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                elif self.scan_angle_definition == 'gaia':
+                    x1 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    x2 = alphastar_reference_epoch[jj] + self.mean_spsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                    y1 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] + self.errResidualX[jj])
+                    y2 = delta_reference_epoch[jj] + self.mean_cpsi[jj] * (
+                                self.meanResidualX[jj] - self.errResidualX[jj])
+                pl.plot([x1, x2], [y1, y2], 'k-', lw=1)
 
     def plot(self, argument_dict=None):
         """Make the astrometric orbit plots.
@@ -2511,7 +2539,8 @@ class AstrometricOrbitPlotter():
                 panel_index_offset = 2 if argument_dict['orbit_timeseries_panel'] else 0
                 orbit_panel_index = (3,5) if argument_dict['orbit_timeseries_panel'] else 3
                 n_columns = 2
-                fig = pl.figure(figsize=(14, 9), facecolor='w', edgecolor='k')
+                fig = pl.figure(figsize=(12, 7), facecolor='w', edgecolor='k')
+                # fig = pl.figure(figsize=(14, 9), facecolor='w', edgecolor='k')
                 pl.clf()
 
                 # PPM panel
@@ -2550,7 +2579,7 @@ class AstrometricOrbitPlotter():
                     xlabel = 'MJD - {:3.1f}'.format(orb.Tref_MJD)
                 pl.xlabel(xlabel)
 
-                fig.tight_layout(h_pad=0.1, w_pad=0.1)
+                fig.tight_layout(h_pad=0.1, w_pad=0.5)
                 pl.show()
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'],
@@ -2612,7 +2641,7 @@ class AstrometricOrbitPlotter():
             ##################################################
             #  ORBIT only
             if argument_dict['orbit_only_panel']:
-                fig = pl.figure(figsize=(8, 8), facecolor='w', edgecolor='k')
+                fig = pl.figure(figsize=(6, 6), facecolor='w', edgecolor='k')
                 pl.clf()
 
                 self.insert_orbit_plot(orb, argument_dict)
@@ -2627,6 +2656,7 @@ class AstrometricOrbitPlotter():
                 if argument_dict['save_plot']:
                     figure_file_name = os.path.join(argument_dict['plot_dir'], 'orbit_only_{}.pdf'.format(name_seed_2.replace('.', 'p')))
                     fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
+                    logging.info(f'Saved figure as {figure_file_name}')
             ##################################################
 
 
@@ -2645,7 +2675,7 @@ class AstrometricOrbitPlotter():
                 else:
                     n_rows = 2
 
-                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, sharey=False, figsize=(n_columns*4.0, n_rows*2.5), facecolor='w',
+                fig, axes = pl.subplots(n_rows, n_columns, sharex=True, sharey=True, figsize=(n_columns*3.0, n_rows*2.), facecolor='w',
                                         edgecolor='k', squeeze=False)
 
                 self.insert_orbit_timeseries_plot(orb, argument_dict, ax=axes[0][0])
@@ -2674,7 +2704,7 @@ class AstrometricOrbitPlotter():
 
                 # if self.title is None:
                 #     fig.tight_layout(pad=0.0)
-                # plt.tight_layout()
+                plt.tight_layout()
                 # pl.subplots_adjust(right=1.5)
                 pl.show()
                 if argument_dict['save_plot']:
@@ -2686,7 +2716,7 @@ class AstrometricOrbitPlotter():
                         figure_file_name = os.path.join(argument_dict['plot_dir'],
                                                'orbit_time_{}.png'.format(name_seed_2.replace('.', 'p')))
                     fig.savefig(figure_file_name, transparent=True, bbox_inches='tight', pad_inches=0.05)
-
+                    logging.info(f'Saved figure as {figure_file_name}')
 
             # if argument_dict['make_relative_orbit_figure']:
 
@@ -2705,6 +2735,7 @@ class AstrometricOrbitPlotter():
 
         """
 
+        # logging.debug(orb.Tref_MJD)
         t_curve_mjd_2d = np.sort(np.tile(self.t_curve_MJD, 2))
 
         ppm_curve = orb.ppm(t_curve_mjd_2d, offsetRA_mas=orb.offset_alphastar_mas,
@@ -2722,8 +2753,8 @@ class AstrometricOrbitPlotter():
                                 horizons_file_seed=argument_dict['horizons_file_seed'])
             pl.plot(curve_offset_x + ppm_epoch[0], curve_offset_y + ppm_epoch[1], marker='o', color='k', mfc='w', ms=4, zorder=10, ls='none')
 
-        plt.annotate('', xy=(np.float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'] + curve_offset_x,
-                             np.float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y'] + curve_offset_y),
+        plt.annotate('', xy=(float(orb.muRA_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_x'] + curve_offset_x,
+                             float(orb.muDE_mas) * argument_dict['arrow_length_factor'] + argument_dict['arrow_offset_y'] + curve_offset_y),
                      xytext=(curve_offset_x + argument_dict['arrow_offset_x'], curve_offset_y + argument_dict['arrow_offset_y']),
                      arrowprops=dict(arrowstyle="->", facecolor='black'), size=30)
 
@@ -2831,6 +2862,8 @@ class AstrometricOrbitPlotter():
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
             # ax.set_ylabel('O-C (mas)')
 
+
+
     def insert_orbit_frame_residuals_plot(self, orb, argument_dict, direction='x', ax=None, mark_outliers=False):
         """
 
@@ -2875,9 +2908,9 @@ class AstrometricOrbitPlotter():
         elif self.data_type == '2d':
 
             if direction=='x':
-                tmp_index = self.xi
+                tmp_index = self.data.xi
             elif direction=='y':
-                tmp_index = self.yi
+                tmp_index = self.data.yi
 
             # mfc = 'none'
             mec= '0.4'
@@ -2887,7 +2920,8 @@ class AstrometricOrbitPlotter():
             ax.plot(epoch_time[tmp_index], self.residuals[tmp_index], mec=mec, mfc=mfc, marker=marker, ls='none', alpha=alpha)
             ax.axhline(y=0, color='0.5', ls='--', zorder=-50)
 
-        ax.set_ylabel('Frame O-C (mas)')
+        if (self.data_type != '2d') or (direction!='y'):
+            ax.set_ylabel('Frame O-C (mas)')
 
 
     def insert_epoch_residual_plot(self, orb, argument_dict):
@@ -3017,10 +3051,11 @@ class AstrometricOrbitPlotter():
             else:
                 orbit_periastron = orb.photocenter_orbit(t_periastron_mjd, spsi_periastron, cpsi_periastron)
 
-            phi1_model_periastron = orbit_periastron[xi_periastron]
-            phi2_model_periastron = orbit_periastron[yi_periastron]
-            pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
-            pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5', zorder=10)
+            phi1_model_periastron = orbit_periastron[xi_periastron[0]]
+            phi2_model_periastron = orbit_periastron[yi_periastron[0]]
+            if phi1_model_periastron != 0:
+                pl.plot([0, phi1_model_periastron], [0, phi2_model_periastron], marker='.', ls='-', lw=0.5, color='0.5')
+                pl.plot(phi1_model_periastron, phi2_model_periastron, marker='s', color='0.5', mfc='0.5', zorder=10)
 
 
 
@@ -3077,8 +3112,8 @@ class AstrometricOrbitPlotter():
             pl.plot(self.Xmean_orb, self.Ymean_orb, 'ko', ms=8)
             pl.errorbar(self.Xmean_orb, self.Ymean_orb, xerr=self.errResidualX, yerr=self.errResidualY,
                         fmt='none', ecolor='0.6', zorder=-49)
-            for j in range(len(phi1_model_epoch)):
-                pl.plot([self.Xmean_orb[j], phi1_model_epoch[j]], [self.Ymean_orb[j], phi2_model_epoch[j]],
+            for j in range(len(orb.phi1_model_epoch)):
+                pl.plot([self.Xmean_orb[j], orb.phi1_model_epoch[j]], [self.Ymean_orb[j], orb.phi2_model_epoch[j]],
                         'k--', color='0.7', zorder=-50)
 
         # show origin
@@ -3873,7 +3908,7 @@ class DetectionLimit(object):
 
 def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_systemic_velocity=False,
                  data_colour='k', include_degenerate_orbit=False, plot_parameters_ensemble=None,
-                 show_residuals=True):
+                 show_residuals=True, phased=False):
     """
 
     Parameters
@@ -3908,8 +3943,14 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
     # fig.suptitle(self.title)
 
     # pl.subplot(2,1,1)
-    axes[0][0].plot(rv['jyear'], rv['rv_{}'.format(basic_unit)], 'ko', label='_', mfc=data_colour)
-    axes[0][0].errorbar(rv['jyear'], rv['rv_{}'.format(basic_unit)], yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+    if (phased and (orbit_system is not None)):
+        t_plot_data = ((rv['MJD'] - orbit_system.Tp_day)%orbit_system.P_day) / orbit_system.P_day
+    else:
+        t_plot_data = rv['jyear']
+
+
+    axes[0][0].plot(t_plot_data, rv['rv_{}'.format(basic_unit)], 'ko', label='_', mfc=data_colour)
+    axes[0][0].errorbar(t_plot_data, rv['rv_{}'.format(basic_unit)], yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
 
 
     n_rv = len(rv)
@@ -3928,7 +3969,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             LHS = np.mat(np.array(rv['rv_kmps']) - rv_kmps)
             res = linearfit.LinearFit(LHS, np.diag(weight), C)
             res.fit()
-            gamma_kmps = np.float(res.p)
+            gamma_kmps = float(res.p)
             gamma_mps = gamma_kmps*1e3
             orbit_system.gamma_ms += gamma_mps
             logging.info('Systemic velocity {:2.3f} +/- {:2.3f} {}'.format(orbit_system.gamma_ms,
@@ -3941,9 +3982,11 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             gamma_mps = None
         # plot RV orbit of primary
         time_offset_day = rv['MJD'][0] - orbit_system.Tp_day
+        time_offset_day = 0
+        print(f"time_offset_day = {time_offset_day}")
 
         orbit_system.plot_rv_orbit(time_offset_day=time_offset_day, n_orbit=n_orbit,
-                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit, line_width=2)
+                                   n_curve=10000, axis=axes[0][0], rv_unit=basic_unit, line_width=2, phased=phased)
         if plot_parameters_ensemble is not None:
             n_curve = 500
             n_ensemble = len(plot_parameters_ensemble)
@@ -3970,7 +4013,7 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
             orbit_system_degenerate.OMEGA_deg += 180.
             orbit_system_degenerate.plot_rv_orbit(time_offset_day=rv['MJD'][0] - orbit_system.Tp_day,
                                        n_orbit=n_orbit, n_curve=1000, axis=axes[0][0],
-                                       rv_unit=basic_unit, line_style='--')
+                                       rv_unit=basic_unit, line_style='--', phased=phased)
 
         residuals = rv['rv_{}'.format(basic_unit)] - rv['rv_model_{}'.format(basic_unit)]
         rv_description = '$\\gamma={:2.3f}$ km/s\n$N_\\mathrm{{RV}}={}$\n' \
@@ -3981,15 +4024,18 @@ def plot_rv_data(rv, orbit_system=None, verbose=True, n_orbit=2, estimate_system
         axes[0][0].axhline(y=orbit_system.gamma_ms / conversion_factor, color='0.5', ls=':', zorder=-50)
 
         if show_residuals:
-            axes[1][0].plot(rv['jyear'], residuals, 'ko', label='_', mfc=data_colour)
-            axes[1][0].errorbar(rv['jyear'], residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
+            axes[1][0].plot(t_plot_data, residuals, 'ko', label='_', mfc=data_colour)
+            axes[1][0].errorbar(t_plot_data, residuals, yerr=rv['sigma_rv_{}'.format(basic_unit)], fmt='none', ecolor=data_colour, label='_')
 
             axes[1][0].text(0.01, 0.99, rv_description, horizontalalignment='left',
                     verticalalignment='top', transform=axes[1][0].transAxes)
             axes[1][0].set_ylabel('O-C ({})'.format(unit_string[basic_unit]))
             axes[1][0].axhline(y=0, color='0.5', ls='--', zorder=-50)
 
-    axes[-1][0].set_xlabel('Time (Julian year)')
+    if phased:
+        axes[-1][0].set_xlabel('Orbital phase')
+    else:
+        axes[-1][0].set_xlabel('Time (Julian year)')
     # pl.legend()
     axes[0][0].set_ylabel('RV ({})'.format(unit_string[basic_unit]))
     # axes[1][0].set_xlabel('Time (Julian year)')
@@ -5104,8 +5150,8 @@ class ImagingAstrometryData(object):
             pt = Table.read(outFile,format='ascii.basic',delimiter=',')
 
         self.simbad_object_parameters = pt
-        self.RA_deg  = np.float(self.simbad_object_parameters['RA_d'])
-        self.Dec_deg = np.float(self.simbad_object_parameters['DEC_d'])
+        self.RA_deg  = float(self.simbad_object_parameters['RA_d'])
+        self.Dec_deg = float(self.simbad_object_parameters['DEC_d'])
 
         #         for c in ['RA_d','DEC_d','PMDEC','PMRA','PLX_VALUE','SP_TYPE']:
 
