@@ -2225,7 +2225,7 @@ class AstrometricOrbitPlotter():
                 
         if len(outlier_1D_index) != 0:
             print('MJD of outliers:')
-            for ii in np.unique(outlier_1D_index.astype(np.int)):
+            for ii in np.unique(outlier_1D_index.astype(int)):
                 print('{:.12f}'.format(T['MJD'][ii]), end=',')
             print()
 
@@ -2468,7 +2468,7 @@ class AstrometricOrbitPlotter():
                                     '$\\bar\\sigma_\Lambda$={:2.3f} mas'.format(
                 len(self.data.epoch_data), self.data.n_original_frames, np.std(self.residuals), np.mean(self.data.epoch_data['sigma_da_mas']))
             if 'excess_noise' in argument_dict.keys():
-                argument_dict['frame_omc_description'] += '\nexN = {:2.2f}, mF = {:2.0f}'.format(
+                argument_dict['frame_omc_description'] += '\nexN = {:2.2f} mas, mF = {:2.0f}'.format(
             argument_dict['excess_noise'], argument_dict['merit_function'])
 
         if argument_dict['orbit_signal_description'] == 'default':
@@ -3380,7 +3380,7 @@ class AstrometricPpmPlotter(AstrometricOrbitPlotter):
 
         if len(outlier_1D_index) != 0:
             print('MJD of outliers:')
-            for ii in np.unique(outlier_1D_index.astype(np.int)):
+            for ii in np.unique(outlier_1D_index.astype(int)):
                 print('{:.12f}'.format(T['MJD'][ii]), end=',')
             print()
 
