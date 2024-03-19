@@ -196,9 +196,13 @@ def query_dpcg_epochastrometry(connection, out_dir, tag='dpcgdata', query=None, 
             from mdb_gaia_starobject_088 so
             join dr3_ops_cs36_mv.dgdreq58_rejected_cu4transitids_astro transrej using (sourceid)
             join lateral unnest(filter_transits(transits,rejected_cu4transitids_astro)) as t on true
-            -- provide source id list (comma separated)
-            where sourceid in ({selected_source_id_string})
             """
+
+            if selected_source_id_string != None:
+                query += f"""-- provide source id list (comma separated) 
+                where sourceid in ({selected_source_id_string})"""
+            else:
+                query += """ where sourceid != 0"""
 
         dpcg_df = pd.read_sql(query, connection)
         dpcg_df.to_parquet(out_file)

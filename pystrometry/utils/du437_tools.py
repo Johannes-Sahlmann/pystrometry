@@ -162,7 +162,7 @@ class NssDataFrame:
 
 
         cov_matrix = covariance_matrix(row, parameters=parameters)
-        solution_parameters = row[parameters].astype(np.float)
+        solution_parameters = row[parameters].astype(float)
 
         # draw random data accounting for covariances
         if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
@@ -327,7 +327,7 @@ class NssDataFrame:
         #         # print(cov_matrix)
         #     else:
         cov_matrix = covariance_matrix(self._obj.loc[index], parameters=parameters)
-        solution_parameters = self._obj.loc[index, parameters].astype(np.float)
+        solution_parameters = self._obj.loc[index, parameters].astype(float)
 
         # draw random data accounting for covariances
         if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
@@ -400,7 +400,7 @@ class NssDataFrame:
                 # print(cov_matrix)
             else:
                 cov_matrix = covariance_matrix(solution)[5:9, 5:9]
-            thiele_innes_parameters = solution[parameters].astype(np.float)
+            thiele_innes_parameters = solution[parameters].astype(float)
 
             # draw random data accounting for covariances
             if np.isnan(cov_matrix).any(): # this corresponds to circular orbits
@@ -543,7 +543,7 @@ class NssDataFrame:
             ax = pl.gca()
 
         self._obj.plot('bp_rp', 'absolute_phot_g_mean_mag', kind='scatter', ax=ax, label=label, **kwargs)  # , c='parallax'
-        pl.title('{} ({} sources)'.format(title, len(self._obj)))
+        ax.set_title('{} ({} sources)'.format(title, len(self._obj)))
         ax.invert_yaxis()
         if show_cutoff:
             colour_cutoff = 3.5
@@ -557,10 +557,10 @@ class NssDataFrame:
             pl.plot(x, cutoff(x), 'k-')
             pl.plot([colour_cutoff, colour_cutoff], [cutoff(colour_cutoff), 0], 'k-')
 
-        pl.xlabel('$G_\mathrm{BP}-G_\mathrm{RP}$')
-        pl.ylabel('$M_G$')
+        ax.set_xlabel('$G_\mathrm{BP}-G_\mathrm{RP}$')
+        ax.set_ylabel('$M_G$')
 
-        pl.show()
+        # pl.show()
         # return ax
 
 @pd.api.extensions.register_dataframe_accessor("nssmc")

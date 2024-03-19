@@ -90,7 +90,6 @@ class GaiaIad(object):
         if filter_on_frame_uncertainty:
             rse_filter_threshold = 10
             rse = robust_scatter_estimate(self.epoch_data['errda_mas_obs'])
-            # print(rse)
             remove_index = np.where(np.abs(self.epoch_data['errda_mas_obs']) > rse_filter_threshold*rse)[0]
             self.n_filtered_frames += len(remove_index)
             print('RSE cut removed {} frames (of {})'.format(self.n_filtered_frames, self.n_original_frames))
@@ -498,6 +497,8 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         P_day = parameter_dict['p{}_period_day'.format(planet_number)]
         m2_kg = pjGet_m2(m1_MS * MS_kg, a_m, P_day)
         m2_MJ = m2_kg / MJ_kg
+        m2_MS = m2_kg / MS_kg
+        mass_function = alpha_mas**3 * (u.year.to(u.day))**2 / (P_day**2 * absolute_parallax_mas**3)
 
         # create dictionary that defines the OrbitSystem
         attribute_dict = {
@@ -567,7 +568,9 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
             orbit_descr += '$i={0[p1_incl_deg]:2.{prec}f}\\pm{0[sigma_p1_incl_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
             orbit_descr += '$\\omega={0[p1_omega_deg]:2.{prec}f}\\pm{0[sigma_p1_omega_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
             orbit_descr += '$\\Omega={0[p1_OMEGA_deg]:2.{prec}f}\\pm{0[sigma_p1_OMEGA_deg]:2.{prec}f}$ deg\n'.format(dict(parameter_dict), prec=2)
+            orbit_descr += '$f(m)={0:2.{prec}f}$ Msun\n'.format(mass_function, prec=2)
             orbit_descr += '$M_1={0:2.{prec}f}$ Msun\n'.format(m1_MS, prec=2)
+            orbit_descr += '$M_2={0:2.{prec}f}$ Msun\n'.format(m2_MS, prec=2)
             orbit_descr += '$M_2={0:2.{prec}f}$ Mjup\n'.format(m2_MJ, prec=2)
 
         else:
@@ -620,6 +623,10 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
         axp.title = '{} ({})'.format(iad.source_id, mag_str)
         name_seed = '{}'.format(iad.source_id)
 
+    if ('title' in parameter_dict.keys()) and (parameter_dict['title'] is not None):
+        axp.title = parameter_dict['title']
+
+
     argument_dict = {'plot_dir'             : plot_dir, 'ppm_panel': True,
                      'frame_residual_panel' : True, 'orbit_only_panel': True,
                      'ppm_description'      : ppm_description,
@@ -651,6 +658,7 @@ def plot_individual_orbit(parameter_dict, iad, mapping_dr3id_to_starname=None,
 # small helper dictionary to become tolerant against different variable naming, e.g.
 # internal DPAC naming versus Gaia archive naming
 astrometric_parameter_name_equivalences = {'varpi': 'parallax',
+                                           'varpi': 'plx_mas',
                                            'plx_mas': 'parallax',
                                            'plx_mas': 'absolute_plx_mas',
                                            'absolute_plx_mas': 'parallax',
@@ -784,7 +792,10 @@ def plot_individual_ppm(parameter_dict, iad, plot_dir=os.path.expanduser('~')):
 
     source_id = np.int64(parameter_dict['sourceId'])
     # axp.title = 'Gaia DR4 {} ({}, {})'.format(source_id, 'LPC', mag_str)
-    axp.title = 'Gaia {} ({})'.format(source_id, mag_str)
+    if ('title' in parameter_dict.keys()) and (parameter_dict['title'] is not None):
+        axp.title = parameter_dict['title']
+    else:
+        axp.title = 'Gaia {} ({})'.format(source_id, mag_str)
 
     name_seed = parameter_dict.get('name_seed', 'Gaia_{}'.format(source_id))
 
