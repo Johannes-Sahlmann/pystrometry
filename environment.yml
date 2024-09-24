@@ -12,5 +12,6 @@ dependencies:
   - astropy == 5.0.6
   - sympy
   - scipy
+  - uncertainties
   - pip:
     - linearfit
