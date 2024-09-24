@@ -10,4 +10,3 @@ dependencies:
   - matplotlib == 3.7.1
   - astroquery == 0.4.6
   - astropy == 5.0.6
-  
