@@ -62,7 +62,7 @@ jobs:
           conda install pytest
           pytest pystrometry/tests          
 
-build-linux-python-3p11:
+  build-linux-python-3p11:
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
