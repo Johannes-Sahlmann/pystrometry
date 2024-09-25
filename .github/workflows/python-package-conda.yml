@@ -35,7 +35,7 @@ jobs:
         pytest pystrometry/tests
         
 
-  build-linux-python-3.9:
+  build-linux-python-3p9:
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
