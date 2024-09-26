@@ -3,7 +3,7 @@ name: Python Package using Conda
 on: [push]
 
 jobs:
-  build-linux:
+  build-linux-python-3p10:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 5
@@ -20,7 +20,8 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
     - name: Install dependencies
       run: |
-        conda env update --file environment-3.10-pinned.yml --name base
+        conda env update --file environment-3.10.yml --name base
+#        conda env update --file environment-3.10-pinned.yml --name base
 #        conda env update --file environment-3.9-pinned.yml --name base
     - name: Lint with flake8
       run: |
@@ -63,7 +64,7 @@ jobs:
           conda install pytest
           pytest pystrometry/tests          
 
-  build-linux-python-3p10:
+  build-linux-python-3p10-pinned:
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
@@ -79,7 +80,8 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env update --file environment-3.10.yml --name base
+#          conda env update --file environment-3.10.yml --name base
+          conda env update --file environment-3.10-pinned.yml --name base
       - name: Lint with flake8
         run: |
           conda install flake8
