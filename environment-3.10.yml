@@ -1,0 +1,17 @@
+name: pystrometry-environment
+channels:
+  - conda-forge
+dependencies:
+  - python == 3.10
+  - numpy
+  - pip
+  - kepmodel
+  - pandas
+  - matplotlib
+  - astroquery
+  - astropy
+  - sympy
+  - scipy
+  - uncertainties
+  - pip:
+    - linearfit
