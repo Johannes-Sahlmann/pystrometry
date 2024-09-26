@@ -1,7 +1,8 @@
-name: pystrometry-environment
+name: pystrometry-environment-3p10
 channels:
   - conda-forge
 dependencies:
+  - python == 3.10
   - numpy
   - pip
   - kepmodel
