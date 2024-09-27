@@ -1,0 +1,91 @@
+name: Python Package using Conda
+
+on: [push]
+
+jobs:
+  build-linux-python-3p10:
+      runs-on: ubuntu-latest
+      strategy:
+        max-parallel: 5
+
+      steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+      - name: Add conda to system path
+        run: |
+          echo $CONDA/bin >> $GITHUB_PATH
+      - name: Install dependencies
+        run: |
+          conda env update --file environment-3.10.yml --name base
+      - name: Lint with flake8
+        run: |
+          conda install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      - name: Test with pytest
+        run: |
+          conda config --set solver classic
+          conda install pytest
+          pytest pystrometry/tests 
+
+  build-linux-python-3p10-pinned:
+      runs-on: ubuntu-latest
+      strategy:
+        max-parallel: 5
+
+      steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+      - name: Add conda to system path
+        run: |
+          echo $CONDA/bin >> $GITHUB_PATH
+      - name: Install dependencies
+        run: |
+          conda env update --file environment-3.10-pinned.yml --name base
+      - name: Lint with flake8
+        run: |
+          conda install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      - name: Test with pytest
+        run: |
+          conda config --set solver classic
+          conda install pytest
+          pytest pystrometry/tests 
+
+  build-linux-python-3p9:
+      runs-on: ubuntu-latest
+      strategy:
+        max-parallel: 5
+
+      steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+      - name: Add conda to system path
+        run: |
+          echo $CONDA/bin >> $GITHUB_PATH
+      - name: Install dependencies
+        run: |
+          conda env update --file environment-3.9.yml --name base
+      - name: Lint with flake8
+        run: |
+          conda install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        continue-on-error: true
+      - name: Test with pytest
+        run: |
+          conda install pytest
+          pytest pystrometry/tests          
+
