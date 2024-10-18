@@ -31,6 +31,7 @@ jobs:
           conda config --set solver classic
           conda install pytest
           pytest pystrometry/tests 
+          pytest pystrometry/utils/tests 
 
   build-linux-python-3p10-pinned:
       runs-on: ubuntu-latest
@@ -89,4 +90,5 @@ jobs:
         run: |
           conda install pytest
           pytest pystrometry/tests          
+          pytest pystrometry/utils/tests 
 
