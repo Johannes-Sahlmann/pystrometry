@@ -60,6 +60,7 @@ jobs:
           conda config --set solver classic
           conda install pytest
           pytest pystrometry/tests 
+          pytest pystrometry/utils/tests 
 
   build-linux-python-3p9:
       runs-on: ubuntu-latest
