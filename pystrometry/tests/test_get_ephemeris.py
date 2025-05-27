@@ -1,4 +1,3 @@
-import pytest
 from astropy.table import Table
 from astropy.time import Time
 from ..pystrometry import get_ephemeris
@@ -17,6 +16,6 @@ def test_get_ephemeris_valid_input():
     # Validate the result
     assert isinstance(result, Table), "Result should be an Astropy Table"
     assert len(result) > 0, "Result table should not be empty"
-    assert 'X' in result.colnames, "Result table should contain 'x' column"
-    assert 'Y' in result.colnames, "Result table should contain 'y' column"
-    assert 'Z' in result.colnames, "Result table should contain 'z' column"
+    assert 'X' in result.colnames, "Result table should contain 'X' column"
+    assert 'Y' in result.colnames, "Result table should contain 'Y' column"
+    assert 'Z' in result.colnames, "Result table should contain 'Z' column"
