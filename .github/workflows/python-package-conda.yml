@@ -24,7 +24,9 @@ jobs:
           echo $HOME/.local/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          mamba env update --file environment-3.10.yml --name base
+#          mamba env update --file environment-3.10.yml --name base
+          mamba env create --file environment-3.10.yml --name pystrometry-env-3p10
+          source activate pystrometry-env-3p10
       - name: Lint with flake8
         run: |
           mamba install flake8
@@ -53,6 +55,8 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
+#          mamba env create --file environment-3.10-astropy.yml --name pystrometry-env-astropy
+#          source activate pystrometry-env-astropy
           conda env create --file environment-3.10-astropy.yml --name pystrometry-env-astropy
           conda init
           conda activate pystrometry-env-astropy
