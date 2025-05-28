@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ "ubuntu-latest"]
-        python-version: [ "3.10" ]
+        python-version: [ "3.10" , "3.11" ]
       fail-fast: false
     env:
       PYTHONUNBUFFERED: 1
@@ -41,7 +41,7 @@ jobs:
 
       - run: micromamba env export
 
-#      - run: python -c "import jwql; print('Version ' + jwql.__version__); print('Path ' + jwql.__path__[0])"
+#      - run: python -c "import pystrometry; print('Version ' + pystrometry.__version__); print('Path ' + pystrometry.__path__[0])"
 
       - run: pytest pystrometry/tests
-#        pytest -n auto pystrometry/utils/tests
+      - run: pytest pystrometry/utils/tests
