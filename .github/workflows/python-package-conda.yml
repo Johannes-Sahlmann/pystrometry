@@ -20,12 +20,12 @@ jobs:
       - name: Install dependencies
         run: |
           conda env create --file environment-3.10.yml          
-          conda init
       - name: Test with pytest
         shell: bash -l {0}
         run: |
-          conda activate pystrometry-environment-3p10
+          conda init
           conda config --set solver classic
+          conda activate pystrometry-environment-3p10
           conda install pytest
           pytest pystrometry/tests 
           pytest pystrometry/utils/tests 
