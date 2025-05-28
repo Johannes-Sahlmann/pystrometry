@@ -1,0 +1,35 @@
+name: Python Package Tests with Python 3.10 and Mamba
+
+on: [push, pull_request]
+
+jobs:
+  test-python-3p10:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Install Mamba
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+        pip install mamba
+    - name: Add mamba to system path
+      run: |
+        echo $HOME/.local/bin >> $GITHUB_PATH
+    - name: Create environment with mamba
+      run: |
+        mamba env create --file environment-3.10.yml
+        source activate pystrometry-environment-3p10
+    - name: Install pytest
+      run: |
+        mamba install pytest
+    - name: Run tests
+      run: |
+        pytest pystrometry/tests
+        pytest pystrometry/utils/tests
