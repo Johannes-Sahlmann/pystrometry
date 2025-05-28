@@ -20,11 +20,11 @@ def test_get_ephemeris_valid_input():
     logging.info(f"\nephemeris_dir={ephemeris_dir}\n")
     horizons_file_seed = '{}_{}_{}_{}_{}'.format(center, target, start_time, stop_time, step_size)
     out_file = os.path.join(ephemeris_dir, horizons_file_seed + '.txt')
-    assert os.path.isfile(out_file), f"Expected output file {out_file} does not exist."
 
     # Call the function
     result = get_ephemeris(center=center, target=target, start_time=start_time, stop_time=stop_time, step_size=step_size)
-
+    assert os.path.isfile(out_file), f"Expected output file {out_file} does not exist."
+    
     # Validate the result
     assert isinstance(result, Table), "Result should be an Astropy Table"
     assert len(result) > 0, "Result table should not be empty"
