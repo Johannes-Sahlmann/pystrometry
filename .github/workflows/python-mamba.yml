@@ -24,7 +24,7 @@ jobs:
         echo $HOME/.local/bin >> $GITHUB_PATH
     - name: Create environment with mamba
       run: |
-        mamba env create -f environment-3.10.yml
+        mamba env create -f environment-3p10.yml
         source activate pystrometry-environment-3p10
     - name: Install pytest
       run: |
