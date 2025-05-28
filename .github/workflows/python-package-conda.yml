@@ -39,6 +39,7 @@ jobs:
           pytest pystrometry/tests
           pytest pystrometry/utils/tests
 
+
   build-linux-python-3p10-astropy:
       if: false
       runs-on: ubuntu-latest
