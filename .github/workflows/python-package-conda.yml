@@ -49,7 +49,8 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env update --file environment-3.10-astropy.yml --name base
+          conda env create --file environment-3.10-astropy.yml --name pystrometry-env-astropy
+          conda activate pystrometry-env-astropy
       - name: Lint with flake8
         run: |
           conda install flake8
