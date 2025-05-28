@@ -19,13 +19,13 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env create --file environment-3.10.yml          
+          conda env update --file environment-3.10.yml --name base
       - name: Test with pytest
         shell: bash -l {0}
         run: |
-          conda init
+#          conda init
           conda config --set solver classic
-          conda activate pystrometry-environment-3p10
+#          conda activate pystrometry-environment-3p10
           conda install pytest
           pytest pystrometry/tests 
           pytest pystrometry/utils/tests 
