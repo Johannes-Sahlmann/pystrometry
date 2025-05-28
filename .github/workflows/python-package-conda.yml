@@ -21,8 +21,8 @@ jobs:
           pip install mamba
       - name: Install dependencies
         run: |
-          mamba env create --file environment-3.10.yml --name pystrometry-env-3p10
-          source activate pystrometry-env-3p10
+          mamba env create --file environment-3.10.yml
+          source activate pystrometry-environment-3p10
       - name: Lint with flake8
         run: |
           mamba install flake8
@@ -36,4 +36,3 @@ jobs:
           pytest pystrometry/utils/tests
 
 
-  
