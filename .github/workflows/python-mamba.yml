@@ -28,7 +28,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           environment-name: pystrometry-${{ runner.os }}-py${{ matrix.python-version }}
-          environment-file: environment-3.10.yml
+          environment-file: environment-{{ matrix.python-version }}.yml
           create-args: >-
             python=${{ matrix.python-version }}
           init-shell: none
