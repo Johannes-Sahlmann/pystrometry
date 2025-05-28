@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-  pull_request:
+#  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +27,7 @@ jobs:
 
       - uses: mamba-org/setup-micromamba@v1
         with:
-          environment-name: jwql-${{ runner.os }}-py${{ matrix.python-version }}
+          environment-name: pystrometry-${{ runner.os }}-py${{ matrix.python-version }}
           environment-file: environment-3.10.yml
           create-args: >-
             python=${{ matrix.python-version }}
@@ -37,6 +37,7 @@ jobs:
 #      - run: pip install -e .[test] pytest-xdist
 
       - run: pip list
+      - run: pip install pytest
 
       - run: micromamba env export
 
