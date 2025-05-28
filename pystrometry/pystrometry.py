@@ -4857,6 +4857,11 @@ def get_ephemeris(center='g@399', target='0', start_time=None, stop_time=None, s
         with open(out_file, 'wb') as ephemeris:
             ephemeris.write(content)
 
+    logging.info(f"Reading {horizons_file_seed} from {ephemeris_dir}")
+    files = os.listdir(ephemeris_dir)
+    for file in files:
+        logging.info(f"File in ephemeris_dir: {file}")
+
     xyzdata = read_ephemeris(horizons_file_seed, overwrite=overwrite, ephemeris_path=ephemeris_dir)
     return xyzdata
 

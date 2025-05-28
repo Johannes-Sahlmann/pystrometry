@@ -1,0 +1,50 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+#    name: test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: test (env file ${{ matrix.environment-files }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ "ubuntu-latest"]
+#        python-version: [ "3.10" , "3.11" ]
+        environment-files: ["environment-3.9.yml", "environment-3.9-pinned.yml", "environment-3.10.yml", "environment-3.11.yml", "environment-3.10-pinned.yml", "environment-3.10-astropy.yml"]
+      fail-fast: false
+    env:
+      PYTHONUNBUFFERED: 1
+    defaults:
+      run:
+        shell: micromamba-shell {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+#          environment-name: pystrometry-${{ runner.os }}-py${{ matrix.python-version }}
+          environment-name: pystrometry-${{ runner.os }}-${{ matrix.environment-files }}
+          environment-file: ${{ matrix.environment-files }}
+#          create-args: >-
+#            python=${{ matrix.python-version }}
+          init-shell: none
+          generate-run-shell: true
+
+#      - run: pip install -e .[test] pytest-xdist
+
+      - run: pip list
+      - run: pip install pytest
+
+      - run: micromamba env export
+
+#      - run: python -c "import pystrometry; print('Version ' + pystrometry.__version__); print('Path ' + pystrometry.__path__[0])"
+
+      - run: pytest --durations=0 -vs -o log_cli=true --log-level=INFO pystrometry/tests
+      - run: pytest --durations=0 -vs -o log_cli=true --log-level=INFO pystrometry/utils/tests
