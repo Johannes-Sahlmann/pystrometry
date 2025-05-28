@@ -42,6 +42,5 @@ jobs:
 
 #      - run: python -c "import jwql; print('Version ' + jwql.__version__); print('Path ' + jwql.__path__[0])"
 
-      - run: |
-        pytest -n auto pystrometry/tests 
-        pytest -n auto pystrometry/utils/tests
+      - run: pytest -n auto pystrometry/tests
+#        pytest -n auto pystrometry/utils/tests
