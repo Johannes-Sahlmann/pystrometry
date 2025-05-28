@@ -1,0 +1,47 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ "ubuntu-latest"]
+        python-version: [ "3.10" ]
+      fail-fast: false
+    env:
+      PYTHONUNBUFFERED: 1
+    defaults:
+      run:
+        shell: micromamba-shell {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: jwql-${{ runner.os }}-py${{ matrix.python-version }}
+          environment-file: environment-3.10.yml
+          create-args: >-
+            python=${{ matrix.python-version }}
+          init-shell: none
+          generate-run-shell: true
+
+      - run: pip install -e .[test] pytest-xdist
+
+      - run: pip list
+
+      - run: micromamba env export
+
+#      - run: python -c "import jwql; print('Version ' + jwql.__version__); print('Path ' + jwql.__path__[0])"
+
+      - run: |
+        pytest -n auto pystrometry/tests 
+        pytest -n auto pystrometry/utils/tests
