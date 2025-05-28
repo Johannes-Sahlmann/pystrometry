@@ -24,7 +24,7 @@ def test_get_ephemeris_valid_input():
     # Call the function
     result = get_ephemeris(center=center, target=target, start_time=start_time, stop_time=stop_time, step_size=step_size)
     assert os.path.isfile(out_file), f"Expected output file {out_file} does not exist."
-    
+
     # Validate the result
     assert isinstance(result, Table), "Result should be an Astropy Table"
     assert len(result) > 0, "Result table should not be empty"
