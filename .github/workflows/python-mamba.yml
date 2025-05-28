@@ -16,7 +16,7 @@ jobs:
       matrix:
         os: [ "ubuntu-latest"]
         python-version: [ "3.10" , "3.11" ]
-        environment-file: ["environment-3.10.yml", "environment-3.11.yml"]# "environment-3.10-pinned.yml", "environment-3.10-astropy.yml"]
+        environment-files: ["environment-3.10.yml", "environment-3.11.yml"]# "environment-3.10-pinned.yml", "environment-3.10-astropy.yml"]
       fail-fast: false
     env:
       PYTHONUNBUFFERED: 1
@@ -29,7 +29,7 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           environment-name: pystrometry-${{ runner.os }}-py${{ matrix.python-version }}
-          environment-file: {{ matrix.environment-file }}
+          environment-file: ${{ matrix.environment-files }}
           create-args: >-
             python=${{ matrix.python-version }}
           init-shell: none
