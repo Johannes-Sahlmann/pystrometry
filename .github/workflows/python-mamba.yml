@@ -1,4 +1,4 @@
-name: Python Package Tests with Python 3.10 and Mamba
+name: Python Package Tests with Python 3.10 and Mambaforge
 
 on: [push, pull_request]
 
@@ -10,26 +10,28 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+
+    - name: Set up Mambaforge with Python 3.10
+      uses: conda-incubator/setup-miniconda@v2
       with:
-        python-version: '3.10'
-    - name: Install Mamba
+        miniforge-variant: Mambaforge
+        python-version: 3.10
+        use-mamba: true
+        auto-activate-base: false
+
+    - name: Create env from file
+      shell: bash -l {0}
       run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-pip
-        pip install mamba
-    - name: Add mamba to system path
-      run: |
-        echo $HOME/.local/bin >> $GITHUB_PATH
-    - name: Create environment with mamba
-      run: |
-        mamba create -f environment-3p10.yml
+        mamba env create -f environment-3p10.yml
         source activate pystrometry-environment-3p10
+
     - name: Install pytest
+      shell: bash -l {0}
       run: |
         mamba install pytest
+
     - name: Run tests
+      shell: bash -l {0}
       run: |
         pytest pystrometry/tests
         pytest pystrometry/utils/tests
