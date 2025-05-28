@@ -10,7 +10,8 @@ concurrency:
 
 jobs:
   test:
-    name: test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+#    name: test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: test (env file ${{ matrix.environment-files }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
