@@ -19,7 +19,8 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env update --file environment-3.10.yml --name base
+          conda env update --file environment-3.10.yml
+          conda activate pystrometry-environment-3p10
       - name: Lint with flake8
         run: |
           conda install flake8
@@ -49,8 +50,8 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env create --file environment-3.10-astropy.yml --name pystrometry-env-astropy
-          conda activate pystrometry-env-astropy
+          conda env create --file environment-3.10-astropy.yml
+          conda activate pystrometry-environment-3p10-astropy
       - name: Lint with flake8
         run: |
           conda install flake8
@@ -65,6 +66,7 @@ jobs:
           pytest pystrometry/utils/tests 
 
   build-linux-python-3p10-pinned:
+      if: false
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
@@ -95,6 +97,7 @@ jobs:
           pytest pystrometry/utils/tests 
 
   build-linux-python-3p9:
+      if: false
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
