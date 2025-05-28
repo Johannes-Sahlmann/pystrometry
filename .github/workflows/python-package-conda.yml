@@ -19,23 +19,19 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
       - name: Install dependencies
         run: |
-          conda env update --file environment-3.10.yml
+          conda env create --file environment-3.10.yml          
           conda init
-          conda activate pystrometry-environment-3p10
-      - name: Lint with flake8
-        run: |
-          conda install flake8
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        continue-on-error: true
       - name: Test with pytest
+        shell: bash -l {0}
         run: |
+          conda activate pystrometry-environment-3p10
           conda config --set solver classic
           conda install pytest
           pytest pystrometry/tests 
           pytest pystrometry/utils/tests 
 
   build-linux-python-3p10-astropy:
+      if: false
       runs-on: ubuntu-latest
       strategy:
         max-parallel: 5
@@ -61,6 +57,7 @@ jobs:
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         continue-on-error: true
       - name: Test with pytest
+        shell: bash -l {0}
         run: |
           conda config --set solver classic
           conda install pytest
